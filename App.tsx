@@ -143,13 +143,38 @@ const App: React.FC = () => {
   const getUrgencyColor = (timeStr: string) => {
     if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
     const cleanTime = timeStr.toLowerCase();
-    if (cleanTime.includes('aprox') || cleanTime.includes('agora') || cleanTime.includes('0 min')) 
+    if (cleanTime.includes('aprox') || cleanTime.includes('agora') || cleanTime === '0') 
       return 'bg-red-600 text-white';
     
     const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
     if (mins <= 3) return 'bg-red-600 text-white';
     if (mins <= 8) return 'bg-yellow-500 text-black';
     return 'bg-emerald-500 text-white';
+  };
+
+  // Helper para renderizar o tempo com o rótulo "MINUTO(S)" embaixo
+  const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
+    const isNoPrev = timeStr === 'SEM PREVISÃO';
+    const urgencyClasses = getUrgencyColor(timeStr);
+    
+    if (isNoPrev) {
+      return (
+        <div className={`px-2 py-3 rounded-2xl ${urgencyClasses} font-black uppercase tracking-tighter w-full text-center text-[9px] opacity-40`}>
+          {timeStr}
+        </div>
+      );
+    }
+
+    return (
+      <div className={`flex flex-col items-center justify-center w-full rounded-2xl py-2 ${urgencyClasses} ${!isNext ? 'opacity-90' : ''}`}>
+        <span className={`font-black leading-none tracking-tighter ${isNext ? 'text-2xl' : 'text-xl'}`}>
+          {timeStr}
+        </span>
+        <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 opacity-80">
+          MINUTO(S)
+        </span>
+      </div>
+    );
   };
 
   if (isSplash) {
