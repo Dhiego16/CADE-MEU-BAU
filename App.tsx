@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BusLine } from './types';
 
@@ -37,15 +36,19 @@ const App: React.FC = () => {
 
   /**
    * Normaliza os horários vindos da API.
-   * Transforma "--", "---", nulo, vazio ou traços em "SEM PREVISÃO"
+   * Transforma "--", "---", nulo ou vazio em "SEM PREVISÃO".
+   * Remove sufixos como "min" para limpeza visual.
    */
   const normalizeTime = (time: any): string => {
     if (time === null || time === undefined) return 'SEM PREVISÃO';
-    const t = time.toString().trim();
-    // Verifica se é vazio, contém apenas traços ou pontos
-    if (!t || /^[-.]+$/.test(t) || t === 'SEM PREVISÃO') {
+    let t = time.toString().trim();
+    
+    // Verifica se é vazio, contém apenas traços, pontos ou a string "---"
+    if (!t || /^[-.]+$/.test(t) || t === 'SEM PREVISÃO' || t === '....') {
       return 'SEM PREVISÃO';
     }
+
+    // Remove "min", "Min", "MIN" etc para tratar o dado puro
     return t.replace(/\s*min(utos?)?/gi, '');
   };
 
@@ -62,7 +65,6 @@ const App: React.FC = () => {
       
       if (data?.horarios && Array.isArray(data.horarios)) {
         return data.horarios.map((item: any, index: number) => {
-          // Lógica de linha: Se tiver apenas 1 dígito, adiciona NS (SEM PARÊNTESES)
           const rawLinha = (item.linha || '').toString().trim();
           const formattedLinha = rawLinha.length === 1 ? `NS${rawLinha}` : rawLinha;
 
@@ -75,7 +77,6 @@ const App: React.FC = () => {
             schedules: [],
             frequencyMinutes: 0,
             status: 'Normal',
-            // Normalização rigorosa de ambos os campos de previsão
             nextArrival: normalizeTime(item.proximo || item.previsao), 
             subsequentArrival: normalizeTime(item.seguinte),
             stopSource: sId
@@ -181,7 +182,6 @@ const App: React.FC = () => {
     return (
       <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-10 overflow-hidden text-center">
         <div className="relative mb-8 flex flex-col items-center scale-110">
-           {/* Logo visual baseada em CSS para evitar 404 se a imagem faltar */}
            <div className="w-40 h-40 bg-yellow-400 rounded-[3rem] flex items-center justify-center text-8xl shadow-[0_0_50px_rgba(251,191,36,0.4)] mb-8 transform rotate-[-5deg]">
              🚍
            </div>
@@ -192,7 +192,7 @@ const App: React.FC = () => {
         <div className="w-48 h-2 bg-white/10 rounded-full overflow-hidden relative">
           <div className="absolute top-0 left-0 h-full bg-yellow-400 w-1/2 animate-[loading_1.5s_infinite_linear]"></div>
         </div>
-        <p className="mt-6 text-[10px] font-black uppercase tracking-[0.5em] text-slate-500 animate-pulse">Sintonizando Satélites...</p>
+        <p className="mt-6 text-[10px] font-black uppercase tracking-[0.5em] text-slate-500 animate-pulse">Rastreando Linhas...</p>
         <style>{`@keyframes loading { from { left: -50%; } to { left: 100%; } }`}</style>
       </div>
     );
@@ -264,8 +264,6 @@ const App: React.FC = () => {
             <div className="space-y-4">
               {busLines.map(line => {
                 const isFav = favorites.some(f => f.stopId === (line.stopSource || stopId) && f.lineNumber === line.number);
-                const isNoPrev1 = line.nextArrival === 'SEM PREVISÃO';
-                const isNoPrev2 = line.subsequentArrival === 'SEM PREVISÃO';
                 
                 return (
                   <div key={line.id} className="bg-slate-900 border border-white/10 p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98] transition-transform">
@@ -289,19 +287,14 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Containers de Tempo de Chegada */}
                     <div className="flex gap-2">
-                       <div className="flex-1 bg-black/60 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[90px]">
+                       <div className="flex-1 bg-black/60 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[95px]">
                           <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Chega em:</span>
-                          <div className={`px-2 py-2 rounded-full ${getUrgencyColor(line.nextArrival || '')} font-black uppercase tracking-tighter w-full text-center truncate ${isNoPrev1 ? 'text-[9px] opacity-40' : 'text-xs'}`}>
-                             {line.nextArrival}
-                          </div>
+                          {renderTimeDisplay(line.nextArrival || 'SEM PREVISÃO', true)}
                        </div>
-                       <div className="flex-1 bg-black/30 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[90px] opacity-90">
+                       <div className="flex-1 bg-black/30 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[95px] opacity-90">
                           <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Próximo em:</span>
-                          <span className={`block font-black text-center w-full truncate leading-none ${isNoPrev2 ? 'text-[9px] text-slate-600' : 'text-white text-lg'}`}>
-                            {line.subsequentArrival}
-                          </span>
+                          {renderTimeDisplay(line.subsequentArrival || 'SEM PREVISÃO', false)}
                        </div>
                     </div>
                   </div>
