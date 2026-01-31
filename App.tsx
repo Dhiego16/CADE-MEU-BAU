@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { BusLine } from './types';
 
@@ -9,6 +8,24 @@ interface FavoriteItem {
 }
 
 const REFRESH_INTERVAL = 25; // segundos
+
+// Função para formatar número do ônibus
+const formatBusNumber = (numero: string): string => {
+  const num = numero.trim();
+  
+  // Se tem apenas 1 dígito, é Norte-Sul
+  if (num.length === 1 && !isNaN(Number(num))) {
+    return `NS${num}`;
+  }
+  
+  // Linhas com 2 dígitos: adiciona zero à esquerda (08 → 008)
+  if (num.length === 2 && !isNaN(Number(num))) {
+    return num.padStart(3, '0');
+  }
+  
+  // Linhas com 3+ dígitos: retorna como está
+  return num;
+};
 
 const App: React.FC = () => {
   const [busLines, setBusLines] = useState<BusLine[]>([]);
@@ -48,19 +65,23 @@ const App: React.FC = () => {
       
       const data = await res.json();
       if (data && data.horarios && Array.isArray(data.horarios)) {
-        return data.horarios.map((item: any, index: number) => ({
-          id: `api-${sId}-${item.linha}-${index}`,
-          number: item.linha,
-          name: item.linha,
-          origin: '',
-          destination: item.destino,
-          schedules: [],
-          frequencyMinutes: 0,
-          status: 'Normal',
-          nextArrival: item.proximo,
-          subsequentArrival: item.seguinte,
-          stopSource: sId
-        }));
+        return data.horarios.map((item: any, index: number) => {
+          const formattedNumber = formatBusNumber(item.linha);
+          
+          return {
+            id: `api-${sId}-${item.linha}-${index}`,
+            number: formattedNumber,
+            name: formattedNumber,
+            origin: '',
+            destination: item.destino,
+            schedules: [],
+            frequencyMinutes: 0,
+            status: 'Normal',
+            nextArrival: item.proximo,
+            subsequentArrival: item.seguinte,
+            stopSource: sId
+          };
+        });
       }
       return [];
     } catch (err) {
