@@ -342,7 +342,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-3 md:gap-4">
               <div className="w-2 md:w-3 h-2 md:h-3 bg-yellow-400 rounded-full animate-ping"></div>
               <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-600">
-                PROX EM <span className="text-yellow-400 tabular-nums">{countdown}S</span>
+                ATUALIZANDO EM <span className="text-yellow-400 tabular-nums">{countdown}S</span>
               </span>
             </div>
             <span className="text-[8px] md:text-[10px] font-black text-slate-700 uppercase tracking-widest bg-black/40 px-3 py-1 md:py-1.5 rounded-full">{busLines.length} LINHAS</span>
