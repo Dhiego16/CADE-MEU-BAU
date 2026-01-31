@@ -223,26 +223,6 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-
-      <header className="bg-slate-900 border-b-4 border-yellow-400 p-6 md:p-8 sticky top-0 z-50 shadow-2xl">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-8">
-          
-          {/* Logo Section */}
-          <div className="flex items-center gap-5 group cursor-default">
-            <div className="relative">
-               <div className="absolute inset-0 bg-yellow-400 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-               <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-800 rounded-3xl border-2 border-yellow-400 flex items-center justify-center overflow-hidden relative shadow-2xl transform group-hover:rotate-6 transition-transform">
-                  <img 
-                    src="./logo.png" 
-                    alt="Logo" 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as any).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23fbbf24"><path d="M18 11h-2V6c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v15c0 .55.45 1 1 1h14c.55 0 1-.45 1-1v-8c0-1.1-.9-2-2-2zM5 6h9v10H5V6zm13 14H5v-2h13v2zm0-4H5v-2h13v2zm0-4h-2v-3h2v3z"/></svg>';
-                    }}
-                  />
-               </div>
-            </div>
-            
             <div className="flex flex-col">
                <div className="bg-yellow-400 text-black px-6 py-1.5 font-black italic text-2xl md:text-4xl skew-x-[-12deg] shadow-[6px_6px_0px_0px_rgba(255,255,255,0.1)] uppercase leading-none">
                 CADÊ MEU BAÚ?
