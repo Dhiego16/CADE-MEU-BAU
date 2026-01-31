@@ -145,8 +145,8 @@ const App: React.FC = () => {
     if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
     const cleanTime = timeStr.toLowerCase();
     if (cleanTime.includes('agora') || cleanTime === '0') return 'bg-red-600 text-white';  
-    if (cleanTime.includes('aprox')) return "blue;
-    return 'bg-emerald-500 text-white';
+    if (cleanTime.includes('aprox')) return "blue";
+  
     
     const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
     if (mins <= 3) return 'bg-red-600 text-white';
