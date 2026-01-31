@@ -211,7 +211,7 @@ const App: React.FC = () => {
                   />
                 </div>
                 <div className="flex-[2] relative">
-                  <span className="absolute left-0 top-2 text-[8px] font-black text-slate-500 uppercase text-center w-full pointer-events-none">Num. Onibus(OPCIOAL)</span>
+                  <span className="absolute left-0 top-2 text-[8px] font-black text-slate-500 uppercase text-center w-full pointer-events-none">Num. Onibus(OPCIONAL)</span>
                   <input 
                     type="text" 
                     placeholder="Ex: 327"
