@@ -142,17 +142,30 @@ const App: React.FC = () => {
   }, [favorites]);
 
   const getUrgencyColor = (timeStr: string) => {
-    if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
-    const cleanTime = timeStr.toLowerCase();
-    if (cleanTime.includes('agora') || cleanTime === '0') return 'bg-red-600 text-white';  
-    if (cleanTime.includes('aprox')) return "blue";
-  
-    
-    const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
-    if (mins <= 3) return 'bg-red-600 text-white';
-    if (mins <= 8) return 'bg-yellow-500 text-black';
-    
-  };
+  if (!timeStr || timeStr === 'SEM PREVISÃO') {
+    return 'bg-slate-800 text-slate-500';
+  }
+
+  const cleanTime = timeStr.toLowerCase();
+
+  if (cleanTime.includes('agora') || cleanTime === '0') {
+    return 'bg-red-600 text-white';
+  }
+
+  if (cleanTime.includes('aprox')) {
+    return 'bg-blue-500 text-white';
+  }
+
+  // Extrai números da string (por exemplo: "5 min" -> 5)
+  const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
+
+  if (mins <= 3) return 'bg-red-600 text-white';
+  if (mins <= 8) return 'bg-yellow-500 text-black';
+
+  // Padrão: verde
+  return 'bg-emerald-500 text-white';
+};
+
 
   // Helper para renderizar o tempo com o rótulo "MINUTO(S)" embaixo
   const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
