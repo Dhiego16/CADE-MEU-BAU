@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { BusLine } from './types';
 
@@ -7,431 +8,238 @@ interface FavoriteItem {
   nickname?: string;
 }
 
-const REFRESH_INTERVAL = 25; // segundos
-
-// Função para formatar número do ônibus
-const formatBusNumber = (numero: string): string => {
-  const num = numero.trim();
-  
-  // Se tem apenas 1 dígito, é Norte-Sul
-  if (num.length === 1 && !isNaN(Number(num))) {
-    return `NS${num}`;
-  }
-  
-  // Linhas com 2 dígitos: adiciona zero à esquerda (08 → 008)
-  if (num.length === 2 && !isNaN(Number(num))) {
-    return num.padStart(3, '0');
-  }
-  
-  // Linhas com 3+ dígitos: retorna como está
-  return num;
-};
+const REFRESH_INTERVAL = 30;
 
 const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'map'>('search');
+  const [isSplash, setIsSplash] = useState(true);
   const [busLines, setBusLines] = useState<BusLine[]>([]);
   const [stopId, setStopId] = useState('');
   const [lineFilter, setLineFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
-  const [searchMode, setSearchMode] = useState<'favorites' | 'manual'>('favorites');
   
-  const [namingFavorite, setNamingFavorite] = useState<{line: BusLine, stopId: string} | null>(null);
-  const [tempNickname, setTempNickname] = useState('');
-
   const [favorites, setFavorites] = useState<FavoriteItem[]>(() => {
-    const saved = localStorage.getItem('cade_meu_bau_favs_v2');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return [];
-      }
-    }
-    return [];
+    const saved = localStorage.getItem('cade_meu_bau_app_favs');
+    return saved ? JSON.parse(saved) : [];
   });
 
   const baseUrl = 'https://bot-onibus.vercel.app/api/ponto';
 
+  useEffect(() => {
+    // Simula Splash Screen de App Nativo
+    const timer = setTimeout(() => setIsSplash(false), 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const performSearch = useCallback(async (sId: string, lFilter: string): Promise<BusLine[]> => {
     try {
       let fullUrl = `${baseUrl}?ponto=${sId.trim()}`;
-      if (lFilter.trim()) {
-        fullUrl += `&linha=${lFilter.trim()}`;
-      }
+      if (lFilter.trim()) fullUrl += `&linha=${lFilter.trim()}`;
       
       const res = await fetch(fullUrl);
       if (!res.ok) return [];
       
       const data = await res.json();
-      if (data && data.horarios && Array.isArray(data.horarios)) {
-        return data.horarios.map((item: any, index: number) => {
-          const formattedNumber = formatBusNumber(item.linha);
-          
-          return {
-            id: `api-${sId}-${item.linha}-${index}`,
-            number: formattedNumber,
-            name: formattedNumber,
-            origin: '',
-            destination: item.destino,
-            schedules: [],
-            frequencyMinutes: 0,
-            status: 'Normal',
-            nextArrival: item.proximo,
-            subsequentArrival: item.seguinte,
-            stopSource: sId
-          };
-        });
+      if (data?.horarios && Array.isArray(data.horarios)) {
+        return data.horarios.map((item: any, index: number) => ({
+          id: `api-${sId}-${item.linha}-${index}`,
+          number: item.linha,
+          name: item.linha,
+          origin: '',
+          destination: item.destino,
+          schedules: [],
+          frequencyMinutes: 0,
+          status: 'Normal',
+          nextArrival: item.proximo,
+          subsequentArrival: item.seguinte,
+          stopSource: sId
+        }));
       }
       return [];
     } catch (err) {
-      console.error("Erro na busca:", err);
       return [];
     }
   }, []);
 
-  const fetchAllFavorites = useCallback(async (silent = false) => {
-    if (favorites.length === 0) {
-      setBusLines([]);
-      return;
-    }
-    if (!silent) setIsLoading(true);
-    setErrorMsg(null);
-    const results = await Promise.all(
-      favorites.map(fav => performSearch(fav.stopId, fav.lineNumber))
-    );
-    const flatResults = results.flat();
-    setBusLines(flatResults);
-    setIsLoading(false);
-    setCountdown(REFRESH_INTERVAL);
-  }, [favorites, performSearch]);
-
-  useEffect(() => {
-    if (favorites.length > 0) {
-      setSearchMode('favorites');
-      fetchAllFavorites();
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setNamingFavorite(null);
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, []);
-
-  useEffect(() => {
-    if (busLines.length === 0) {
-      setCountdown(REFRESH_INTERVAL);
-      return;
-    }
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          if (searchMode === 'favorites') {
-            fetchAllFavorites(true);
-          } else if (stopId) {
-            performSearch(stopId, lineFilter).then(results => {
-              if (results.length > 0) setBusLines(results);
-            });
-          }
-          return REFRESH_INTERVAL;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [busLines.length, searchMode, stopId, lineFilter, fetchAllFavorites, performSearch]);
-
-  useEffect(() => {
-    localStorage.setItem('cade_meu_bau_favs_v2', JSON.stringify(favorites));
-  }, [favorites]);
-
-  const handleManualSearch = async (forcedId?: string) => {
+  const handleSearch = async (forcedId?: string) => {
     const idToSearch = forcedId || stopId;
-    if (!idToSearch) {
-      setErrorMsg("Digite o número do ponto.");
-      return;
-    }
-    setSearchMode('manual');
+    if (!idToSearch) return;
     setIsLoading(true);
     setErrorMsg(null);
     const results = await performSearch(idToSearch, lineFilter);
     setBusLines(results);
-    if (results.length === 0) {
-      setErrorMsg("Nenhum baú encontrado para este ponto.");
-    }
+    if (results.length === 0) setErrorMsg("Nenhum ônibus encontrado.");
     setIsLoading(false);
     setCountdown(REFRESH_INTERVAL);
   };
 
-  const openNamingModal = (line: BusLine, currentStop: string) => {
-    const isFav = favorites.some(f => f.stopId === currentStop && f.lineNumber === line.number);
-    if (isFav) {
-      setFavorites(prev => prev.filter(f => !(f.stopId === currentStop && f.lineNumber === line.number)));
-    } else {
-      setNamingFavorite({ line, stopId: currentStop });
-      setTempNickname('');
-    }
-  };
-
-  const confirmFavorite = () => {
-    if (namingFavorite) {
-      setFavorites(prev => [...prev, { 
-        stopId: namingFavorite.stopId, 
-        lineNumber: namingFavorite.line.number, 
-        nickname: tempNickname.trim() 
-      }]);
-      setNamingFavorite(null);
-    }
-  };
+  useEffect(() => {
+    localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
+  }, [favorites]);
 
   const getUrgency = (timeStr: string) => {
-    if (!timeStr || timeStr.toLowerCase().includes('aprox')) {
-       return { label: 'NA ESQUINA', color: 'bg-red-600', text: 'text-white', pulse: true };
-    }
+    if (!timeStr || timeStr.toLowerCase().includes('aprox')) 
+      return { label: 'NA ESQUINA', color: 'bg-red-600' };
     const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
-    if (mins <= 3) return { label: 'CORRE!', color: 'bg-red-600', text: 'text-white', pulse: true };
-    if (mins <= 8) return { label: 'DÁ PRA IR', color: 'bg-yellow-400', text: 'text-black', pulse: false };
-    return { label: 'RELAXA', color: 'bg-emerald-500', text: 'text-white', pulse: false };
+    if (mins <= 3) return { label: 'CORRE!', color: 'bg-red-600' };
+    if (mins <= 8) return { label: 'A CAMINHO', color: 'bg-yellow-400', text: 'text-black' };
+    return { label: 'TRANQUILO', color: 'bg-emerald-500' };
   };
 
+  if (isSplash) {
+    return (
+      <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-10">
+        <div className="relative mb-8">
+           <img 
+            src="./logo.png" 
+            alt="Logo" 
+            className="w-32 h-32 object-contain animate-pulse"
+            onError={(e) => e.currentTarget.style.display = 'none'}
+          />
+        </div>
+        <div className="bg-yellow-400 text-black px-6 py-2 font-black italic text-3xl skew-x-[-12deg] mb-6 shadow-[10px_10px_0px_rgba(251,191,36,0.2)]">
+          CADÊ MEU BAÚ?
+        </div>
+        <div className="w-32 h-1 bg-white/10 rounded-full overflow-hidden relative">
+          <div className="absolute top-0 left-0 h-full bg-yellow-400 w-1/2 animate-[loading_1.5s_infinite_linear]"></div>
+        </div>
+        <style>{`@keyframes loading { from { left: -50%; } to { left: 100%; } }`}</style>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-yellow-400 selection:text-black pb-20 overflow-x-hidden">
-      {/* Modal Customizado de Favoritos */}
-      {namingFavorite && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-black/95 backdrop-blur-md animate-in fade-in duration-300"
-          onClick={() => setNamingFavorite(null)}
-        >
-          <div 
-            className="bg-slate-900 border-4 border-yellow-400 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] max-w-md w-full shadow-[0_0_80px_rgba(251,191,36,0.4)] animate-in zoom-in-95 duration-200"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-center mb-4 md:mb-6">
-               <div className="bg-yellow-400 p-3 md:p-4 rounded-2xl rotate-3 shadow-lg">
-                  <span className="text-3xl md:text-4xl">⭐</span>
-               </div>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter mb-2 text-center text-yellow-400">Novo Favorito</h2>
-            <p className="text-slate-500 text-center text-[10px] font-black uppercase mb-6 md:mb-8 tracking-widest">Apelido para a Linha {namingFavorite.line.number}</p>
-            
-            <input 
-              autoFocus
-              type="text" 
-              placeholder="EX: CASA, TRABALHO..."
-              value={tempNickname}
-              onChange={e => setTempNickname(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && confirmFavorite()}
-              className="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl px-6 py-4 md:py-5 text-white font-black text-xl md:text-2xl outline-none focus:border-yellow-400 transition-all mb-6 md:mb-8 placeholder:text-slate-700 text-center uppercase"
-            />
-
-            <div className="flex gap-3 md:gap-4">
-              <button 
-                onClick={() => setNamingFavorite(null)}
-                className="flex-1 bg-slate-800 text-slate-500 py-4 md:py-5 rounded-xl md:rounded-2xl font-black uppercase hover:text-white transition-all active:scale-95 text-sm md:text-base"
-              >
-                Voltar
-              </button>
-              <button 
-                onClick={confirmFavorite}
-                className="flex-1 bg-yellow-400 text-black py-4 md:py-5 rounded-xl md:rounded-2xl font-black uppercase hover:bg-white transition-all shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)] active:scale-95 text-sm md:text-base"
-              >
-                Salvar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <header className="bg-slate-900 border-b-4 border-yellow-400 p-4 md:p-8 sticky top-0 z-50 shadow-2xl">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-6 md:gap-8">
-          
-          {/* Header Title Section (Logo Image removed as requested) */}
-          <div className="flex items-center gap-3 md:gap-5 group cursor-default">
-            <div className="flex flex-col items-center md:items-start text-center md:text-left">
-               <div className="bg-yellow-400 text-black px-4 md:px-6 py-1 md:py-1.5 font-black italic text-xl md:text-4xl skew-x-[-12deg] shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] uppercase leading-none">
-                CADÊ MEU BAÚ?
-               </div>
-               <span className="text-[8px] md:text-[10px] font-black tracking-[0.3em] md:tracking-[0.4em] text-slate-600 mt-1 md:mt-2 uppercase">Monitor em Tempo Real</span>
-            </div>
-
-            {isLoading && (
-              <div className="flex items-center gap-2 ml-2 md:ml-4">
-                <div className="w-4 h-4 md:w-5 md:h-5 border-3 md:border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
-          </div>
-          
-          {/* Search Controls */}
-          <div className="w-full flex flex-col md:flex-row gap-3">
-            <div className="flex-[2] flex bg-slate-800 rounded-xl md:rounded-2xl p-0.5 md:p-1 border-2 border-slate-700 shadow-inner group focus-within:border-yellow-400 transition-all relative">
-              <input 
-                type="text" 
-                inputMode="numeric"
-                placeholder="NÚMERO DO PONTO"
-                value={stopId}
-                onChange={e => setStopId(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleManualSearch()}
-                className="bg-transparent px-4 md:px-6 py-3 md:py-4 outline-none font-black text-yellow-400 w-full text-base md:text-lg placeholder:text-slate-700 uppercase"
-              />
-            </div>
-            <div className="flex-1 flex bg-slate-800 rounded-xl md:rounded-2xl p-0.5 md:p-1 border-2 border-slate-700 shadow-inner focus-within:border-yellow-400 transition-all">
-              <input 
-                type="text" 
-                placeholder="LINHA(OPCIONAL)"
-                value={lineFilter}
-                onChange={e => setLineFilter(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleManualSearch()}
-                className="bg-transparent px-4 md:px-6 py-3 md:py-4 outline-none font-black text-white w-full text-base md:text-lg placeholder:text-slate-700 text-center uppercase"
-              />
-            </div>
-            <button 
-              onClick={() => handleManualSearch()}
-              disabled={isLoading}
-              className="bg-yellow-400 text-black px-6 md:px-12 py-4 rounded-xl md:rounded-2xl font-black hover:bg-white transition-all active:scale-95 uppercase text-lg md:text-xl shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]"
-            >
-              {isLoading ? '...' : 'BUSCAR'}
-            </button>
-          </div>
-        </div>
+    <div className="h-screen w-screen bg-black text-white flex flex-col relative overflow-hidden">
+      
+      {/* App Header */}
+      <header className="pt-[env(safe-area-inset-top)] bg-slate-900 border-b border-white/5 p-4 flex justify-between items-center shrink-0">
+        <div className="font-black italic text-yellow-400 text-xl tracking-tighter skew-x-[-10deg]">CADÊ MEU BAÚ?</div>
+        {isLoading && <div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>}
       </header>
 
-      <main className="max-w-3xl mx-auto p-4 md:p-8 fade-in-up">
-        {favorites.length > 0 && (
-          <div className="mb-10 md:mb-14">
-            <div className="flex items-center justify-between mb-4 md:mb-6">
-              <h2 className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.4em] md:tracking-[0.5em] text-slate-600 flex items-center gap-2 md:gap-3">
-                <span className="text-yellow-400 animate-pulse">⭐</span> MEUS FAVORITOS
-              </h2>
-              <button 
-                onClick={() => { setSearchMode('favorites'); fetchAllFavorites(); }} 
-                className="text-[8px] md:text-[10px] font-black bg-slate-900 border border-slate-800 px-3 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl text-slate-500 hover:text-yellow-400 hover:border-yellow-400 transition-all uppercase tracking-tighter active:scale-95"
-              >
-                Atualizar
-              </button>
+      {/* Main Content Area */}
+      <div className="flex-grow overflow-y-auto app-container p-4 space-y-6">
+        
+        {activeTab === 'search' && (
+          <div className="page-enter space-y-6">
+            <div className="bg-slate-900 p-4 rounded-3xl border border-white/5 shadow-2xl">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  inputMode="numeric"
+                  placeholder="Nº DO PONTO"
+                  value={stopId}
+                  onChange={e => setStopId(e.target.value)}
+                  className="flex-[2] bg-black border border-white/10 rounded-2xl px-4 py-4 font-bold text-yellow-400 outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700"
+                />
+                <button 
+                  onClick={() => handleSearch()}
+                  className="flex-1 bg-yellow-400 text-black rounded-2xl font-black btn-active uppercase text-xs"
+                >
+                  BUSCAR
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 md:gap-4">
-              {favorites.map((fav, i) => (
-                <div key={i} className="flex items-center bg-slate-900 border-2 border-slate-800 rounded-2xl md:rounded-3xl overflow-hidden hover:border-yellow-400 transition-all shadow-xl hover:-translate-y-1 group">
-                  <button
-                    onClick={() => { setStopId(fav.stopId); setLineFilter(fav.lineNumber); handleManualSearch(fav.stopId); }}
-                    className="px-4 md:px-8 py-3 md:py-4 flex flex-col items-start leading-tight text-left"
-                  >
-                    {fav.nickname && <span className="text-[7px] md:text-[9px] font-black text-slate-500 uppercase truncate max-w-[100px] md:max-w-[150px] tracking-widest mb-0.5 md:mb-1">{fav.nickname}</span>}
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <span className="font-black text-yellow-400 text-lg md:text-2xl italic">{fav.lineNumber || 'TUDO'}</span>
-                      <span className="text-[7px] md:text-[9px] font-black text-slate-700 bg-black/40 px-1.5 py-0.5 rounded uppercase tracking-tighter">PT {fav.stopId}</span>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={() => setFavorites(prev => prev.filter((_, idx) => idx !== i))}
-                    className="bg-red-900/10 px-4 md:px-5 py-6 md:py-8 text-red-500 hover:bg-red-600 hover:text-white transition-all border-l border-slate-800"
-                  >
-                    <span className="block text-xs">✕</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {busLines.length > 0 && (
-          <div className="flex items-center justify-between mb-6 md:mb-8 bg-slate-900/40 px-4 md:px-8 py-3 md:py-4 rounded-2xl md:rounded-3xl border border-slate-800/50">
-            <div className="flex items-center gap-3 md:gap-4">
-              <div className="w-2 md:w-3 h-2 md:h-3 bg-yellow-400 rounded-full animate-ping"></div>
-              <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-600">
-                ATUALIZANDO EM <span className="text-yellow-400 tabular-nums">{countdown}S</span>
-              </span>
-            </div>
-            <span className="text-[8px] md:text-[10px] font-black text-slate-700 uppercase tracking-widest bg-black/40 px-3 py-1 md:py-1.5 rounded-full">{busLines.length} LINHAS</span>
-          </div>
-        )}
+            {errorMsg && (
+              <div className="bg-red-500/10 border border-red-500 p-4 rounded-2xl text-center text-red-500 font-bold text-xs">
+                {errorMsg}
+              </div>
+            )}
 
-        {errorMsg && (
-          <div className="mb-8 p-6 md:p-10 bg-red-900/10 border-4 border-red-600 text-red-500 rounded-[2rem] md:rounded-[3rem] font-black text-center uppercase italic tracking-tighter shadow-2xl animate-in shake duration-500">
-            <div className="text-2xl md:text-4xl mb-2 md:mb-4">⚠️</div>
-            <span className="text-sm md:text-base">{errorMsg}</span>
-          </div>
-        )}
-
-        <div className="space-y-4 md:space-y-8">
-          {busLines.length > 0 ? (
-            busLines.map(line => {
-              const urgency = getUrgency(line.nextArrival || '');
-              const currentPoint = (line as any).stopSource || stopId;
-              const isFav = favorites.some(f => f.stopId === currentPoint && f.lineNumber === line.number);
-              
-              return (
-                <div key={line.id} className="bg-slate-900 border-2 border-slate-800 p-5 md:p-8 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-8 transition-all hover:border-yellow-400 rounded-[2rem] md:rounded-[3.5rem] group shadow-2xl relative overflow-hidden active:scale-[0.98]">
-                  <div className="flex items-center gap-4 md:gap-10 w-full md:w-auto">
-                    <div className="text-5xl md:text-8xl font-black text-yellow-400 tabular-nums w-20 md:w-40 text-center drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)] italic md:skew-x-[-6deg]">
-                      {line.number}
-                    </div>
-                    <div className="flex-grow">
-                      <h3 className="font-black text-lg md:text-3xl uppercase tracking-tighter leading-tight group-hover:text-yellow-400 transition-colors mb-2 md:mb-4">
-                        {line.destination}
-                      </h3>
-                      <div className="flex flex-wrap gap-2 md:gap-3">
-                         <div className="flex flex-col">
-                            <span className="text-[7px] md:text-[9px] font-black text-slate-600 mb-0.5 md:mb-1 uppercase tracking-widest">Chegada</span>
-                            <span className="text-[10px] md:text-sm font-black bg-slate-800 border-2 border-slate-700 px-3 md:px-5 py-1 md:py-2 rounded-lg md:rounded-2xl uppercase tracking-widest text-slate-300">
-                              {line.nextArrival ? `${line.nextArrival} MIN` : 'N/A'}
-                            </span>
-                         </div>
-                         {line.subsequentArrival && (
-                           <div className="flex flex-col">
-                              <span className="text-[7px] md:text-[9px] font-black text-slate-700 mb-0.5 md:mb-1 uppercase tracking-widest">Depois</span>
-                              <span className="text-[9px] md:text-[11px] font-black bg-black/50 px-3 md:px-5 py-1 md:py-2 rounded-lg md:rounded-2xl uppercase tracking-widest text-slate-600">
-                                {line.subsequentArrival} MIN
-                              </span>
-                           </div>
-                         )}
-                         {(line as any).stopSource && (
-                            <div className="flex flex-col">
-                              <span className="text-[7px] md:text-[9px] font-black text-slate-700 mb-0.5 md:mb-1 uppercase tracking-widest">Ponto</span>
-                              <span className="text-[9px] md:text-[11px] font-black bg-yellow-400/5 text-yellow-400/30 px-3 md:px-5 py-1 md:py-2 rounded-lg md:rounded-2xl uppercase tracking-tighter">
-                                #{ (line as any).stopSource }
-                              </span>
-                            </div>
-                         )}
+            <div className="space-y-4">
+              {busLines.map(line => {
+                const urgency = getUrgency(line.nextArrival || '');
+                return (
+                  <div key={line.id} className="bg-slate-900/50 border border-white/5 p-5 rounded-[2.5rem] flex items-center justify-between group active:bg-slate-800 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="text-4xl font-black text-yellow-400 italic w-14">{line.number}</div>
+                      <div>
+                        <div className="font-black text-sm uppercase truncate max-w-[150px]">{line.destination}</div>
+                        <div className="text-[10px] font-bold text-slate-500 tracking-widest">{line.nextArrival || '--'} MIN</div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 md:gap-6 w-full md:w-auto justify-between md:justify-end border-t border-slate-800/50 md:border-0 pt-4 md:pt-0">
-                    <button 
-                      onClick={() => openNamingModal(line, currentPoint)}
-                      className={`p-4 md:p-6 rounded-2xl md:rounded-[2rem] border-2 transition-all flex items-center justify-center text-2xl md:text-4xl shadow-xl active:scale-90 ${isFav ? 'bg-red-600/10 border-red-600 text-red-500' : 'bg-slate-800 border-slate-700 text-slate-700 hover:text-red-400 hover:border-red-400'}`}
-                    >
-                      {isFav ? '❤️' : '🤍'}
-                    </button>
-                    
-                    <div className={`flex-grow md:flex-none px-6 md:px-12 py-4 md:py-6 rounded-2xl md:rounded-[2rem] ${urgency.color} ${urgency.text} font-black text-xl md:text-3xl italic tracking-tighter shadow-2xl md:min-w-[200px] text-center uppercase ${urgency.pulse ? 'animate-pulse' : ''}`}>
+                    <div className={`px-4 py-2 rounded-full ${urgency.color} ${urgency.text || 'text-white'} text-[9px] font-black uppercase tracking-tighter`}>
                       {urgency.label}
                     </div>
                   </div>
-                </div>
-              );
-            })
-          ) : !isLoading && (
-            <div className="flex flex-col items-center justify-center py-24 md:py-48 opacity-20">
-              <div className="text-[8rem] md:text-[12rem] mb-6 md:mb-10 grayscale animate-bounce duration-[2000ms]">🚍</div>
-              <h2 className="text-3xl md:text-5xl font-black uppercase italic tracking-[0.3em] md:tracking-[0.4em]">CADÊ O BAÚ?</h2>
-              <div className="flex items-center gap-2 md:gap-4 mt-6 md:mt-8 px-4 text-center">
-                <div className="hidden md:block h-px w-12 bg-yellow-400"></div>
-                <p className="font-black italic uppercase tracking-widest text-[10px] md:text-sm bg-yellow-400 text-black px-4 md:px-6 py-2 rounded-sm shadow-xl">Insira o número do ponto acima</p>
-                <div className="hidden md:block h-px w-12 bg-yellow-400"></div>
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
+                );
+              })}
 
-      <footer className="text-center p-12 md:p-20 opacity-10 text-[8px] md:text-[10px] font-black uppercase tracking-[1em] md:tracking-[2em] px-4">
-        RMTC GOIÂNIA • REDE METROPOLITANA • REAL-TIME DATA
-      </footer>
+              {busLines.length === 0 && !isLoading && (
+                <div className="py-20 text-center opacity-20">
+                  <div className="text-6xl mb-4">🚍</div>
+                  <p className="font-black text-xs uppercase tracking-[0.3em]">Aguardando Busca</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'favs' && (
+          <div className="page-enter space-y-4">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-600 mb-6 px-2">Meus Favoritos</h2>
+            {favorites.map((fav, i) => (
+              <div key={i} className="bg-slate-900 p-4 rounded-[2rem] border border-white/5 flex items-center justify-between btn-active"
+                onClick={() => { setActiveTab('search'); setStopId(fav.stopId); handleSearch(fav.stopId); }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-yellow-400 rounded-xl flex items-center justify-center text-black font-black">⭐</div>
+                  <div>
+                    <div className="font-black text-sm">{fav.nickname || 'Linha ' + fav.lineNumber}</div>
+                    <div className="text-[10px] font-bold text-slate-500">Ponto: {fav.stopId}</div>
+                  </div>
+                </div>
+                <button className="text-slate-700 text-xl px-2">›</button>
+              </div>
+            ))}
+            {favorites.length === 0 && (
+              <div className="py-20 text-center opacity-20">
+                <p className="font-black text-xs uppercase tracking-[0.3em]">Nenhum favorito salvo</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'map' && (
+          <div className="page-enter flex flex-col items-center justify-center py-20 text-center">
+            <div className="text-5xl mb-6">📍</div>
+            <h3 className="font-black text-lg mb-2 text-yellow-400">MAPA EM BREVE</h3>
+            <p className="text-xs text-slate-500 max-w-[200px] leading-relaxed uppercase tracking-tighter">Estamos trabalhando para trazer a localização dos ônibus no mapa em tempo real.</p>
+          </div>
+        )}
+
+      </div>
+
+      {/* Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-white/5 px-6 pb-8 pt-4 flex justify-between items-center shadow-[0_-10px_40px_rgba(0,0,0,0.8)] z-50">
+        <button 
+          onClick={() => setActiveTab('search')}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'search' ? 'text-yellow-400 scale-110' : 'text-slate-600'}`}
+        >
+          <div className="text-xl">🔍</div>
+          <span className="text-[8px] font-black uppercase tracking-widest">Busca</span>
+        </button>
+        
+        <button 
+          onClick={() => setActiveTab('favs')}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'favs' ? 'text-yellow-400 scale-110' : 'text-slate-600'}`}
+        >
+          <div className="text-xl">⭐</div>
+          <span className="text-[8px] font-black uppercase tracking-widest">Favs</span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('map')}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'map' ? 'text-yellow-400 scale-110' : 'text-slate-600'}`}
+        >
+          <div className="text-xl">📍</div>
+          <span className="text-[8px] font-black uppercase tracking-widest">Mapa</span>
+        </button>
+      </nav>
+
     </div>
   );
 };
