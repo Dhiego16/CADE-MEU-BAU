@@ -15,6 +15,8 @@ export interface BusLine {
   status: 'Normal' | 'Atrasado' | 'Indisponível';
   nextArrival?: string; // Mapeado de 'proximo'
   subsequentArrival?: string; // Mapeado de 'seguinte'
+  // Adicionado stopSource para identificar a qual ponto esta linha pertence nos resultados de busca
+  stopSource?: string;
 }
 
 export interface ChatMessage {
