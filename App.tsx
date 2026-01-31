@@ -227,25 +227,13 @@ const App: React.FC = () => {
       <header className="bg-slate-900 border-b-4 border-yellow-400 p-4 md:p-8 sticky top-0 z-50 shadow-2xl">
         <div className="max-w-3xl mx-auto flex flex-col items-center gap-6 md:gap-8">
           
-          {/* Logo Section */}
+          {/* Header Title Section (Logo Image removed as requested) */}
           <div className="flex items-center gap-3 md:gap-5 group cursor-default">
-            <div className="relative">
-               <div className="absolute inset-0 bg-yellow-400 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-               <div className="w-12 h-12 md:w-20 md:h-20 bg-slate-800 rounded-2xl md:rounded-3xl border-2 border-yellow-400 flex items-center justify-center overflow-hidden relative shadow-2xl transform group-hover:rotate-6 transition-transform">
-                  <img 
-                    src="logo.png" 
-                    alt="Logo" 
-                    className="w-full h-full object-cover"
-                    loading="eager"
-                  />
-               </div>
-            </div>
-            
-            <div className="flex flex-col">
+            <div className="flex flex-col items-center md:items-start text-center md:text-left">
                <div className="bg-yellow-400 text-black px-4 md:px-6 py-1 md:py-1.5 font-black italic text-xl md:text-4xl skew-x-[-12deg] shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] uppercase leading-none">
                 CADÊ MEU BAÚ?
                </div>
-               <span className="text-[8px] md:text-[10px] font-black tracking-[0.3em] md:tracking-[0.4em] text-slate-600 mt-1 md:mt-2 ml-1 uppercase">Monitor em Tempo Real</span>
+               <span className="text-[8px] md:text-[10px] font-black tracking-[0.3em] md:tracking-[0.4em] text-slate-600 mt-1 md:mt-2 uppercase">Monitor em Tempo Real</span>
             </div>
 
             {isLoading && (
