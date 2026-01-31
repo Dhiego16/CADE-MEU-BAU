@@ -144,12 +144,13 @@ const App: React.FC = () => {
   const getUrgencyColor = (timeStr: string) => {
     if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
     const cleanTime = timeStr.toLowerCase();
-    if (cleanTime.includes('aprox') || cleanTime.includes('agora') || cleanTime === '0') 
-      return 'bg-red-600 text-white';
+    if (cleanTime.includes('agora') || cleanTime === '0') 
+      return 'bg-red-600 text-white';    
     
     const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
     if (mins <= 3) return 'bg-red-600 text-white';
     if (mins <= 8) return 'bg-yellow-500 text-black';
+    if (mins.includes('aprox')) return "blue;
     return 'bg-emerald-500 text-white';
   };
 
