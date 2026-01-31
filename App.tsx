@@ -46,7 +46,7 @@ const App: React.FC = () => {
     if (!t || /^[-.]+$/.test(t) || t === 'SEM PREVISÃO') {
       return 'SEM PREVISÃO';
     }
-    return t;
+    return t.replace(/\s*min(utos?)?/gi, '');
   };
 
   const performSearch = useCallback(async (sId: string, lFilter: string): Promise<BusLine[]> => {
