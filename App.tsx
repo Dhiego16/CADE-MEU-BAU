@@ -280,7 +280,7 @@ const App: React.FC = () => {
             <div className="flex-1 flex bg-slate-800 rounded-xl md:rounded-2xl p-0.5 md:p-1 border-2 border-slate-700 shadow-inner focus-within:border-yellow-400 transition-all">
               <input 
                 type="text" 
-                placeholder="LINHA"
+                placeholder="LINHA(OPCIONAL)"
                 value={lineFilter}
                 onChange={e => setLineFilter(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleManualSearch()}
