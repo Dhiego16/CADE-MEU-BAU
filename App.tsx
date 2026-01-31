@@ -149,11 +149,6 @@ const App: React.FC = () => {
     return (
       <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-10 overflow-hidden text-center">
         <div className="relative mb-8 flex flex-col items-center scale-110">
-           <img 
-            src="./logo.png" 
-            alt="Logo" 
-            className="w-56 h-56 object-contain mb-4"
-          />
           <div className="bg-yellow-400 text-black px-6 py-2 font-black italic text-2xl skew-x-[-12deg] shadow-[8px_8px_0px_rgba(251,191,36,0.3)] uppercase tracking-tighter">
             Cadê meu Baú?
           </div>
