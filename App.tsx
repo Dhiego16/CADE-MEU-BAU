@@ -146,11 +146,12 @@ const App: React.FC = () => {
     const cleanTime = timeStr.toLowerCase();
     if (cleanTime.includes('agora') || cleanTime === '0') return 'bg-red-600 text-white';  
     if (cleanTime.includes('aprox')) return "blue;
+    return 'bg-emerald-500 text-white';
     
     const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
     if (mins <= 3) return 'bg-red-600 text-white';
     if (mins <= 8) return 'bg-yellow-500 text-black';
-    return 'bg-emerald-500 text-white';
+    
   };
 
   // Helper para renderizar o tempo com o rótulo "MINUTO(S)" embaixo
