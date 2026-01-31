@@ -204,17 +204,17 @@ const App: React.FC = () => {
                   <input 
                     type="text" 
                     inputMode="numeric"
-                    placeholder="Ex: 123"
+                    placeholder="Ex: 31700"
                     value={stopId}
                     onChange={e => setStopId(e.target.value)}
                     className="w-full bg-black border border-white/10 rounded-2xl px-4 pt-6 pb-3 font-black text-yellow-400 outline-none focus:border-yellow-400 transition-all placeholder:text-slate-800 text-xl"
                   />
                 </div>
                 <div className="flex-[2] relative">
-                  <span className="absolute left-0 top-2 text-[8px] font-black text-slate-500 uppercase text-center w-full pointer-events-none">Filtro</span>
+                  <span className="absolute left-0 top-2 text-[8px] font-black text-slate-500 uppercase text-center w-full pointer-events-none">Num. Onibus(OPCIOAL)</span>
                   <input 
                     type="text" 
-                    placeholder="Linha"
+                    placeholder="Ex: 327"
                     value={lineFilter}
                     onChange={e => setLineFilter(e.target.value)}
                     className="w-full bg-black border border-white/10 rounded-2xl px-4 pt-6 pb-3 font-black text-white outline-none focus:border-yellow-400 transition-all placeholder:text-slate-800 text-xl text-center"
