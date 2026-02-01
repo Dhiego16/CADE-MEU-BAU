@@ -305,7 +305,8 @@ const App: React.FC = () => {
                           {line.number}
                         </div>
                         <div className="min-w-0 flex flex-col justify-center">
-                          <div className="font-black text-[13px] uppercase truncate text-white leading-tight mb-1 pr-2">{line.destination}</div>
+                          <div className="font-black text-[13px] uppercase truncate text-white leading-tight mb-1 pr-2">INDO PARA: {line.destination}</div>
+
                           <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online agora
                           </div>
