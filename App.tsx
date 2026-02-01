@@ -315,9 +315,15 @@ const App: React.FC = () => {
                           </div>
 
 
-                          <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online agora
+                          <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                line.nextArrival?.toLowerCase().includes('aprox') ? 'bg-red-500' : 'bg-emerald-500'
+                              }`}
+                            ></span>
+                              {line.nextArrival?.toLowerCase().includes('aprox') ? 'Offline' : 'Online agora'}
                           </div>
+
                         </div>
                       </div>
                       <button 
