@@ -201,8 +201,8 @@ const App: React.FC = () => {
       </span>
 
       {isApprox && (
-        <span className="text-[6px] font-bold uppercase tracking-widest mt-1 text-red-500 text-center">
-          IMPOSSÍVEL RASTREAR O BAÚ AGORA, MOSTRANDO TEMPO ESPECULADO
+        <span className="text-[6px] font-black uppercase tracking-widest mt-1 opacity-80 text-center">
+          IMPOSSÍVEL RASTREAR O BAÚ AGORA, MOSTRANDO TEMPO ESPECULADO!
         </span>
       )}
     </div>
