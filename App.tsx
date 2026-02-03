@@ -14,9 +14,11 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'map'>('search');
   const [isSplash, setIsSplash] = useState(true);
   const [busLines, setBusLines] = useState<BusLine[]>([]);
+  const [favoriteBusLines, setFavoriteBusLines] = useState<BusLine[]>([]);
   const [stopId, setStopId] = useState('');
   const [lineFilter, setLineFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   
@@ -30,7 +32,14 @@ const App: React.FC = () => {
   const baseUrl = 'https://bot-onibus.vercel.app/api/ponto';
 
   useEffect(() => {
-    const splashTimer = setTimeout(() => setIsSplash(false), 2500);
+    const splashTimer = setTimeout(() => {
+      setIsSplash(false);
+      // Após splash, verifica se tem favoritos
+      if (favorites.length > 0) {
+        setActiveTab('favs');
+        loadFavoritesSchedules();
+      }
+    }, 2500);
     return () => clearTimeout(splashTimer);
   }, []);
 
@@ -102,6 +111,33 @@ const App: React.FC = () => {
     setCountdown(REFRESH_INTERVAL);
   };
 
+  // Nova função para carregar horários dos favoritos
+  const loadFavoritesSchedules = async () => {
+    if (favorites.length === 0) return;
+    
+    setIsFavoritesLoading(true);
+    
+    try {
+      // Faz requests paralelas para todos os favoritos
+      const promises = favorites.map(fav => 
+        performSearch(fav.stopId, fav.lineNumber)
+      );
+      
+      const results = await Promise.all(promises);
+      
+      // Flatten e combinar todos os resultados
+      const allLines = results.flat();
+      
+      setFavoriteBusLines(allLines);
+    } catch (err) {
+      console.error("Erro ao carregar favoritos:", err);
+    } finally {
+      setIsFavoritesLoading(false);
+      setCountdown(REFRESH_INTERVAL);
+    }
+  };
+
+  // Auto-refresh para aba de busca
   useEffect(() => {
     if (activeTab === 'search' && busLines.length > 0 && !isLoading) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -123,11 +159,36 @@ const App: React.FC = () => {
     };
   }, [activeTab, busLines.length, isLoading, stopId, lineFilter]);
 
+  // Auto-refresh para aba de favoritos
+  useEffect(() => {
+    if (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            loadFavoritesSchedules();
+            return REFRESH_INTERVAL;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (activeTab !== 'favs') {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [activeTab, favoriteBusLines.length, isFavoritesLoading, favorites]);
+
   const toggleFavorite = (line: BusLine) => {
     const sId = line.stopSource || stopId;
     const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
     if (isFav) {
-      setFavorites(favorites.filter(f => !(f.stopId === sId && f.lineNumber === line.number)));
+      const newFavorites = favorites.filter(f => !(f.stopId === sId && f.lineNumber === line.number));
+      setFavorites(newFavorites);
+      // Remove da lista de favoritos carregados também
+      setFavoriteBusLines(favoriteBusLines.filter(l => !(l.stopSource === sId && l.number === line.number)));
     } else {
       setFavorites([...favorites, { 
         stopId: sId, 
@@ -141,74 +202,134 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
   }, [favorites]);
 
+  // Recarrega favoritos quando a aba de favoritos é selecionada
+  useEffect(() => {
+    if (activeTab === 'favs' && favorites.length > 0 && favoriteBusLines.length === 0) {
+      loadFavoritesSchedules();
+    }
+  }, [activeTab]);
+
   const getUrgencyColor = (timeStr: string) => {
-  if (!timeStr || timeStr === 'SEM PREVISÃO') {
-    return 'bg-slate-800 text-slate-500';
-  }
+    if (!timeStr || timeStr === 'SEM PREVISÃO') {
+      return 'bg-slate-800 text-slate-500';
+    }
 
-  const cleanTime = timeStr.toLowerCase();
+    const cleanTime = timeStr.toLowerCase();
 
-  if (cleanTime.includes('agora') || cleanTime === '0') {
-    return 'bg-red-600 text-white';
-  }
+    if (cleanTime.includes('agora') || cleanTime === '0') {
+      return 'bg-red-600 text-white';
+    }
 
-  if (cleanTime.includes('aprox')) {
-    return 'bg-blue-500 text-white';
-  }
+    if (cleanTime.includes('aprox')) {
+      return 'bg-blue-500 text-white';
+    }
 
-  // Extrai números da string (por exemplo: "5 min" -> 5)
-  const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
+    // Extrai números da string (por exemplo: "5 min" -> 5)
+    const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
 
-  if (mins <= 3) return 'bg-red-600 text-white';
-  if (mins <= 8) return 'bg-yellow-500 text-black';
+    if (mins <= 3) return 'bg-red-600 text-white';
+    if (mins <= 8) return 'bg-yellow-500 text-black';
 
-  // Padrão: verde
-  return 'bg-emerald-500 text-white';
-};
-
+    // Padrão: verde
+    return 'bg-emerald-500 text-white';
+  };
 
   // Helper para renderizar o tempo com o rótulo "MINUTO(S)" embaixo
   const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
-  const isNoPrev = timeStr === 'SEM PREVISÃO';
-  const urgencyClasses = getUrgencyColor(timeStr);
-  const isApprox = timeStr.toLowerCase().includes('aprox');
+    const isNoPrev = timeStr === 'SEM PREVISÃO';
+    const urgencyClasses = getUrgencyColor(timeStr);
+    const isApprox = timeStr.toLowerCase().includes('aprox');
 
-  if (isNoPrev) {
+    if (isNoPrev) {
+      return (
+        <div
+          className={`px-2 py-3 rounded-2xl ${urgencyClasses} font-black uppercase tracking-tighter w-full text-center text-[9px] opacity-40`}
+        >
+          {timeStr}
+        </div>
+      );
+    }
+
     return (
       <div
-        className={`px-2 py-3 rounded-2xl ${urgencyClasses} font-black uppercase tracking-tighter w-full text-center text-[9px] opacity-40`}
-      >
-        {timeStr}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`flex flex-col items-center justify-center w-full rounded-2xl py-2 ${urgencyClasses} ${
-        !isNext ? 'opacity-90' : ''
-      }`}
-    >
-      <span
-        className={`font-black leading-none tracking-tighter ${
-          isNext ? 'text-2xl' : 'text-xl'
+        className={`flex flex-col items-center justify-center w-full rounded-2xl py-2 ${urgencyClasses} ${
+          !isNext ? 'opacity-90' : ''
         }`}
       >
-        {timeStr}
-      </span>
-      <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 opacity-80">
-        MINUTO(S)
-      </span>
-
-      {isApprox && (
-        <span className="text-[6px] font-black uppercase tracking-widest mt-1 opacity-80 text-center">
-          IMPOSSÍVEL RASTREAR O BAÚ AGORA, MOSTRANDO TEMPO ESPECULADO!
+        <span
+          className={`font-black leading-none tracking-tighter ${
+            isNext ? 'text-2xl' : 'text-xl'
+          }`}
+        >
+          {timeStr}
         </span>
-      )}
-    </div>
-  );
-};
+        <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 opacity-80">
+          MINUTO(S)
+        </span>
 
+        {isApprox && (
+          <span className="text-[6px] font-black uppercase tracking-widest mt-1 opacity-80 text-center">
+            IMPOSSÍVEL RASTREAR O BAÚ AGORA, MOSTRANDO TEMPO ESPECULADO!
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // Componente para renderizar card de ônibus (reutilizável)
+  const BusLineCard = ({ line, showFavoriteButton = true }: { line: BusLine, showFavoriteButton?: boolean }) => {
+    const isFav = favorites.some(f => f.stopId === (line.stopSource || stopId) && f.lineNumber === line.number);
+    
+    return (
+      <div className="bg-slate-900 border border-white/10 p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98] transition-transform">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="text-4xl font-black text-yellow-400 italic w-24 shrink-0 text-center leading-none tracking-tighter drop-shadow-[0_2px_10px_rgba(251,191,36,0.2)]">
+              {line.number}
+            </div>
+            <div className="min-w-0 flex flex-col justify-center">
+              <div className="mb-1 pr-2 min-w-0 flex flex-col">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                  INDO PARA:
+                </span>
+                <span className="font-black text-[13px] uppercase text-white leading-tight break-words">
+                  {line.destination}
+                </span>
+              </div>
+
+              <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    line.nextArrival?.toLowerCase().includes('aprox') ? 'bg-red-500' : 'bg-emerald-500'
+                  }`}
+                ></span>
+                {line.nextArrival?.toLowerCase().includes('aprox') ? 'Offline' : 'Online agora'}
+              </div>
+            </div>
+          </div>
+          {showFavoriteButton && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); toggleFavorite(line); }}
+              className={`text-3xl transition-all active:scale-150 p-2 ${isFav ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'text-slate-800'}`}
+            >
+              {isFav ? '★' : '☆'}
+            </button>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <div className="flex-1 bg-black/60 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[95px]">
+            <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Chega em:</span>
+            {renderTimeDisplay(line.nextArrival || 'SEM PREVISÃO', true)}
+          </div>
+          <div className="flex-1 bg-black/30 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[95px] opacity-90">
+            <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Próximo em:</span>
+            {renderTimeDisplay(line.subsequentArrival || 'SEM PREVISÃO', false)}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (isSplash) {
     return (
@@ -237,7 +358,8 @@ const App: React.FC = () => {
         <div className="font-black italic text-yellow-400 text-xl tracking-tighter skew-x-[-10deg]">CADÊ MEU BAÚ?</div>
         
         <div className="flex items-center gap-3">
-          {busLines.length > 0 && !isLoading && (
+          {((activeTab === 'search' && busLines.length > 0 && !isLoading) || 
+            (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading)) && (
             <div className="text-right flex flex-col items-end">
               <span className="text-[7px] font-black text-slate-500 uppercase leading-none mb-0.5">Auto-Refresh</span>
               <div className="flex items-center gap-1.5">
@@ -246,7 +368,7 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-          {isLoading && <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>}
+          {(isLoading || isFavoritesLoading) && <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>}
         </div>
       </header>
 
@@ -294,59 +416,9 @@ const App: React.FC = () => {
             )}
 
             <div className="space-y-4">
-              {busLines.map(line => {
-                const isFav = favorites.some(f => f.stopId === (line.stopSource || stopId) && f.lineNumber === line.number);
-                
-                return (
-                  <div key={line.id} className="bg-slate-900 border border-white/10 p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98] transition-transform">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="text-4xl font-black text-yellow-400 italic w-24 shrink-0 text-center leading-none tracking-tighter drop-shadow-[0_2px_10px_rgba(251,191,36,0.2)]">
-                          {line.number}
-                        </div>
-                        <div className="min-w-0 flex flex-col justify-center">
-                          <div className="mb-1 pr-2 min-w-0 flex flex-col">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                              INDO PARA:
-                            </span>
-                            <span className="font-black text-[13px] uppercase text-white leading-tight break-words">
-                              {line.destination}
-                            </span>
-                          </div>
-
-
-                          <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                line.nextArrival?.toLowerCase().includes('aprox') ? 'bg-red-500' : 'bg-emerald-500'
-                              }`}
-                            ></span>
-                              {line.nextArrival?.toLowerCase().includes('aprox') ? 'Offline' : 'Online agora'}
-                          </div>
-
-                        </div>
-                      </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); toggleFavorite(line); }}
-                        className={`text-3xl transition-all active:scale-150 p-2 ${isFav ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'text-slate-800'}`}
-                      >
-                        {isFav ? '★' : '☆'}
-                      </button>
-                    </div>
-
-                    <div className="flex gap-2">
-                       <div className="flex-1 bg-black/60 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[95px]">
-                          <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Chega em:</span>
-                          {renderTimeDisplay(line.nextArrival || 'SEM PREVISÃO', true)}
-                       </div>
-                       <div className="flex-1 bg-black/30 rounded-[1.5rem] p-4 border border-white/5 flex flex-col items-center justify-center min-h-[95px] opacity-90">
-                          <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Próximo em:</span>
-                          {renderTimeDisplay(line.subsequentArrival || 'SEM PREVISÃO', false)}
-                       </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {busLines.map(line => (
+                <BusLineCard key={line.id} line={line} />
+              ))}
 
               {busLines.length === 0 && !isLoading && (
                 <div className="py-20 text-center opacity-10 flex flex-col items-center">
@@ -363,28 +435,18 @@ const App: React.FC = () => {
             <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-600 mb-8 px-2 flex items-center gap-2">
               <span className="text-yellow-400 text-lg">★</span> Minha Garagem
             </h2>
-            {favorites.map((fav, i) => (
-              <div key={i} className="bg-slate-900 p-5 rounded-[2.5rem] border border-white/10 flex items-center justify-between shadow-lg active:bg-slate-800 transition-colors"
-                onClick={() => { setActiveTab('search'); setStopId(fav.stopId); handleSearch(fav.stopId); }}
-              >
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                   <div className="text-4xl font-black text-yellow-400 italic w-24 shrink-0 text-center tracking-tighter">{fav.lineNumber}</div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-black text-[12px] uppercase truncate text-white mb-0.5">{fav.destination}</div>
-                    <div className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">PONTO: {fav.stopId}</div>
-                  </div>
-                </div>
-                <button 
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    setFavorites(favorites.filter(f => !(f.stopId === fav.stopId && f.lineNumber === fav.lineNumber)));
-                  }}
-                  className="text-yellow-400 text-3xl p-4 -mr-2"
-                >
-                  ★
-                </button>
+            
+            {isFavoritesLoading && favorites.length > 0 && (
+              <div className="py-10 text-center">
+                <div className="w-12 h-12 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rastreando seus baús...</p>
               </div>
+            )}
+
+            {!isFavoritesLoading && favoriteBusLines.map((line) => (
+              <BusLineCard key={line.id} line={line} />
             ))}
+
             {favorites.length === 0 && (
               <div className="py-28 text-center opacity-20 px-10">
                 <p className="font-black text-[12px] uppercase tracking-[0.3em] mb-4">Garagem Vazia</p>
