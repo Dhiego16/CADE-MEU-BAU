@@ -335,8 +335,17 @@ const App: React.FC = () => {
     return (
       <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-10 overflow-hidden text-center">
         <div className="relative mb-8 flex flex-col items-center scale-110">
-           <div className="w-40 h-40 bg-yellow-400 rounded-[3rem] flex items-center justify-center text-8xl shadow-[0_0_50px_rgba(251,191,36,0.4)] mb-8 transform rotate-[-5deg]">
-             🚍
+           <div className="w-40 h-40 bg-yellow-400 rounded-[3rem] flex items-center justify-center shadow-[0_0_50px_rgba(251,191,36,0.4)] mb-8 transform rotate-[-5deg] overflow-hidden">
+             <img 
+               src="/logo.png" 
+               alt="Cadê meu Baú" 
+               className="w-32 h-32 object-contain"
+               onError={(e) => {
+                 // Fallback para emoji se imagem não carregar
+                 e.currentTarget.style.display = 'none';
+                 e.currentTarget.parentElement!.innerHTML = '<span class="text-8xl">🚍</span>';
+               }}
+             />
            </div>
           <div className="bg-yellow-400 text-black px-6 py-2 font-black italic text-2xl skew-x-[-12deg] shadow-[8px_8px_0px_rgba(251,191,36,0.3)] uppercase tracking-tighter">
             Cadê meu Baú?
