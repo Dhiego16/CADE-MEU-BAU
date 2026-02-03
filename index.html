@@ -1,23 +1,36 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Cadê meu Baú?</title>
+    <title>Cadê meu Baú? - Monitor de Ônibus</title>
+    <meta name="description" content="Monitor de ônibus em tempo real para Goiânia e região. Consulte horários e salve suas linhas favoritas.">
     
     <!-- PWA / App Mode -->
-    <link rel="manifest" href="./manifest.json" />
-    <meta name="theme-color" content="#000000" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#fbbf24" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Cadê meu Baú?" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <link rel="icon" type="image/png" href="./logo.png" />
-    <link rel="apple-touch-icon" href="./logo.png" />
+    <!-- Ícones -->
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/logo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/logo.png" />
+    
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Cadê meu Baú? - Monitor de Ônibus" />
+    <meta property="og:description" content="Monitor de ônibus em tempo real para Goiânia e região" />
+    <meta property="og:image" content="/logo.png" />
+    <meta property="og:url" content="https://cademeubau.vercel.app/" />
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    
     <style>
       :root {
         --yellow: #fbbf24;
@@ -27,22 +40,21 @@
         margin: 0; 
         background: black; 
         color: white; 
-        -webkit-user-select: none; /* Bloqueia seleção de texto para parecer app */
+        -webkit-user-select: none;
         user-select: none;
-        overflow: hidden; /* O scroll será controlado internamente */
+        overflow: hidden;
         height: 100vh;
         width: 100vw;
+        -webkit-tap-highlight-color: transparent;
       }
 
-      /* Scroll customizado para o container interno */
       .app-container {
         height: 100vh;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        padding-bottom: 100px; /* Espaço para o bottom nav */
+        padding-bottom: 100px;
       }
 
-      /* Animações de App */
       .page-enter {
         animation: slideUp 0.3s ease-out forwards;
       }
@@ -51,16 +63,55 @@
         to { opacity: 1; transform: translateY(0); }
       }
 
-      /* Efeito de clique nativo */
       .btn-active:active {
         transform: scale(0.95);
         opacity: 0.8;
       }
 
-      /* Esconder barra de rolagem */
       ::-webkit-scrollbar { display: none; }
+
+      /* PWA Install Prompt */
+      .pwa-install-prompt {
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fbbf24;
+        color: black;
+        padding: 12px 20px;
+        border-radius: 20px;
+        font-weight: 900;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        z-index: 9999;
+        box-shadow: 0 10px 30px rgba(251, 191, 36, 0.5);
+        animation: slideUpPrompt 0.3s ease-out;
+        display: none;
+      }
+
+      @keyframes slideUpPrompt {
+        from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+        to { opacity: 1; transform: translateX(-50%) translateY(0); }
+      }
+
+      .pwa-install-prompt.show {
+        display: block;
+      }
+
+      .pwa-install-prompt button {
+        background: black;
+        color: #fbbf24;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 12px;
+        font-weight: 900;
+        margin-left: 10px;
+        cursor: pointer;
+      }
     </style>
-  <script type="importmap">
+
+    <script type="importmap">
 {
   "imports": {
     "react/": "https://esm.sh/react@^19.2.4/",
@@ -72,9 +123,76 @@
   }
 }
 </script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    
+    <!-- PWA Install Prompt -->
+    <div id="pwa-install-prompt" class="pwa-install-prompt">
+      <span>📲 Instalar App</span>
+      <button onclick="installPWA()">Instalar</button>
+      <button onclick="dismissPrompt()" style="background: transparent; color: black;">✕</button>
+    </div>
+
+    <script>
+      // Service Worker Registration
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+              console.log('✅ Service Worker registrado:', registration.scope);
+            })
+            .catch((error) => {
+              console.log('❌ Erro ao registrar Service Worker:', error);
+            });
+        });
+      }
+
+      // PWA Install Prompt
+      let deferredPrompt;
+      
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Mostra prompt apenas se não estiver instalado
+        if (!window.matchMedia('(display-mode: standalone)').matches) {
+          setTimeout(() => {
+            document.getElementById('pwa-install-prompt').classList.add('show');
+          }, 3000);
+        }
+      });
+
+      function installPWA() {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+              console.log('✅ App instalado!');
+            }
+            deferredPrompt = null;
+            dismissPrompt();
+          });
+        }
+      }
+
+      function dismissPrompt() {
+        document.getElementById('pwa-install-prompt').classList.remove('show');
+        localStorage.setItem('pwa-prompt-dismissed', 'true');
+      }
+
+      // Não mostra novamente se já foi dispensado
+      if (localStorage.getItem('pwa-prompt-dismissed')) {
+        document.getElementById('pwa-install-prompt').style.display = 'none';
+      }
+
+      // Detecta quando app está rodando como instalado
+      window.addEventListener('appinstalled', () => {
+        console.log('✅ App foi instalado com sucesso!');
+        dismissPrompt();
+      });
+    </script>
+
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
