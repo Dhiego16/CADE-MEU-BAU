@@ -39,7 +39,7 @@ const App: React.FC = () => {
         setActiveTab('favs');
         loadFavoritesSchedules();
       }
-    }, 2500);
+    }, );
     return () => clearTimeout(splashTimer);
   }, []);
 
@@ -51,6 +51,8 @@ const App: React.FC = () => {
   const normalizeTime = (time: any): string => {
     if (time === null || time === undefined) return 'SEM PREVISÃO';
     let t = time.toString().trim();
+    
+    if (time === 0 ) return 'Agora!';
     
     // Verifica se é vazio, contém apenas traços, pontos ou a string "---"
     if (!t || /^[-.]+$/.test(t) || t === 'SEM PREVISÃO' || t === '....') {
