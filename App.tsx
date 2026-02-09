@@ -8,7 +8,7 @@ interface FavoriteItem {
   nickname?: string;
 }
 
-const REFRESH_INTERVAL = 25;
+const REFRESH_INTERVAL = 20;
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'map'>('search');
@@ -106,7 +106,7 @@ const App: React.FC = () => {
     setErrorMsg(null);
     const results = await performSearch(idToSearch, lineFilter);
     setBusLines(results);
-    if (results.length === 0) setErrorMsg("Nenhum ônibus encontrado para este ponto.");
+    if (results.length === 0) setErrorMsg("Sem Baú na Rua Agora!");
     setIsLoading(false);
     setCountdown(REFRESH_INTERVAL);
   };
