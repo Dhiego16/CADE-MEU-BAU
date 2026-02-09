@@ -216,7 +216,7 @@ const App: React.FC = () => {
 
     const cleanTime = timeStr.toLowerCase();
 
-    if (cleanTime.includes('agora') {
+    if (cleanTime.includes('agora')) {
       return 'bg-red-600 text-white';
     }
 
