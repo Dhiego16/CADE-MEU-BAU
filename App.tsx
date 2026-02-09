@@ -106,7 +106,7 @@ const App: React.FC = () => {
     setErrorMsg(null);
     const results = await performSearch(idToSearch, lineFilter);
     setBusLines(results);
-    if (results.length === 0) setErrorMsg("Sem Baú na Rua Agora!");
+    if (results.length === 0) setErrorMsg("Sem Baú na Rua Agora Ou Número do Ponto/Linha Errado!");
     setIsLoading(false);
     setCountdown(REFRESH_INTERVAL);
   };
