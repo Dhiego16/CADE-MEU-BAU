@@ -13,7 +13,7 @@ const SPLASH_DURATION = 2000;
 const MAX_HISTORY = 5;
 
 // ─── Haptic feedback ──────────────────────────────────────────────────────────
-const haptic = (ms = 50) => {
+const haptic = (ms: number | number[] = 50) => {
   try { navigator.vibrate?.(ms); } catch { /* ignore */ }
 };
 
