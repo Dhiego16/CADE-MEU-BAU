@@ -1,83 +1,92 @@
-const CACHE_NAME = 'cade-meu-bau-v1';
-const urlsToCache = [
+const CACHE_NAME = 'cade-meu-bau-v2';
+
+const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/logo.png',
-  'https://cdn.tailwindcss.com'
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png',
 ];
 
-// Instalação do Service Worker
+// ─── Instalação ───────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Cache aberto');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      // addAll falha silenciosamente para assets que não existem ainda
+      return Promise.allSettled(
+        STATIC_ASSETS.map(url => cache.add(url).catch(() => {}))
+      );
+    })
   );
   self.skipWaiting();
 });
 
-// Ativação - limpa caches antigos
+// ─── Ativação — limpa caches antigos ─────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deletando cache antigo:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      )
+    )
   );
   self.clients.claim();
 });
 
-// Intercepta requests - Network First (sempre tenta rede primeiro)
+// ─── Fetch — Network First para API, Cache First para assets estáticos ────────
 self.addEventListener('fetch', (event) => {
-  // Ignora requests que não são GET
   if (event.request.method !== 'GET') return;
-  
-  // Ignora requests pra API (sempre busca dados frescos)
-  if (event.request.url.includes('bot-onibus.vercel.app')) {
+
+  const url = new URL(event.request.url);
+
+  // API de horários: sempre busca da rede, nunca cacheia
+  if (url.hostname.includes('bot-onibus.vercel.app')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
+  // Assets externos (CDN Tailwind, Google Fonts): Network First
+  if (!url.hostname.includes(self.location.hostname) && url.hostname !== self.location.hostname) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Assets do próprio app: Cache First, fallback para rede
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Se conseguiu da rede, atualiza o cache
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(event.request).then((response) => {
         if (response && response.status === 200) {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      })
-      .catch(() => {
-        // Se falhou, tenta pegar do cache
-        return caches.match(event.request)
-          .then((response) => {
-            if (response) {
-              return response;
-            }
-            // Se não tem no cache, retorna página offline
-            if (event.request.mode === 'navigate') {
-              return caches.match('/index.html');
-            }
-          });
-      })
+      }).catch(() => {
+        // Offline fallback para navegação
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+      });
+    })
   );
 });
 
-// Mensagens do app
+// ─── Mensagens ────────────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
