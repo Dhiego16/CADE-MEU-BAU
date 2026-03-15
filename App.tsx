@@ -71,6 +71,13 @@ const App: React.FC = () => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
   });
 
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showIosInstructions, setShowIosInstructions] = useState(false);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<Event | null>(null);
+  const [isInstalled, setIsInstalled] = useState(
+    () => window.matchMedia('(display-mode: standalone)').matches
+  );
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,6 +109,45 @@ const App: React.FC = () => {
       if (linha) setLineFilter(linha);
     }
   }, []);
+
+  // ─── PWA Install ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    // Já instalado como PWA, não mostra nada
+    if (isInstalled) return;
+
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const dismissed = localStorage.getItem('cade_meu_bau_install_dismissed');
+
+    // iOS Safari: não tem evento beforeinstallprompt, mostra instruções manuais
+    if (isIos && isSafari && !dismissed) {
+      setTimeout(() => setShowInstallBanner(true), 3000);
+      return;
+    }
+
+    // Android Chrome: captura o evento nativo
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+      if (!dismissed) setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', () => {
+      setIsInstalled(true);
+      setShowInstallBanner(false);
+    });
+
+    // Se o evento nunca disparar (Chrome throttle), mostra banner manual após 4s
+    const fallbackTimer = setTimeout(() => {
+      if (!dismissed) setShowInstallBanner(true);
+    }, 4000);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      clearTimeout(fallbackTimer);
+    };
+  }, [isInstalled]);
 
   // ─── Splash ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -281,6 +327,25 @@ const App: React.FC = () => {
     ));
     setEditingNickname(null);
     haptic(40);
+  };
+
+  // ─── Instalar PWA ─────────────────────────────────────────────────────────
+  const handleInstall = async () => {
+    haptic(50);
+    if (deferredInstallPrompt) {
+      // Android: dispara o prompt nativo
+      (deferredInstallPrompt as { prompt: () => void }).prompt();
+      setShowInstallBanner(false);
+    } else {
+      // iOS ou Chrome sem prompt: mostra instruções
+      setShowIosInstructions(true);
+    }
+  };
+
+  const dismissInstallBanner = () => {
+    setShowInstallBanner(false);
+    localStorage.setItem('cade_meu_bau_install_dismissed', 'true');
+    haptic(30);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -484,6 +549,141 @@ const App: React.FC = () => {
     );
   }
 
+  // ─── Banner de instalação ─────────────────────────────────────────────────
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  const InstallBanner = () => (
+    <div
+      className="mx-4 mb-2 stagger-card"
+      style={{ animation: 'slideUp 0.4s ease-out' }}
+    >
+      <div className="bg-yellow-400 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(251,191,36,0.4)]">
+        <div className="text-3xl shrink-0">📲</div>
+        <div className="flex-1 min-w-0">
+          <p className="font-black text-black text-[11px] uppercase tracking-wider leading-tight">
+            Instale o app!
+          </p>
+          <p className="text-black/60 text-[9px] font-bold uppercase tracking-widest leading-tight mt-0.5">
+            Acesso rápido • Funciona offline
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={handleInstall}
+            className="bg-black text-yellow-400 font-black text-[10px] uppercase tracking-widest px-3 py-2 rounded-xl active:scale-95 transition-transform"
+          >
+            Instalar
+          </button>
+          <button
+            onClick={dismissInstallBanner}
+            className="text-black/40 font-black text-lg px-1 active:scale-95 transition-transform"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ─── Modal de instruções iOS / fallback Android ───────────────────────────
+  const InstallInstructionsModal = () => (
+    <div
+      className="fixed inset-0 bg-black/90 z-[100] flex items-end justify-center p-4"
+      onClick={() => setShowIosInstructions(false)}
+    >
+      <div
+        className={`${t.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`}
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'slideUp 0.3s ease-out' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-black uppercase tracking-widest text-yellow-400">
+            📲 Como instalar
+          </p>
+          <button
+            onClick={() => setShowIosInstructions(false)}
+            className={`${t.subtext} text-xl font-black`}
+          >
+            ✕
+          </button>
+        </div>
+
+        {isIos ? (
+          // Instruções iOS Safari
+          <div className="space-y-4">
+            <div className={`flex items-start gap-3 ${t.card} border rounded-2xl p-3`}>
+              <span className="text-2xl shrink-0">1️⃣</span>
+              <div>
+                <p className="font-black text-[11px] uppercase tracking-wide">Toque no botão compartilhar</p>
+                <p className={`text-[9px] ${t.subtext} font-bold mt-0.5`}>
+                  O ícone de caixa com seta ↑ na barra inferior do Safari
+                </p>
+              </div>
+            </div>
+            <div className={`flex items-start gap-3 ${t.card} border rounded-2xl p-3`}>
+              <span className="text-2xl shrink-0">2️⃣</span>
+              <div>
+                <p className="font-black text-[11px] uppercase tracking-wide">Role para baixo</p>
+                <p className={`text-[9px] ${t.subtext} font-bold mt-0.5`}>
+                  Procure a opção <span className="text-yellow-400">"Adicionar à Tela de Início"</span>
+                </p>
+              </div>
+            </div>
+            <div className={`flex items-start gap-3 ${t.card} border rounded-2xl p-3`}>
+              <span className="text-2xl shrink-0">3️⃣</span>
+              <div>
+                <p className="font-black text-[11px] uppercase tracking-wide">Toque em "Adicionar"</p>
+                <p className={`text-[9px] ${t.subtext} font-bold mt-0.5`}>
+                  O app aparecerá na sua tela inicial como um app nativo!
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Instruções Android (quando o Chrome ainda não liberou o prompt)
+          <div className="space-y-4">
+            <div className={`flex items-start gap-3 ${t.card} border rounded-2xl p-3`}>
+              <span className="text-2xl shrink-0">1️⃣</span>
+              <div>
+                <p className="font-black text-[11px] uppercase tracking-wide">Toque no menu do Chrome</p>
+                <p className={`text-[9px] ${t.subtext} font-bold mt-0.5`}>
+                  Os três pontinhos <span className="text-yellow-400">⋮</span> no canto superior direito
+                </p>
+              </div>
+            </div>
+            <div className={`flex items-start gap-3 ${t.card} border rounded-2xl p-3`}>
+              <span className="text-2xl shrink-0">2️⃣</span>
+              <div>
+                <p className="font-black text-[11px] uppercase tracking-wide">Selecione a opção</p>
+                <p className={`text-[9px] ${t.subtext} font-bold mt-0.5`}>
+                  <span className="text-yellow-400">"Adicionar à tela inicial"</span> ou{' '}
+                  <span className="text-yellow-400">"Instalar app"</span>
+                </p>
+              </div>
+            </div>
+            <div className={`flex items-start gap-3 ${t.card} border rounded-2xl p-3`}>
+              <span className="text-2xl shrink-0">3️⃣</span>
+              <div>
+                <p className="font-black text-[11px] uppercase tracking-wide">Confirme a instalação</p>
+                <p className={`text-[9px] ${t.subtext} font-bold mt-0.5`}>
+                  Pronto! O ícone aparece na sua tela inicial 🎉
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={() => { setShowIosInstructions(false); dismissInstallBanner(); }}
+          className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest"
+        >
+          Entendi!
+        </button>
+      </div>
+    </div>
+  );
+
   // ─── Modal de nickname ────────────────────────────────────────────────────
   const NicknameModal = () => (
     <div
@@ -536,6 +736,7 @@ const App: React.FC = () => {
       `}</style>
 
       {editingNickname && <NicknameModal />}
+      {showIosInstructions && <InstallInstructionsModal />}
 
       {/* Header */}
       <header className={`pt-[env(safe-area-inset-top)] ${t.header} border-b p-4 flex justify-between items-center shrink-0 z-50`}>
@@ -577,6 +778,9 @@ const App: React.FC = () => {
       </header>
 
       <div className="flex-grow overflow-y-auto app-container px-4 pt-4 pb-32 space-y-5">
+
+        {/* Banner de instalação */}
+        {showInstallBanner && !isInstalled && <InstallBanner />}
 
         {/* ── ABA BUSCA ── */}
         {activeTab === 'search' && (
