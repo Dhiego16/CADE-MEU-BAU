@@ -334,7 +334,7 @@ const App: React.FC = () => {
     haptic(50);
     if (deferredInstallPrompt) {
       // Android: dispara o prompt nativo
-      (deferredInstallPrompt as { prompt: () => void }).prompt();
+      (deferredInstallPrompt as unknown as { prompt: () => void }).prompt();
       setShowInstallBanner(false);
     } else {
       // iOS ou Chrome sem prompt: mostra instruções
