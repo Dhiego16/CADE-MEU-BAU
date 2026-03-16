@@ -336,7 +336,7 @@ const App: React.FC = () => {
             badge: '/icons/icon-72x72.png',
             tag: 'cade-meu-bau',
             renotify: true,
-          });
+          } as NotificationOptions & { renotify: boolean });
         });
       } else {
         new Notification(title, { body, icon: '/icons/icon-192x192.png' });
