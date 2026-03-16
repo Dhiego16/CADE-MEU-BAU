@@ -685,16 +685,14 @@ const App: React.FC = () => {
   );
 
   // ─── Modal de nickname ────────────────────────────────────────────────────
-  const nicknameInputRef = useRef<HTMLInputElement>(null);
-
   // Foca o input apenas uma vez quando o modal abre
   useEffect(() => {
-    if (editingNickname && nicknameInputRef.current) {
-      const timer = setTimeout(() => {
-        nicknameInputRef.current?.focus();
-      }, 300); // aguarda animação do modal terminar
-      return () => clearTimeout(timer);
-    }
+    if (!editingNickname) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById('nickname-input');
+      if (el) (el as HTMLInputElement).focus();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [editingNickname]);
 
   const NicknameModal = () => (
@@ -711,7 +709,7 @@ const App: React.FC = () => {
           ✏️ Apelido da Linha
         </p>
         <input
-          ref={nicknameInputRef}
+          id="nickname-input"
           type="text"
           placeholder="Ex: Meu trabalho, Casa da mãe..."
           value={nicknameInput}
