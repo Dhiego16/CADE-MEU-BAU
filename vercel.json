@@ -1,6 +1,10 @@
 {
   "rewrites": [
     { "source": "/sobre", "destination": "/landing.html" },
-    { "source": "/((?!sobre|icons|logo|manifest|service-worker|screenshots).*)", "destination": "/index.html" }
+    { "source": "/((?!sobre|icons|logo|manifest|service-worker|screenshots|404).*)", "destination": "/index.html" }
+  ],
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "status": 404, "dest": "/404.html" }
   ]
 }
