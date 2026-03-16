@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/sobre", "destination": "/landing.html" },
+    { "source": "/((?!sobre|icons|logo|manifest|service-worker|screenshots).*)", "destination": "/index.html" }
+  ]
+}
