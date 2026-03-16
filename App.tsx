@@ -174,35 +174,52 @@ const App: React.FC = () => {
     return str.replace(/\s*min(utos?)?/gi, '');
   };
 
-  const performSearch = useCallback(async (sId: string, lFilter: string): Promise<BusLine[]> => {
-    if (!sId) return [];
+  type SearchResult = { lines: BusLine[]; error?: 'offline' | 'not_found' | 'no_lines' | 'invalid_stop' };
+
+  const performSearch = useCallback(async (sId: string, lFilter: string): Promise<SearchResult> => {
+    if (!sId) return { lines: [], error: 'invalid_stop' };
     try {
       let url = `${baseUrl}?ponto=${sId.trim()}`;
       if (lFilter.trim()) url += `&linha=${lFilter.trim()}`;
-      const res = await fetch(url);
-      if (!res.ok) return [];
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (res.status === 404) return { lines: [], error: 'not_found' };
+      if (!res.ok) return { lines: [], error: 'offline' };
+
       const data = await res.json();
+
       if (data?.horarios && Array.isArray(data.horarios)) {
-        return data.horarios.map((item: Record<string, unknown>, index: number) => {
-          const rawLinha = String(item.linha ?? '').trim();
-          const formattedLinha = rawLinha.length === 1 ? `NS${rawLinha}` : rawLinha;
-          return {
-            id: `api-${sId}-${item.linha}-${index}`,
-            number: formattedLinha,
-            name: formattedLinha,
-            origin: '',
-            destination: String(item.destino ?? 'Destino não informado'),
-            schedules: [],
-            frequencyMinutes: 0,
-            status: 'Normal' as const,
-            nextArrival: normalizeTime(item.proximo ?? item.previsao),
-            subsequentArrival: normalizeTime(item.seguinte),
-            stopSource: sId,
-          };
-        });
+        if (data.horarios.length === 0) return { lines: [], error: lFilter ? 'no_lines' : 'not_found' };
+        return {
+          lines: data.horarios.map((item: Record<string, unknown>, index: number) => {
+            const rawLinha = String(item.linha ?? '').trim();
+            const formattedLinha = rawLinha.length === 1 ? `NS${rawLinha}` : rawLinha;
+            return {
+              id: `api-${sId}-${item.linha}-${index}`,
+              number: formattedLinha,
+              name: formattedLinha,
+              origin: '',
+              destination: String(item.destino ?? 'Destino não informado'),
+              schedules: [],
+              frequencyMinutes: 0,
+              status: 'Normal' as const,
+              nextArrival: normalizeTime(item.proximo ?? item.previsao),
+              subsequentArrival: normalizeTime(item.seguinte),
+              stopSource: sId,
+            };
+          })
+        };
       }
-      return [];
-    } catch { return []; }
+      return { lines: [], error: 'not_found' };
+    } catch (err: unknown) {
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      return { lines: [], error: isAbort ? 'offline' : 'offline' };
+    }
   }, []);
 
   const addToHistory = useCallback((id: string) => {
@@ -222,11 +239,14 @@ const App: React.FC = () => {
     setErrorMsg(null);
     setStaleData(false);
     try {
-      const results = await performSearch(idToSearch, forcedFilter ?? lineFilter);
-      setBusLines(results);
-      if (results.length === 0) setErrorMsg('Sem Baú na Rua Agora Ou Número do Ponto/Linha Errado!');
-      addToHistory(idToSearch);
-    } catch { setStaleData(true); }
+      const { lines, error } = await performSearch(idToSearch, forcedFilter ?? lineFilter);
+      setBusLines(lines);
+      if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
+      else if (error === 'not_found') setErrorMsg('not_found');
+      else if (error === 'no_lines') setErrorMsg('no_lines');
+      else if (error === 'invalid_stop') setErrorMsg('invalid_stop');
+      if (lines.length > 0) addToHistory(idToSearch);
+    } catch { setStaleData(true); setErrorMsg('offline'); }
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
   }, [stopId, lineFilter, performSearch, addToHistory]);
 
@@ -236,7 +256,10 @@ const App: React.FC = () => {
     setStaleData(false);
     try {
       const results = await Promise.all(favorites.map(fav => performSearch(fav.stopId, fav.lineNumber)));
-      setFavoriteBusLines(results.flat());
+      const allLines = results.flatMap(r => r.lines);
+      const hasOffline = results.some(r => r.error === 'offline');
+      setFavoriteBusLines(allLines);
+      if (hasOffline) setStaleData(true);
     } catch { setStaleData(true); }
     finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); }
   }, [favorites, performSearch]);
@@ -775,11 +798,36 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {errorMsg && (
-              <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl text-center text-red-500 font-bold text-[10px] uppercase tracking-widest animate-pulse">
-                {errorMsg}
-              </div>
-            )}
+            {errorMsg && (() => {
+              const errors: Record<string, { icon: string; title: string; desc: string; color: string }> = {
+                offline:      { icon: '📡', title: 'Sem conexão', desc: 'Verifique sua internet e tente novamente.', color: 'border-slate-500/30 text-slate-400 bg-slate-500/10' },
+                not_found:    { icon: '🔍', title: 'Ponto não encontrado', desc: `O ponto "${stopId}" não existe ou está inativo. Confira o número na placa do ponto.`, color: 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' },
+                no_lines:     { icon: '🚌', title: 'Linha não opera aqui', desc: `A linha "${lineFilter}" não para neste ponto ou não está em operação agora.`, color: 'border-orange-500/30 text-orange-400 bg-orange-500/10' },
+                invalid_stop: { icon: '⚠️', title: 'Número inválido', desc: 'Digite um número de ponto válido. Ex: 31700', color: 'border-red-500/30 text-red-400 bg-red-500/10' },
+              };
+              const e = errors[errorMsg] ?? errors['offline'];
+              return (
+                <div className={`border p-4 rounded-2xl flex items-start gap-3 ${e.color}`}>
+                  <span className="text-2xl shrink-0">{e.icon}</span>
+                  <div>
+                    <p className="font-black text-[11px] uppercase tracking-widest">{e.title}</p>
+                    <p className="text-[9px] font-bold mt-1 opacity-80 leading-relaxed">{e.desc}</p>
+                    {errorMsg === 'not_found' && (
+                      <a href="https://www.rmtcgoiania.com.br" target="_blank" rel="noopener noreferrer"
+                        className="inline-block mt-2 text-[9px] font-black uppercase tracking-widest underline opacity-70">
+                        Ver mapa de pontos →
+                      </a>
+                    )}
+                    {errorMsg === 'offline' && (
+                      <button onClick={() => handleSearch()}
+                        className="mt-2 text-[9px] font-black uppercase tracking-widest underline opacity-70">
+                        Tentar novamente →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {isLoading && [0, 1, 2].map(i => (
               <div key={i} className="stagger-card" style={{ animationDelay: `${i * 80}ms` }}>
