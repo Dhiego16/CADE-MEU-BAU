@@ -83,6 +83,8 @@ const App: React.FC = () => {
     () => ('Notification' in window ? Notification.permission : 'denied')
   );
   const [showAlertModal, setShowAlertModal] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
@@ -147,7 +149,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const splashTimer = setTimeout(() => {
       setIsSplash(false);
-      if (favorites.length > 0) setActiveTab('favs');
+      if (favorites.length > 0) {
+        setActiveTab('favs');
+      } else {
+        // Primeira visita — mostra onboarding
+        const seen = localStorage.getItem('cade_meu_bau_onboarding_done');
+        if (!seen) setShowOnboarding(true);
+      }
     }, SPLASH_DURATION);
     return () => clearTimeout(splashTimer);
   }, []); // eslint-disable-line
@@ -610,6 +618,103 @@ const App: React.FC = () => {
         ::-webkit-scrollbar { display: none; }
         .app-container { -webkit-overflow-scrolling: touch; }
       `}</style>
+
+      {/* Onboarding — primeira visita */}
+      {showOnboarding && (() => {
+        const steps = [
+          {
+            icon: '📍',
+            title: 'Bem-vindo ao Cadê meu Baú!',
+            desc: 'Consulte em segundos quando o seu ônibus chega em qualquer ponto de Goiânia.',
+            tip: null,
+          },
+          {
+            icon: '🔢',
+            title: 'Encontre o número do ponto',
+            desc: 'O número está na plaquinha fixada no poste do ponto de ônibus.',
+            tip: '💡 Geralmente tem 5 dígitos. Ex: 31700, 42150',
+          },
+          {
+            icon: '🔍',
+            title: 'Digite e busque',
+            desc: 'Cole o número no campo "Número do Ponto" e toque em Localizar Baú. Pode filtrar também pelo número da linha.',
+            tip: '💡 Os dados atualizam sozinhos a cada 20 segundos!',
+          },
+          {
+            icon: '★',
+            title: 'Salve seus favoritos',
+            desc: 'Toque na estrela de uma linha para salvá-la. Na próxima vez ela já aparece atualizada automaticamente.',
+            tip: '💡 Segure o dedo num card salvo para dar um apelido a ele.',
+          },
+        ];
+        const step = steps[onboardingStep];
+        const isLast = onboardingStep === steps.length - 1;
+        return (
+          <div className="fixed inset-0 bg-black/90 z-[200] flex items-end justify-center p-4"
+            style={{ animation: 'slideUp 0.3s ease-out' }}>
+            <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`}
+              style={{ animation: 'slideUp 0.3s ease-out' }}>
+
+              {/* Progress dots */}
+              <div className="flex justify-center gap-2">
+                {steps.map((_, i) => (
+                  <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === onboardingStep ? 'w-6 bg-yellow-400' : 'w-1.5 bg-white/20'}`} />
+                ))}
+              </div>
+
+              <div className="text-center space-y-3">
+                <div className="text-6xl">{step.icon}</div>
+                <p className="font-black text-lg uppercase tracking-tight text-white leading-tight">
+                  {step.title}
+                </p>
+                <p className={`text-sm ${theme.subtext} leading-relaxed`}>
+                  {step.desc}
+                </p>
+                {step.tip && (
+                  <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-2xl px-4 py-3">
+                    <p className="text-[11px] font-bold text-yellow-400 leading-relaxed">{step.tip}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                {onboardingStep > 0 && (
+                  <button
+                    onClick={() => setOnboardingStep(p => p - 1)}
+                    className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest border ${theme.subtext} ${lightTheme ? 'border-gray-300' : 'border-white/10'}`}>
+                    Voltar
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (isLast) {
+                      localStorage.setItem('cade_meu_bau_onboarding_done', 'true');
+                      setShowOnboarding(false);
+                      haptic(50);
+                    } else {
+                      setOnboardingStep(p => p + 1);
+                      haptic(30);
+                    }
+                  }}
+                  className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform">
+                  {isLast ? '🚍 Vamos lá!' : 'Próximo →'}
+                </button>
+              </div>
+
+              {!isLast && (
+                <button
+                  onClick={() => {
+                    localStorage.setItem('cade_meu_bau_onboarding_done', 'true');
+                    setShowOnboarding(false);
+                  }}
+                  className={`w-full text-center text-[9px] font-black uppercase tracking-widest ${theme.subtext} opacity-40`}>
+                  Pular tutorial
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal alerta de chegada */}
       {showAlertModal && (

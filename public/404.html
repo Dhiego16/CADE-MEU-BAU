@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 — Cadê meu Baú?</title>
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #000;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 24px;
+      overflow: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(251,191,36,0.08) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      background: #fbbf24;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 32px;
+      transform: rotate(-5deg);
+      box-shadow: 0 0 40px rgba(251,191,36,0.3);
+      animation: float 4s ease-in-out infinite;
+    }
+    .logo img {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+    }
+    .code {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(100px, 25vw, 180px);
+      line-height: 1;
+      color: rgba(255,255,255,0.06);
+      letter-spacing: -0.02em;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      user-select: none;
+    }
+    .content { position: relative; z-index: 1; }
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(36px, 8vw, 64px);
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+      line-height: 1;
+    }
+    h1 em { color: #fbbf24; font-style: normal; }
+    p {
+      font-size: 15px;
+      color: #666;
+      line-height: 1.6;
+      max-width: 320px;
+      margin: 0 auto 36px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #fbbf24;
+      color: #000;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 16px 32px;
+      border-radius: 100px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 0 30px rgba(251,191,36,0.3);
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 50px rgba(251,191,36,0.5);
+    }
+    @keyframes float {
+      0%, 100% { transform: rotate(-5deg) translateY(0); }
+      50% { transform: rotate(-5deg) translateY(-10px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="code">404</div>
+  <div class="content">
+    <div class="logo">
+      <img src="/logo.png" alt="Logo" onerror="this.parentElement.innerHTML='🚍'" />
+    </div>
+    <h1>Baú não<br><em>encontrado!</em></h1>
+    <p>Esta página não existe ou foi removida. Mas seus ônibus estão te esperando!</p>
+    <a href="/" class="btn">🚍 Voltar ao App</a>
+  </div>
+</body>
+</html>
