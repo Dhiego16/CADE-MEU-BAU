@@ -76,6 +76,14 @@ const App: React.FC = () => {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_search_history') || '[]'); } catch { return []; }
   });
 
+  const [activeAlerts, setActiveAlerts] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('cade_meu_bau_alerts') || '{}'); } catch { return {}; }
+  });
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    () => ('Notification' in window ? Notification.permission : 'denied')
+  );
+  const [showAlertModal, setShowAlertModal] = useState<string | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -306,6 +314,94 @@ const App: React.FC = () => {
     haptic(40);
   };
 
+  // ─── Notificações locais ──────────────────────────────────────────────────
+
+  const requestNotifPermission = async (): Promise<boolean> => {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    const result = await Notification.requestPermission();
+    setNotifPermission(result);
+    return result === 'granted';
+  };
+
+  const sendNotification = (title: string, body: string) => {
+    if (Notification.permission !== 'granted') return;
+    try {
+      // Tenta via service worker primeiro (funciona com tela bloqueada)
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(title, {
+            body,
+            icon: '/icons/icon-192x192.png',
+            badge: '/icons/icon-72x72.png',
+            tag: 'cade-meu-bau',
+            renotify: true,
+          });
+        });
+      } else {
+        new Notification(title, { body, icon: '/icons/icon-192x192.png' });
+      }
+    } catch { /* ignore */ }
+  };
+
+  const setAlert = async (lineKey: string, minutes: number) => {
+    const granted = await requestNotifPermission();
+    if (!granted) {
+      alert('Permissão de notificação negada. Ative nas configurações do navegador.');
+      return;
+    }
+    haptic([40, 30, 60]);
+    setActiveAlerts(prev => {
+      const next = { ...prev, [lineKey]: minutes };
+      localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
+      return next;
+    });
+    setShowAlertModal(null);
+    sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
+  };
+
+  const removeAlert = (lineKey: string) => {
+    haptic(40);
+    setActiveAlerts(prev => {
+      const next = { ...prev };
+      delete next[lineKey];
+      localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Verifica alertas a cada refresh de dados
+  const checkAlerts = useCallback((lines: BusLine[]) => {
+    if (Object.keys(activeAlerts).length === 0) return;
+    lines.forEach(line => {
+      const key = `${line.stopSource ?? ''}::${line.number}`;
+      const alertMinutes = activeAlerts[key];
+      if (alertMinutes === undefined) return;
+      const nextStr = line.nextArrival ?? '';
+      if (nextStr === 'SEM PREVISÃO') return;
+      const isNow = nextStr.toLowerCase().includes('agora');
+      const mins = isNow ? 0 : parseInt(nextStr.replace(/\D/g, '')) || 999;
+      if (mins <= alertMinutes) {
+        const msg = isNow
+          ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
+          : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
+        sendNotification('🚍 Baú chegando!', msg);
+        haptic([100, 50, 100]);
+        // Remove o alerta após disparar para não spam
+        removeAlert(key);
+      }
+    });
+  }, [activeAlerts]);
+
+  // Roda checkAlerts sempre que os dados atualizam
+  useEffect(() => {
+    if (busLines.length > 0) checkAlerts(busLines);
+  }, [busLines]);
+
+  useEffect(() => {
+    if (favoriteBusLines.length > 0) checkAlerts(favoriteBusLines);
+  }, [favoriteBusLines]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
   };
@@ -425,6 +521,16 @@ const App: React.FC = () => {
               className={`text-3xl transition-all duration-200 active:scale-150 p-2 ${isFav ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : theme.inactiveNav}`}>
               {isFav ? '★' : '☆'}
             </button>
+            <button onClick={e => {
+                e.stopPropagation();
+                if (activeAlerts[key]) { removeAlert(key); } 
+                else { setShowAlertModal(key); }
+                haptic(30);
+              }}
+              className={`text-lg p-1.5 transition-all active:scale-125 ${activeAlerts[key] ? 'text-yellow-400' : theme.subtext}`}
+              title={activeAlerts[key] ? `Alerta: ${activeAlerts[key]} min — toque para remover` : 'Criar alerta'}>
+              {activeAlerts[key] ? '🔔' : '🔕'}
+            </button>
             <button onClick={e => { e.stopPropagation(); shareLine(line.stopSource ?? stopId, line.number); haptic(30); }}
               className={`text-lg p-1.5 transition-all active:scale-125 ${theme.subtext}`}>
               🔗
@@ -481,6 +587,37 @@ const App: React.FC = () => {
         ::-webkit-scrollbar { display: none; }
         .app-container { -webkit-overflow-scrolling: touch; }
       `}</style>
+
+      {/* Modal alerta de chegada */}
+      {showAlertModal && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4"
+          onClick={() => setShowAlertModal(null)}>
+          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`}
+            onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-black uppercase tracking-widest text-yellow-400">🔔 Alertar quando chegar</p>
+              <button onClick={() => setShowAlertModal(null)} className={`${theme.subtext} text-xl font-black`}>✕</button>
+            </div>
+            <p className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>
+              Notificar quando o baú estiver a:
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {[2, 5, 10, 15].map(min => (
+                <button key={min} onClick={() => setAlert(showAlertModal, min)}
+                  className={`${theme.card} border rounded-2xl py-4 font-black text-center active:scale-95 transition-transform hover:border-yellow-400`}>
+                  <span className="block text-2xl font-black text-yellow-400">{min}</span>
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>minutos</span>
+                </button>
+              ))}
+            </div>
+            {notifPermission === 'denied' && (
+              <p className="text-[9px] text-red-400 font-bold uppercase tracking-widest text-center">
+                ⚠️ Notificações bloqueadas. Ative nas configurações do navegador.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal nickname */}
       {editingNickname && (
