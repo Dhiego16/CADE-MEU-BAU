@@ -364,25 +364,27 @@ const App: React.FC = () => {
     return result === 'granted';
   };
 
-  const sendNotification = (title: string, body: string) => {
-    if (Notification.permission !== 'granted') return;
-    try {
-      // Tenta via service worker primeiro (funciona com tela bloqueada)
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(title, {
-            body,
-            icon: '/icons/icon-192x192.png',
-            badge: '/icons/icon-72x72.png',
-            tag: 'cade-meu-bau',
-            renotify: true,
-          } as NotificationOptions & { renotify: boolean });
-        });
-      } else {
-        new Notification(title, { body, icon: '/icons/icon-192x192.png' });
-      }
-    } catch { /* ignore */ }
-  };
+  const sendNotification = async (title: string, body: string) => {
+  if (Notification.permission !== 'granted') return;
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, {
+        body,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-72x72.png',
+        tag: 'cade-meu-bau',
+        renotify: true,
+        vibrate: [200, 100, 200],
+      } as NotificationOptions & { renotify: boolean; vibrate: number[] });
+    } else {
+      new Notification(title, { body, icon: '/icons/icon-192x192.png' });
+    }
+  } catch (err) {
+    console.warn('Notificação falhou:', err);
+    try { new Notification(title, { body }); } catch { /* ignore */ }
+  }
+};
 
   const setAlert = async (lineKey: string, minutes: number) => {
     const granted = await requestNotifPermission();
