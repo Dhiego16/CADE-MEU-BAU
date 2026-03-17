@@ -1087,7 +1087,7 @@ const App: React.FC = () => {
                   <div>
                     <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>Bilhete Único</p>
                     <p className="font-black text-sm uppercase text-white">{saldoData.cartaoDescricao}</p>
-                    <p className={`text-[9px] font-bold ${theme.subtext}`}>📍 {saldoData.cartaoNumero}</p>
+                    <p className={`text-[9px] font-bold ${theme.subtext}`}>🆔 {saldoData.cartaoNumero}</p>
                   </div>
                 </div>
                 <div className={`${theme.divider} h-px w-full`} />
@@ -1133,7 +1133,7 @@ const App: React.FC = () => {
         <button onClick={() => { setActiveTab('sitpass'); haptic(30); }}
           className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'sitpass' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
           <div className="text-2xl leading-none">🎫</div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em]">Saldo</span>
+          <span className="text-[9px] font-black uppercase tracking-[0.2em]">SitPass</span>
         </button>
       </nav>
 
