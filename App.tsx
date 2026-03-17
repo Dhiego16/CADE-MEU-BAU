@@ -46,7 +46,7 @@ const SkeletonCard = ({ light }: { light: boolean }) => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'map'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'sitpass'>('search');
   const [isSplash, setIsSplash] = useState(true);
   const [busLines, setBusLines] = useState<BusLine[]>([]);
   const [favoriteBusLines, setFavoriteBusLines] = useState<BusLine[]>([]);
@@ -85,6 +85,15 @@ const App: React.FC = () => {
   const [showAlertModal, setShowAlertModal] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
+  const [cpfSitpass, setCpfSitpass] = useState('');
+  const [saldoData, setSaldoData] = useState<{
+    cartaoNumero: string;
+    cartaoDescricao: string;
+    saldo: string;
+    saldo_formatado: string;
+  } | null>(null);
+  const [saldoLoading, setSaldoLoading] = useState(false);
+  const [saldoErro, setSaldoErro] = useState<string | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
@@ -435,6 +444,23 @@ const App: React.FC = () => {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
+  };
+  const consultarSaldo = async () => {
+    if (!cpfSitpass) return;
+    setSaldoLoading(true);
+    setSaldoErro(null);
+    setSaldoData(null);
+    try {
+      const cpfLimpo = cpfSitpass.replace(/\D/g, '');
+      const res = await fetch(`https://sitpass-api.fly.dev/saldo?cpf=${cpfLimpo}`);
+      const data = await res.json();
+      if (res.ok) setSaldoData(data);
+      else setSaldoErro(data.erro ?? 'Erro ao consultar saldo.');
+    } catch {
+      setSaldoErro('Sem conexão. Tente novamente.');
+    } finally {
+      setSaldoLoading(false);
+    }
   };
 
   const handleInstall = async () => {
@@ -1016,14 +1042,70 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ABA MAPA */}
-        {activeTab === 'map' && (
-          <div className="page-enter flex flex-col items-center justify-center py-32 text-center px-10">
-            <div className="text-8xl mb-10 drop-shadow-[0_0_20px_rgba(251,191,36,0.4)]">📍</div>
-            <h3 className="font-black text-2xl mb-4 text-yellow-400 italic skew-x-[-10deg] uppercase tracking-tighter">Radar em Obras</h3>
-            <p className={`text-[10px] ${theme.subtext} leading-relaxed uppercase tracking-[0.3em] font-black`}>
-              Estamos preparando a visão em mapa para você ver o baú dobrando a esquina em tempo real.
-            </p>
+        {/* ABA SITPASS */}
+        {activeTab === 'sitpass' && (
+          <div className="page-enter space-y-5">
+            <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
+              <div className="relative">
+                <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>
+                  CPF (somente números)
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ex: 71209278170"
+                  value={cpfSitpass}
+                  onChange={e => setCpfSitpass(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && consultarSaldo()}
+                  maxLength={11}
+                  className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl`}
+                />
+              </div>
+              <button
+                onClick={consultarSaldo}
+                disabled={saldoLoading}
+                className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
+                {saldoLoading ? 'Consultando...' : 'Consultar Saldo'}
+              </button>
+            </div>
+
+            {saldoErro && (
+              <div className="border border-red-500/30 bg-red-500/10 text-red-400 p-4 rounded-2xl flex items-start gap-3">
+                <span className="text-2xl shrink-0">⚠️</span>
+                <div>
+                  <p className="font-black text-[11px] uppercase tracking-widest">Erro</p>
+                  <p className="text-[9px] font-bold mt-1 opacity-80">{saldoErro}</p>
+                </div>
+              </div>
+            )}
+
+            {saldoData && (
+              <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4"
+                style={{ animation: 'slideUp 0.3s ease-out' }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-4xl">🎫</span>
+                  <div>
+                    <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>Bilhete Único</p>
+                    <p className="font-black text-sm uppercase text-white">{saldoData.cartaoDescricao}</p>
+                    <p className={`text-[9px] font-bold ${theme.subtext}`}>📍 {saldoData.cartaoNumero}</p>
+                  </div>
+                </div>
+                <div className={`${theme.divider} h-px w-full`} />
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
+                  <span className="text-4xl font-black text-yellow-400">{saldoData.saldo_formatado}</span>
+                </div>
+              </div>
+            )}
+
+            {!saldoData && !saldoErro && !saldoLoading && (
+              <div className="py-20 text-center opacity-10 flex flex-col items-center">
+                <div className="text-9xl mb-6">🎫</div>
+                <p className={`font-black text-[12px] uppercase tracking-[0.5em] px-10 leading-relaxed ${theme.subtext}`}>
+                  Digite seu CPF para consultar o saldo
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -1048,10 +1130,10 @@ const App: React.FC = () => {
           </div>
           <span className="text-[9px] font-black uppercase tracking-[0.2em]">Salvos</span>
         </button>
-        <button onClick={() => { setActiveTab('map'); haptic(30); }}
-          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'map' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
-          <div className="text-2xl leading-none">📍</div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em]">Mapa</span>
+        <button onClick={() => { setActiveTab('sitpass'); haptic(30); }}
+          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'sitpass' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
+          <div className="text-2xl leading-none">🎫</div>
+          <span className="text-[9px] font-black uppercase tracking-[0.2em]">Saldo</span>
         </button>
       </nav>
 
