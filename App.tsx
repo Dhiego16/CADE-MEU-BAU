@@ -453,7 +453,7 @@ const App: React.FC = () => {
     setSaldoData(null);
     try {
       const cpfLimpo = cpfSitpass.replace(/\D/g, '');
-      const res = await fetch(`/api/saldo?cpf=${cpfLimpo}`);
+      const res = await fetch(`https://sitpass.cj22233333.workers.dev/saldo?cpf=${cpfLimpo}`);
       const data = await res.json();
       if (res.ok) setSaldoData(data);
       else setSaldoErro(data.erro ?? 'Erro ao consultar saldo.');
