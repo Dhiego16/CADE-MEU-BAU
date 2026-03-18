@@ -413,27 +413,26 @@ const App: React.FC = () => {
   };
 
   // Verifica alertas a cada refresh de dados
-  const checkAlerts = useCallback((lines: BusLine[]) => {
-    if (Object.keys(activeAlerts).length === 0) return;
-    lines.forEach(line => {
-      const key = `${line.stopSource ?? ''}::${line.number}`;
-      const alertMinutes = activeAlerts[key];
-      if (alertMinutes === undefined) return;
-      const nextStr = line.nextArrival ?? '';
-      if (nextStr === 'SEM PREVISÃO') return;
-      const isNow = nextStr.toLowerCase().includes('agora');
-      const mins = isNow ? 0 : parseInt(nextStr.replace(/\D/g, '')) || 999;
-      if (mins <= alertMinutes) {
-        const msg = isNow
-          ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
-          : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
-        sendNotification('🚍 Baú chegando!', msg);
-        haptic([100, 50, 100]);
-        // Remove o alerta após disparar para não spam
-        removeAlert(key);
-      }
-    });
-  }, [activeAlerts]);
+  const checkAlerts = useCallback(async (lines: BusLine[]) => {
+  if (Object.keys(activeAlerts).length === 0) return;
+  for (const line of lines) {
+    const key = `${line.stopSource ?? ''}::${line.number}`;
+    const alertMinutes = activeAlerts[key];
+    if (alertMinutes === undefined) continue;
+    const nextStr = line.nextArrival ?? '';
+    if (nextStr === 'SEM PREVISÃO') continue;
+    const isNow = nextStr.toLowerCase().includes('agora');
+    const mins = isNow ? 0 : parseInt(nextStr.replace(/\D/g, '')) || 999;
+    if (mins <= alertMinutes) {
+      const msg = isNow
+        ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
+        : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
+      await sendNotification('🚍 Baú chegando!', msg);
+      haptic([100, 50, 100]);
+      removeAlert(key);
+    }
+  }
+}, [activeAlerts]);
 
   // Roda checkAlerts sempre que os dados atualizam
   useEffect(() => {
