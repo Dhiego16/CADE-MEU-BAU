@@ -399,7 +399,7 @@ const App: React.FC = () => {
       return next;
     });
     setShowAlertModal(null);
-    sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
+    await sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
   };
 
   const removeAlert = (lineKey: string) => {
