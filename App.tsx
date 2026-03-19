@@ -1273,12 +1273,16 @@ const App: React.FC = () => {
                 {/* Aviso saldo baixo */}
                 {(() => {
                   const saldoNum = parseFloat(saldoData.saldo.replace('.', '').replace(',', '.'));
-                  if (saldoNum < 4.30) {
+                  const TARIFA_INTEIRA = 4.30;
+                  const MEIA_TARIFA = 2.15;
+
+                  if (saldoNum < MEIA_TARIFA) {
+                    // Abaixo até da meia tarifa
                     return (
                       <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
                         <span className="text-base shrink-0 mt-0.5">⚠️</span>
                         <p className="text-[9px] font-bold leading-relaxed text-red-400">
-                          Saldo insuficiente para uma passagem (R$ 4,30). Recarregue seu SitPass antes de embarcar.
+                          Saldo insuficiente para qualquer passagem (nem meia tarifa de R$ 2,15). Recarregue seu SitPass antes de embarcar.
                           <span className={`block mt-1 ${theme.subtext} opacity-70`}>
                             Se você já recarregou recentemente, ignore este aviso — o saldo pode não ter atualizado ainda.
                           </span>
@@ -1286,6 +1290,30 @@ const App: React.FC = () => {
                       </div>
                     );
                   }
+
+                  if (saldoNum < TARIFA_INTEIRA) {
+                    // Tem meia tarifa mas não tem tarifa inteira
+                    return (
+                      <div className="space-y-2">
+                        <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
+                          <span className="text-base shrink-0 mt-0.5">⚠️</span>
+                          <p className="text-[9px] font-bold leading-relaxed text-yellow-400">
+                            Saldo insuficiente para a tarifa inteira (R$ 4,30). Recarregue seu SitPass antes de embarcar.
+                            <span className={`block mt-1 ${theme.subtext} opacity-70`}>
+                              Se você já recarregou recentemente, ignore este aviso — o saldo pode não ter atualizado ainda.
+                            </span>
+                          </p>
+                        </div>
+                        <div className="border border-blue-500/30 bg-blue-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
+                          <span className="text-base shrink-0 mt-0.5">ℹ️</span>
+                          <p className="text-[9px] font-bold leading-relaxed text-blue-400">
+                            Seu saldo cobre a meia tarifa (R$ 2,15), disponível em algumas regiões de Goiás para viagens dentro da cidade.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return null;
                 })()}
                 {/* Aviso de saldo não real-time — conforme informação oficial do SitPass */}
