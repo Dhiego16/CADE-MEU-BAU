@@ -264,6 +264,9 @@ const App: React.FC = () => {
   // ─── Favoritos com pontos inativos ───────────────────────────────────────
   const [inactiveStops, setInactiveStops] = useState<Set<string>>(new Set());
 
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -345,6 +348,47 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('cade_meu_bau_theme', lightTheme ? 'light' : 'dark');
   }, [lightTheme]);
+
+  // ─── Detecção de atualização do Service Worker ────────────────────────────
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then((reg) => {
+      swRegistrationRef.current = reg;
+
+      // Verifica se já há um SW aguardando (update pendente ao abrir o app)
+      if (reg.waiting) {
+        setShowUpdateBanner(true);
+      }
+
+      // Escuta novas atualizações enquanto o app está aberto
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            setShowUpdateBanner(true);
+          }
+        });
+      });
+    });
+
+    // Quando o SW muda (após skipWaiting), recarrega a página
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
+  }, []);
+
+  const applyUpdate = () => {
+    const reg = swRegistrationRef.current;
+    if (reg && reg.waiting) {
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+    setShowUpdateBanner(false);
+  };
 
   useEffect(() => {
     if (!editingNickname) return;
@@ -963,6 +1007,24 @@ const App: React.FC = () => {
       </header>
 
       <div className="flex-grow overflow-y-auto app-container px-4 pt-4 pb-32 space-y-5">
+
+        {/* Banner de atualização disponível */}
+        {showUpdateBanner && (
+          <div style={{ animation: 'slideUp 0.4s ease-out' }}>
+            <div className="bg-emerald-500 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(16,185,129,0.4)]">
+              <div className="text-3xl shrink-0">🚀</div>
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-white text-[11px] uppercase tracking-wider leading-tight">Nova versão disponível!</p>
+                <p className="text-white/70 text-[9px] font-bold uppercase tracking-widest leading-tight mt-0.5">Toque para atualizar agora</p>
+              </div>
+              <button
+                onClick={() => { applyUpdate(); haptic(50); }}
+                className="bg-white text-emerald-600 font-black text-[10px] uppercase tracking-widest px-3 py-2 rounded-xl active:scale-95 transition-transform shrink-0">
+                Atualizar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Banner instalação */}
         {showInstallBanner && !isInstalled && (

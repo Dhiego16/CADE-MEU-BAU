@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cade-meu-bau-v4';
+const CACHE_NAME = 'cade-meu-bau-v5';
 
 const STATIC_ASSETS = [
   '/',
@@ -17,6 +17,7 @@ self.addEventListener('install', (event) => {
       );
     })
   );
+  // Ativa imediatamente sem esperar fechar as abas antigas
   self.skipWaiting();
 });
 
@@ -29,9 +30,11 @@ self.addEventListener('activate', (event) => {
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       )
-    )
+    ).then(() => {
+      // Toma controle de todas as abas abertas imediatamente
+      return self.clients.claim();
+    })
   );
-  self.clients.claim();
 });
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
@@ -40,11 +43,19 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
+  // API de ônibus: sempre busca da rede, nunca do cache
   if (url.hostname.includes('bot-onibus.vercel.app')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
+  // API do Sitpass: sempre da rede
+  if (url.hostname.includes('sitpass')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Assets externos (fontes, CDN): cache com fallback
   if (url.hostname !== self.location.hostname) {
     event.respondWith(
       fetch(event.request)
@@ -60,25 +71,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Assets do próprio app: Network First (tenta rede, cai pro cache se offline)
+  // Isso garante que atualizações chegam imediatamente quando online
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         if (response && response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => {
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-      });
-    })
+      })
+      .catch(() => {
+        // Offline: serve do cache
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          // Navegação sem cache: serve o index.html
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+        });
+      })
   );
 });
 
-// ─── Mensagens ────────────────────────────────────────────────────────────────
+// ─── Mensagens do app ─────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
