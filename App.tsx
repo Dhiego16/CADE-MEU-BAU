@@ -1534,59 +1534,71 @@ const App: React.FC = () => {
 
 
         {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
-        {activeTab === 'map' && (
-          <div className="page-enter" style={{height: 'calc(100vh - 180px)', position: 'relative'}}>
 
-            {/* Leaflet CSS */}
-            {!mapReady && (
-              <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-            )}
 
-            {/* Container do mapa */}
-            <div ref={mapRef} style={{width:'100%', height:'100%', borderRadius:'1.5rem', overflow:'hidden'}} />
+      {/* ─── ABA MAPA — fora do scroll, ocupa área entre header e nav ─── */}
+      {activeTab === 'map' && (
+        <div
+          className="page-enter"
+          style={{
+            position: 'fixed',
+            top: '64px',      // altura do header
+            left: 0,
+            right: 0,
+            bottom: '90px',   // altura da nav
+            zIndex: 40,
+          }}
+        >
+          {/* Container do mapa — ocupa 100% do espaço disponível */}
+          <div
+            ref={mapRef}
+            style={{width: '100%', height: '100%'}}
+          />
 
-            {/* Erro de localização */}
-            {locationError && (
-              <div className={`absolute top-4 left-4 right-4 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}>
-                📍 Localização negada — mostrando Senador Canedo
-              </div>
-            )}
+          {/* Erro de localização */}
+          {locationError && (
+            <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
+              style={{backdropFilter: 'blur(8px)'}}>
+              📍 Localização negada — mostrando Senador Canedo
+            </div>
+          )}
 
-            {/* Bottom sheet do ponto selecionado */}
-            {selectedStop && (
-              <div className={`absolute bottom-0 left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
-                style={{animation: 'slideUp 0.3s ease-out'}}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
-                    <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
-                    <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
-                  </div>
-                  <button onClick={() => setSelectedStop(null)} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
+          {/* Bottom sheet do ponto selecionado */}
+          {selectedStop && (
+            <div
+              className={`absolute bottom-0 left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
+              style={{animation: 'slideUp 0.3s ease-out'}}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
+                  <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
+                  <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
                 </div>
-                <button
-                  onClick={() => {
-                    setStopId(selectedStop.id);
-                    setActiveTab('search');
-                    setSelectedStop(null);
-                    haptic([50,30,80]);
-                    setTimeout(() => handleSearch(selectedStop.id), 100);
-                  }}
-                  className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-transform">
-                  🚍 Ver ônibus deste ponto
-                </button>
+                <button onClick={() => setSelectedStop(null)} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
               </div>
-            )}
+              <button
+                onClick={() => {
+                  setStopId(selectedStop.id);
+                  setActiveTab('search');
+                  setSelectedStop(null);
+                  haptic([50,30,80]);
+                  setTimeout(() => handleSearch(selectedStop.id), 100);
+                }}
+                className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-transform">
+                🚍 Ver ônibus deste ponto
+              </button>
+            </div>
+          )}
 
-            {/* Loader inicial */}
-            {!mapReady && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999]">
-                <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
-              </div>
-            )}
-          </div>
-        )}
+          {/* Loader inicial */}
+          {!mapReady && (
+            <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
+              <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+              <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Nav */}
       <nav className={`fixed bottom-0 left-0 right-0 ${theme.nav} border-t px-6 pb-12 pt-5 flex justify-between items-center z-50`}>
