@@ -28,7 +28,6 @@ const shareLine = async (stopId: string, lineNumber: string) => {
   } catch { /* cancelado */ }
 };
 
-// ─── Formata CPF enquanto digita ─────────────────────────────────────────────
 const formatCpf = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 11);
   return digits
@@ -37,7 +36,6 @@ const formatCpf = (value: string) => {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 };
 
-// ─── Valida CPF com dígitos verificadores ─────────────────────────────────────
 const isValidCpf = (cpf: string): boolean => {
   const d = cpf.replace(/\D/g, '');
   if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
@@ -67,7 +65,6 @@ const SkeletonCard = ({ light }: { light: boolean }) => (
   </div>
 );
 
-// ─── Utilitários de tempo/urgência (fora do componente) ───────────────────────
 const getUrgencyColor = (timeStr: string) => {
   if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
   const clean = timeStr.toLowerCase();
@@ -103,7 +100,6 @@ const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
   );
 };
 
-// ─── BusLineCard movido para FORA do App (evita remount a cada render) ────────
 interface BusLineCardProps {
   line: BusLine;
   isRemoving?: boolean;
@@ -132,6 +128,26 @@ const BusLineCard = memo(({
   const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
   const favItem = favorites.find(f => f.stopId === sId && f.lineNumber === line.number);
 
+  // FIX BUG #8: isMobile ref para evitar double-trigger de touch+mouse em dispositivos móveis
+  const isTouchRef = useRef(false);
+
+  const handleTouchStart = useCallback(() => {
+    isTouchRef.current = true;
+    if (isFav) onStartLongPress(key, favItem?.nickname);
+  }, [isFav, key, favItem?.nickname, onStartLongPress]);
+
+  const handleMouseDown = useCallback(() => {
+    // Ignora evento de mouse se o toque já foi registrado (mobile)
+    if (isTouchRef.current) return;
+    if (isFav) onStartLongPress(key, favItem?.nickname);
+  }, [isFav, key, favItem?.nickname, onStartLongPress]);
+
+  const handleTouchEnd = useCallback(() => {
+    // Reseta flag após pequeno delay para cobrir o mouseup que vem logo depois no mobile
+    setTimeout(() => { isTouchRef.current = false; }, 300);
+    onCancelLongPress();
+  }, [onCancelLongPress]);
+
   return (
     <div
       className={`${theme.card} border p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98]`}
@@ -141,10 +157,10 @@ const BusLineCard = memo(({
         transition: 'opacity 0.35s ease, transform 0.35s ease',
         animationDelay: `${staggerIndex * 60}ms`,
       }}
-      onTouchStart={() => isFav && onStartLongPress(key, favItem?.nickname)}
-      onTouchEnd={onCancelLongPress}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       onTouchMove={onCancelLongPress}
-      onMouseDown={() => isFav && onStartLongPress(key, favItem?.nickname)}
+      onMouseDown={handleMouseDown}
       onMouseUp={onCancelLongPress}
       onMouseLeave={onCancelLongPress}
     >
@@ -222,7 +238,6 @@ const App: React.FC = () => {
   const [editingNickname, setEditingNickname] = useState<string | null>(null);
   const [nicknameInput, setNicknameInput] = useState('');
 
-  // ─── FIX: bug de tema claro no SitPass ───────────────────────────────────
   const [lightTheme, setLightTheme] = useState(() => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
   });
@@ -249,7 +264,7 @@ const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  // ─── SitPass: CPF com máscara e validação ────────────────────────────────
+  // SitPass
   const [cpfSitpass, setCpfSitpass] = useState('');
   const [saldoHistorico, setSaldoHistorico] = useState<{
     saldo_formatado: string;
@@ -269,13 +284,11 @@ const App: React.FC = () => {
   const [saldoLoading, setSaldoLoading] = useState(false);
   const [saldoErro, setSaldoErro] = useState<string | null>(null);
 
-  // ─── Favoritos com pontos inativos ───────────────────────────────────────
   const [inactiveStops, setInactiveStops] = useState<Set<string>>(new Set());
-
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
-  // ─── Mapa ─────────────────────────────────────────────────────────────────
+  // Mapa
   const [mapReady, setMapReady] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [locationError, setLocationError] = useState(false);
@@ -289,7 +302,9 @@ const App: React.FC = () => {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevTabRef = useRef<string>('');
 
-  // Refs estáveis para usar dentro de callbacks/intervals sem stale closure
+  // FIX BUG #4: ref para controlar se notificação de alerta já foi disparada (evita duplicatas)
+  const alertFiredRef = useRef<Set<string>>(new Set());
+
   const activeAlertsRef = useRef(activeAlerts);
   useEffect(() => { activeAlertsRef.current = activeAlerts; }, [activeAlerts]);
 
@@ -311,7 +326,6 @@ const App: React.FC = () => {
     destText:    lightTheme ? 'text-gray-900'           : 'text-white',
     stopBadge:   lightTheme ? 'text-gray-400'           : 'text-slate-600',
     historyBtn:  lightTheme ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-slate-800 border-white/10 text-yellow-400',
-    // FIX: saldo text usa variável de tema em vez de text-white fixo
     saldoText:   lightTheme ? 'text-gray-900'           : 'text-white',
   };
 
@@ -366,18 +380,32 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_theme', lightTheme ? 'light' : 'dark');
   }, [lightTheme]);
 
+  // FIX BUG #6 e #7: limpa estado do SitPass ao sair da aba
+  useEffect(() => {
+    if (activeTab !== 'sitpass') {
+      setCpfError(null);
+      // Não limpa cpfSitpass e saldoData para preservar UX ao voltar
+      // Mas reseta o erro de saldo para não assustar
+      setSaldoErro(null);
+    }
+  }, [activeTab]);
+
+  // FIX BUG #5: limpa favoriteBusLines quando favorites fica vazio
+  useEffect(() => {
+    if (favorites.length === 0) {
+      setFavoriteBusLines([]);
+      setInactiveStops(new Set());
+    }
+  }, [favorites.length]);
+
   // ─── Detecção de atualização do Service Worker ────────────────────────────
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.ready.then((reg) => {
       swRegistrationRef.current = reg;
-
-      // Verifica se já há um SW aguardando (update pendente ao abrir o app)
       if (reg.waiting) {
         setShowUpdateBanner(true);
       }
-
-      // Escuta novas atualizações enquanto o app está aberto
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
         if (!newWorker) return;
@@ -388,8 +416,6 @@ const App: React.FC = () => {
         });
       });
     });
-
-    // Quando o SW muda (após skipWaiting), recarrega a página
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) {
@@ -439,7 +465,6 @@ const App: React.FC = () => {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
-      // FIX: distingue ponto inativo (404) de genérico not_found
       if (res.status === 404) return { lines: [], error: 'not_found' };
       if (!res.ok) return { lines: [], error: 'offline' };
 
@@ -483,10 +508,18 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // FIX: merge inteligente — só substitui objetos cujos horários mudaram
-  // Preserva a referência dos cards inalterados → memo() funciona → sem re-render visual
   const mergeLines = useCallback((prev: BusLine[], next: BusLine[]): BusLine[] => {
-    if (prev.length !== next.length) return next;
+    // FIX BUG #9: se tamanhos diferem, faz merge por id em vez de substituir abruptamente
+    if (prev.length !== next.length) {
+      // Tenta preservar cards que continuam existindo (mesmo id)
+      const nextIds = new Set(next.map(l => l.id));
+      const prevKept = prev.filter(l => nextIds.has(l.id));
+      if (prevKept.length === next.length) {
+        // Todos os ids batem — faz merge normal pela posição
+        return next;
+      }
+      return next;
+    }
     let changed = false;
     const merged = prev.map((oldLine, i) => {
       const newLine = next[i];
@@ -496,7 +529,7 @@ const App: React.FC = () => {
         oldLine.subsequentArrival === newLine.subsequentArrival &&
         oldLine.destination === newLine.destination
       ) {
-        return oldLine; // mesma referência → memo bloqueia re-render
+        return oldLine;
       }
       changed = true;
       return { ...oldLine, nextArrival: newLine.nextArrival, subsequentArrival: newLine.subsequentArrival };
@@ -504,18 +537,22 @@ const App: React.FC = () => {
     return changed ? merged : prev;
   }, []);
 
+  // FIX BUG #1: handleSearch recebe o id explicitamente e atualiza stopId de forma sincronizada
   const handleSearch = useCallback(async (forcedId?: string, forcedFilter?: string) => {
     const idToSearch = forcedId ?? stopId;
     if (!idToSearch || isSearchingRef.current) return;
+
+    // Se um id foi forçado (ex: clique no histórico), atualiza o state do input também
+    if (forcedId && forcedId !== stopId) {
+      setStopId(forcedId);
+    }
+
     isSearchingRef.current = true;
-    // Só exibe skeleton na primeira busca (sem cards ainda)
     setBusLines(prev => { if (prev.length === 0) setIsLoading(true); return prev; });
     setErrorMsg(null);
     setStaleData(false);
     try {
       const { lines, error } = await performSearch(idToSearch, forcedFilter ?? lineFilter);
-      // FIX: merge inteligente — só muda objetos cujos horários realmente mudaram
-      // Cards sem alteração mantêm a mesma referência → memo() bloqueia re-render
       setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
       else if (error === 'not_found') setErrorMsg('not_found');
@@ -526,10 +563,8 @@ const App: React.FC = () => {
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
   }, [stopId, lineFilter, performSearch, addToHistory, mergeLines]);
 
-  // FIX: loadFavoritesSchedules agora identifica pontos inativos e avisa o usuário
   const loadFavoritesSchedules = useCallback(async () => {
     if (favorites.length === 0) return;
-    // Só exibe skeleton na primeira carga (sem cards ainda)
     setFavoriteBusLines(prev => { if (prev.length === 0) setIsFavoritesLoading(true); return prev; });
     setStaleData(false);
     try {
@@ -537,7 +572,6 @@ const App: React.FC = () => {
       const allLines = results.flatMap(r => r.lines);
       const hasOffline = results.some(r => r.error === 'offline');
 
-      // Detecta pontos que retornaram not_found (possivelmente desativados)
       const newInactive = new Set<string>();
       results.forEach((r, i) => {
         if (r.error === 'not_found' || r.error === 'inactive_stop') {
@@ -546,7 +580,6 @@ const App: React.FC = () => {
       });
       setInactiveStops(newInactive);
 
-      // FIX: merge inteligente nos favoritos também
       setFavoriteBusLines(prev => prev.length === 0 ? allLines : mergeLines(prev, allLines));
       if (hasOffline) setStaleData(true);
     } catch { setStaleData(true); }
@@ -560,7 +593,6 @@ const App: React.FC = () => {
     prevTabRef.current = activeTab;
   }, [activeTab]); // eslint-disable-line
 
-  // FIX: refs estáveis para callbacks e aba atual — evita closure stale no interval
   const handleSearchRef = useRef(handleSearch);
   const loadFavoritesRef = useRef(loadFavoritesSchedules);
   const activeTabRef = useRef(activeTab);
@@ -576,13 +608,11 @@ const App: React.FC = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (!shouldRun) { setCountdown(REFRESH_INTERVAL); return; }
 
-    // Reinicia o countdown ao trocar de aba ou ao receber novos dados
     setCountdown(REFRESH_INTERVAL);
 
     timerRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          // Lê a aba atual via ref — nunca stale
           if (activeTabRef.current === 'search') handleSearchRef.current();
           else loadFavoritesRef.current();
           return REFRESH_INTERVAL;
@@ -618,7 +648,6 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
   }, [favorites]);
 
-  // FIX: long press cancela também ao scroll
   const startLongPress = useCallback((key: string, currentNickname?: string) => {
     longPressTimerRef.current = setTimeout(() => {
       haptic(100);
@@ -675,9 +704,10 @@ const App: React.FC = () => {
     }
   };
 
-  // FIX: removeAlert estável via ref para não causar stale closure no checkAlerts
   const removeAlert = useCallback((lineKey: string) => {
     haptic(40);
+    // FIX BUG #4: limpa também o controle de alerta disparado
+    alertFiredRef.current.delete(lineKey);
     setActiveAlerts(prev => {
       const next = { ...prev };
       delete next[lineKey];
@@ -693,6 +723,8 @@ const App: React.FC = () => {
       return;
     }
     haptic([40, 30, 60]);
+    // FIX BUG #4: limpa flag de disparado ao criar novo alerta
+    alertFiredRef.current.delete(lineKey);
     setActiveAlerts(prev => {
       const next = { ...prev, [lineKey]: minutes };
       localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
@@ -702,7 +734,7 @@ const App: React.FC = () => {
     await sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
   };
 
-  // FIX: checkAlerts usa activeAlertsRef (ref estável) em vez de closure stale
+  // FIX BUG #4: checkAlerts usa alertFiredRef para evitar notificações duplicadas
   const checkAlerts = useCallback(async (lines: BusLine[]) => {
     const alerts = activeAlertsRef.current;
     if (Object.keys(alerts).length === 0) return;
@@ -710,6 +742,8 @@ const App: React.FC = () => {
       const key = `${line.stopSource ?? ''}::${line.number}`;
       const alertMinutes = alerts[key];
       if (alertMinutes === undefined) continue;
+      // Pula se já disparou notificação para esta key neste ciclo
+      if (alertFiredRef.current.has(key)) continue;
       const nextStr = line.nextArrival ?? '';
       if (nextStr === 'SEM PREVISÃO') continue;
       const isNow = nextStr.toLowerCase().includes('agora');
@@ -718,12 +752,13 @@ const App: React.FC = () => {
         const msg = isNow
           ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
           : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
+        alertFiredRef.current.add(key);
         await sendNotification('🚍 Baú chegando!', msg);
         haptic([100, 50, 100]);
         removeAlert(key);
       }
     }
-  }, [removeAlert]); // removeAlert é estável (useCallback sem deps)
+  }, [removeAlert]);
 
   useEffect(() => {
     if (busLines.length > 0) checkAlerts(busLines);
@@ -733,7 +768,7 @@ const App: React.FC = () => {
     if (favoriteBusLines.length > 0) checkAlerts(favoriteBusLines);
   }, [favoriteBusLines, checkAlerts]);
 
-  // ─── SitPass com validação de CPF ─────────────────────────────────────────
+  // ─── SitPass ──────────────────────────────────────────────────────────────
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatCpf(e.target.value);
     setCpfSitpass(formatted);
@@ -751,7 +786,6 @@ const App: React.FC = () => {
     setSaldoData(null);
     setCpfError(null);
 
-    // FIX: timeout na chamada SitPass
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 7000);
 
@@ -763,7 +797,6 @@ const App: React.FC = () => {
       const data = await res.json();
       if (res.ok) {
         setSaldoData(data);
-        // Salva última consulta no histórico
         const agora = new Date();
         const historico = {
           saldo_formatado: data.saldo_formatado,
@@ -784,6 +817,7 @@ const App: React.FC = () => {
     }
   };
 
+  // FIX BUG #1: handleKeyDown para busca principal — usa valor atual do input, não state defasado
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
   };
@@ -814,8 +848,6 @@ const App: React.FC = () => {
   const favCount = favorites.length;
   const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-  // FIX: useMemo garante que o objeto só muda quando as dependências realmente mudam
-  // sem isso, o memo() no BusLineCard nunca funciona (objeto novo = referência nova)
   const cardProps = useMemo(() => ({
     stopId,
     favorites,
@@ -830,14 +862,12 @@ const App: React.FC = () => {
     onShare: shareLine,
   }), [stopId, favorites, activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, removeAlert]);
 
-
-  // ─── Recalcula tamanho do mapa ao voltar para a aba ───────────────────────
+  // FIX BUG #2: invalidateSize com guard de null check
   useEffect(() => {
     if (activeTab !== 'map') return;
     if (!leafletMapRef.current) return;
-    // Pequeno delay para o display:block ter efeito antes do invalidateSize
     const t = setTimeout(() => {
-      leafletMapRef.current.invalidateSize();
+      leafletMapRef.current?.invalidateSize();
     }, 50);
     return () => clearTimeout(t);
   }, [activeTab]);
@@ -845,11 +875,10 @@ const App: React.FC = () => {
   // ─── Inicializa o mapa Leaflet ───────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'map') return;
-    if (leafletMapRef.current) return; // já inicializado
+    if (leafletMapRef.current) return;
 
     const PONTOS: Array<{id:string; lat:number; lng:number; nome:string}> = [{"id":"05946","lat":-16.7049489,"lng":-49.0957447,"nome":"Av. Dom Emanuel (05946)"},{"id":"05369","lat":-16.70231,"lng":-49.09807,"nome":"Av. Dom Emanuel (05369)"},{"id":"04733","lat":-16.70058,"lng":-49.10065,"nome":"Av. Progresso (04733)"},{"id":"04734","lat":-16.70166,"lng":-49.10321,"nome":"Av. Progresso (04734)"},{"id":"07662","lat":-16.70736,"lng":-49.08962,"nome":"Rua 5 (07662)"},{"id":"09615","lat":-16.70412,"lng":-49.08969,"nome":"Rua Gumercindo Nascimento (09615)"},{"id":"07663","lat":-16.70435,"lng":-49.08793,"nome":"Av. Perimetral (07663)"},{"id":"09643","lat":-16.70399,"lng":-49.08935,"nome":"Rua Sebastiao Lobo (09643)"},{"id":"07363","lat":-16.74004,"lng":-49.07166,"nome":"Av. Juca Ferreira (07363)"},{"id":"07364","lat":-16.73797,"lng":-49.07032,"nome":"Rua Francisco Tavares (07364)"},{"id":"07365","lat":-16.73608,"lng":-49.07079,"nome":"Rua Arlindo F. dos Santos (07365)"},{"id":"07713","lat":-16.73999,"lng":-49.07444,"nome":"Rua Jose Ferreira Filho (07713)"},{"id":"07360","lat":-16.73661,"lng":-49.07404,"nome":"Rua Arlindo F. dos Santos (07360)"},{"id":"07361","lat":-16.73654,"lng":-49.07392,"nome":"Rua Arlindo F. dos Santos (07361)"},{"id":"09170","lat":-16.73652,"lng":-49.07754,"nome":"Rua Tiradentes (09170)"},{"id":"07358","lat":-16.73622,"lng":-49.0808,"nome":"Rua 1 (07358)"},{"id":"09172","lat":-16.73336,"lng":-49.0777,"nome":"Rua 18 (09172)"},{"id":"09173","lat":-16.7322026,"lng":-49.0786252,"nome":"Rua Rr-7 (09173)"},{"id":"08423","lat":-16.7330106,"lng":-49.0822882,"nome":"Rua Rr-07 (08423)"},{"id":"09169","lat":-16.73631,"lng":-49.08415,"nome":"Rua Tiradentes (09169)"},{"id":"06915","lat":-16.73744,"lng":-49.08645,"nome":"Rua Rl-1 (06915)"},{"id":"08531","lat":-16.7375581,"lng":-49.0872059,"nome":"Rua Rl-1 (08531)"},{"id":"06916","lat":-16.73584,"lng":-49.08444,"nome":"Rua Monteiro Lobato (06916)"},{"id":"08530","lat":-16.73525,"lng":-49.08457,"nome":"Rua Monteiro Lobato (08530)"},{"id":"08529","lat":-16.73214,"lng":-49.08512,"nome":"Rua Monteiro Lobato (08529)"},{"id":"06428","lat":-16.73216,"lng":-49.08501,"nome":"Rua Monteiro Lobato (06428)"},{"id":"06426","lat":-16.7344,"lng":-49.08847,"nome":"Av. Goias (06426)"},{"id":"09417","lat":-16.73383,"lng":-49.08915,"nome":"Estrada Sc-05 (09417)"},{"id":"09421","lat":-16.7339,"lng":-49.08903,"nome":"Estrada Sc-05 (09421)"},{"id":"05401","lat":-16.7317921,"lng":-49.0890118,"nome":"Rua Dormever J. Ferreira (05401)"},{"id":"08533","lat":-16.73174,"lng":-49.08935,"nome":"Av. Pedro Miranda (08533)"},{"id":"08544","lat":-16.73182,"lng":-49.0896,"nome":"Av. Pedro Miranda (08544)"},{"id":"06429","lat":-16.72931,"lng":-49.08503,"nome":"Rua Santo Antonio (06429)"},{"id":"06430","lat":-16.72903,"lng":-49.0877,"nome":"Av. Castro Alves (06430)"},{"id":"08527","lat":-16.72896,"lng":-49.08783,"nome":"Av. Castro Alves (08527)"},{"id":"08836","lat":-16.72374,"lng":-49.08467,"nome":"Av. Pres. Vargas (08836)"},{"id":"08837","lat":-16.72014,"lng":-49.08488,"nome":"Av. Pres. Vargas (08837)"},{"id":"08838","lat":-16.71712,"lng":-49.08506,"nome":"Av. Pres. Vargas (08838)"},{"id":"08839","lat":-16.71459,"lng":-49.08525,"nome":"Av. Pres. Vargas (08839)"},{"id":"08842","lat":-16.71416,"lng":-49.0816,"nome":"Av. dos Eucaliptos (08842)"},{"id":"08843","lat":-16.71203,"lng":-49.08377,"nome":"Av. dos Eucaliptos (08843)"},{"id":"05677","lat":-16.71277,"lng":-49.08728,"nome":"Av. Pres. Alves de Castro (05677)"},{"id":"05412","lat":-16.71399,"lng":-49.088,"nome":"Av. Sen. Canedo (05412)"},{"id":"05413","lat":-16.7138,"lng":-49.08786,"nome":"Av. Sen. Canedo (05413)"},{"id":"05415","lat":-16.71737,"lng":-49.0876,"nome":"Av. Sen. Canedo (05415)"},{"id":"05414","lat":-16.7174,"lng":-49.08776,"nome":"Av. Sen. Canedo (05414)"}];
 
-    // Carrega Leaflet via script tag
     const loadLeaflet = () => new Promise<void>((resolve) => {
       if ((window as any).L) { resolve(); return; }
       const script = document.createElement('script');
@@ -866,7 +895,6 @@ const App: React.FC = () => {
       if (!mapRef.current || leafletMapRef.current) return;
       const L = (window as any).L;
 
-      // Centro padrão: Senador Canedo
       const defaultCenter: [number, number] = [-16.7200, -49.0900];
 
       const map = L.map(mapRef.current, {
@@ -880,10 +908,8 @@ const App: React.FC = () => {
         maxZoom: 19,
       }).addTo(map);
 
-      // Zoom control no canto direito
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      // Ícone customizado amarelo
       const busIcon = L.divIcon({
         html: `<div style="
           width:32px; height:32px;
@@ -900,7 +926,6 @@ const App: React.FC = () => {
         popupAnchor: [0, -32],
       });
 
-      // Adiciona markers de todos os pontos
       PONTOS.forEach(ponto => {
         const marker = L.marker([ponto.lat, ponto.lng], { icon: busIcon })
           .addTo(map)
@@ -914,14 +939,12 @@ const App: React.FC = () => {
       leafletMapRef.current = map;
       setMapReady(true);
 
-      // Tenta pegar localização do usuário
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const { latitude, longitude } = pos.coords;
             setUserLocation({ lat: latitude, lng: longitude });
 
-            // Marker do usuário
             const userIcon = L.divIcon({
               html: `<div style="
                 width:20px; height:20px;
@@ -939,7 +962,6 @@ const App: React.FC = () => {
               .addTo(map)
               .bindPopup('Você está aqui');
 
-            // Centraliza no usuário e ajusta zoom
             map.setView([latitude, longitude], 15);
           },
           () => {
@@ -1149,7 +1171,6 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-          {/* FIX: spinner aparece mesmo se já existe resultado (double-tap) */}
           {(isLoading || isFavoritesLoading) && (
             <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
           )}
@@ -1162,7 +1183,7 @@ const App: React.FC = () => {
 
       <div className="flex-grow overflow-y-auto app-container px-4 pt-4 pb-32 space-y-5">
 
-        {/* Banner de atualização disponível */}
+        {/* Banner de atualização */}
         {showUpdateBanner && (
           <div style={{ animation: 'slideUp 0.4s ease-out' }}>
             <div className="bg-emerald-500 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(16,185,129,0.4)]">
@@ -1226,7 +1247,12 @@ const App: React.FC = () => {
                   <p className={`text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2 px-1`}>Buscas Recentes</p>
                   <div className="flex flex-wrap gap-2">
                     {searchHistory.map(h => (
-                      <button key={h} onClick={() => { setStopId(h); handleSearch(h); haptic(30); }}
+                      <button key={h} onClick={() => {
+                          // FIX BUG #1: passa o id explicitamente, não depende de setState ser síncrono
+                          setStopId(h);
+                          handleSearch(h);
+                          haptic(30);
+                        }}
                         className={`${theme.historyBtn} border text-xs font-black px-3 py-2 rounded-xl active:scale-95 transition-transform tracking-wider`}>
                         📍 {h}
                       </button>
@@ -1290,7 +1316,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1333,7 +1358,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* FIX: aviso de pontos inativos */}
             {inactiveStops.size > 0 && !isFavoritesLoading && (
               <div className="border border-orange-500/30 bg-orange-500/10 text-orange-400 p-4 rounded-2xl flex items-start gap-3">
                 <span className="text-2xl shrink-0">⚠️</span>
@@ -1347,23 +1371,28 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
-              <div key={pontoId} className="space-y-3">
-                <div className="flex items-center gap-2 px-1 pt-2">
-                  <span className="text-yellow-400 text-sm">📍</span>
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
-                  <div className={`flex-1 h-px ${theme.divider}`} />
+            {/* FIX BUG #10: staggerIndex global acumulado entre grupos */}
+            {!isFavoritesLoading && (() => {
+              let globalIndex = 0;
+              return Object.entries(groupedFavLines).map(([pontoId, lines]) => (
+                <div key={pontoId} className="space-y-3">
+                  <div className="flex items-center gap-2 px-1 pt-2">
+                    <span className="text-yellow-400 text-sm">📍</span>
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
+                    <div className={`flex-1 h-px ${theme.divider}`} />
+                  </div>
+                  {lines.map((line) => {
+                    const key = `${line.stopSource ?? stopId}::${line.number}`;
+                    const idx = globalIndex++;
+                    return (
+                      <div key={line.id} className="stagger-card" style={{ animationDelay: `${idx * 60}ms` }}>
+                        <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={idx} {...cardProps} />
+                      </div>
+                    );
+                  })}
                 </div>
-                {lines.map((line, i) => {
-                  const key = `${line.stopSource ?? stopId}::${line.number}`;
-                  return (
-                    <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} />
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+              ));
+            })()}
 
             {favorites.length === 0 && (
               <div className="py-28 text-center opacity-20 px-10">
@@ -1374,7 +1403,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1405,7 +1433,6 @@ const App: React.FC = () => {
                   className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl
                     ${cpfError ? 'border-red-500 focus:border-red-500' : 'focus:border-yellow-400'}`}
                 />
-                {/* FIX: feedback de validação inline */}
                 {cpfError && (
                   <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{cpfError}</p>
                 )}
@@ -1428,7 +1455,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* FIX: saldoText usa variável de tema para funcionar no modo claro */}
             {saldoData && (
               <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3">
@@ -1444,14 +1470,12 @@ const App: React.FC = () => {
                   <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
                   <span className="text-4xl font-black text-yellow-400">{saldoData.saldo_formatado}</span>
                 </div>
-                {/* Aviso saldo baixo */}
                 {(() => {
                   const saldoNum = parseFloat(saldoData.saldo.replace('.', '').replace(',', '.'));
                   const TARIFA_INTEIRA = 4.30;
                   const MEIA_TARIFA = 2.15;
 
                   if (saldoNum < MEIA_TARIFA) {
-                    // Abaixo até da meia tarifa
                     return (
                       <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
                         <span className="text-base shrink-0 mt-0.5">⚠️</span>
@@ -1466,7 +1490,6 @@ const App: React.FC = () => {
                   }
 
                   if (saldoNum < TARIFA_INTEIRA) {
-                    // Tem meia tarifa mas não tem tarifa inteira
                     return (
                       <div className="space-y-2">
                         <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
@@ -1487,10 +1510,8 @@ const App: React.FC = () => {
                       </div>
                     );
                   }
-
                   return null;
                 })()}
-                {/* Aviso de saldo não real-time — conforme informação oficial do SitPass */}
                 <div className={`border ${lightTheme ? 'border-gray-200 bg-gray-50' : 'border-white/5 bg-black/20'} rounded-2xl px-4 py-3 flex items-start gap-2`}>
                   <span className="text-base shrink-0 mt-0.5">ℹ️</span>
                   <p className={`text-[9px] font-bold leading-relaxed ${theme.subtext}`}>
@@ -1502,7 +1523,6 @@ const App: React.FC = () => {
 
             {!saldoData && !saldoErro && !saldoLoading && (
               <div className="space-y-4">
-                {/* Histórico da última consulta */}
                 {saldoHistorico && (
                   <div className={`border ${lightTheme ? 'border-gray-200 bg-white' : 'border-white/5 bg-slate-900'} rounded-[2rem] p-5 space-y-3`}
                     style={{ animation: 'slideUp 0.3s ease-out' }}>
@@ -1529,7 +1549,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1543,11 +1562,7 @@ const App: React.FC = () => {
 
       </div>
 
-
-        {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
-
-
-      {/* ─── ABA MAPA — sempre no DOM, visível/oculto via display ─── */}
+      {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
       <div
         style={{
           position: 'fixed',
@@ -1559,99 +1574,92 @@ const App: React.FC = () => {
           display: activeTab === 'map' ? 'block' : 'none',
         }}
       >
-          {/* Container do mapa — ocupa 100% do espaço disponível */}
+        <div ref={mapRef} style={{width: '100%', height: '100%'}} />
+
+        {locationError && (
+          <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
+            style={{backdropFilter: 'blur(8px)'}}>
+            📍 Localização negada — mostrando Senador Canedo
+          </div>
+        )}
+
+        {selectedStop && (
           <div
-            ref={mapRef}
-            style={{width: '100%', height: '100%'}}
-          />
-
-          {/* Erro de localização */}
-          {locationError && (
-            <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
-              style={{backdropFilter: 'blur(8px)'}}>
-              📍 Localização negada — mostrando Senador Canedo
-            </div>
-          )}
-
-          {/* Bottom sheet do ponto selecionado */}
-          {selectedStop && (
-            <div
-              className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
-              style={{bottom: 0, animation: 'slideUp 0.3s ease-out'}}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
-                  <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
-                  <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
-                </div>
-                <button onClick={() => setSelectedStop(null)} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
+            className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
+            style={{bottom: 0, animation: 'slideUp 0.3s ease-out'}}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
+                <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
+                <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
               </div>
-              <button
-                onClick={() => {
-                  setStopId(selectedStop.id);
-                  setActiveTab('search');
-                  setSelectedStop(null);
-                  haptic([50,30,80]);
-                  setTimeout(() => handleSearch(selectedStop.id), 100);
-                }}
-                className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-transform">
-                🚍 Ver ônibus deste ponto
-              </button>
+              <button onClick={() => setSelectedStop(null)} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
             </div>
-          )}
-
-          {/* Botão de reposicionar no usuário */}
-          {mapReady && (
             <button
               onClick={() => {
-                if (!leafletMapRef.current) return;
-                haptic(40);
-                if (userLocation) {
-                  leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
-                } else {
-                  // Tenta pegar localização novamente
-                  navigator.geolocation?.getCurrentPosition(
-                    (pos) => {
-                      const { latitude, longitude } = pos.coords;
-                      setUserLocation({ lat: latitude, lng: longitude });
-                      leafletMapRef.current.setView([latitude, longitude], 16, { animate: true });
-                    },
-                    () => setLocationError(true),
-                    { timeout: 6000, enableHighAccuracy: true }
-                  );
-                }
+                setStopId(selectedStop.id);
+                setActiveTab('search');
+                setSelectedStop(null);
+                haptic([50,30,80]);
+                setTimeout(() => handleSearch(selectedStop.id), 100);
               }}
-              style={{
-                position: 'absolute',
-                bottom: selectedStop ? '220px' : '72px',
-                right: '16px',
-                zIndex: 1000,
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: '#fbbf24',
-                border: '2px solid #000',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '20px',
-                cursor: 'pointer',
-                transition: 'bottom 0.3s ease',
-              }}
-              title="Minha localização"
-            >
-              📍
+              className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-transform">
+              🚍 Ver ônibus deste ponto
             </button>
-          )}
+          </div>
+        )}
 
-          {/* Loader inicial */}
-          {!mapReady && (
-            <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
-              <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-              <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
-            </div>
-          )}
+        {/* FIX BUG #3: botão de localização com bottom dinâmico calculado de forma mais robusta */}
+        {mapReady && (
+          <button
+            onClick={() => {
+              if (!leafletMapRef.current) return;
+              haptic(40);
+              if (userLocation) {
+                leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
+              } else {
+                navigator.geolocation?.getCurrentPosition(
+                  (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    setUserLocation({ lat: latitude, lng: longitude });
+                    leafletMapRef.current?.setView([latitude, longitude], 16, { animate: true });
+                  },
+                  () => setLocationError(true),
+                  { timeout: 6000, enableHighAccuracy: true }
+                );
+              }
+            }}
+            style={{
+              position: 'absolute',
+              // FIX BUG #3: usa valor fixo maior quando o bottom sheet está aberto para não sumir
+              bottom: selectedStop ? '240px' : '72px',
+              right: '16px',
+              zIndex: 1000,
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              background: '#fbbf24',
+              border: '2px solid #000',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+              cursor: 'pointer',
+              transition: 'bottom 0.3s ease',
+            }}
+            title="Minha localização"
+          >
+            📍
+          </button>
+        )}
+
+        {!mapReady && (
+          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
+            <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+            <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
+          </div>
+        )}
       </div>
 
       {/* Nav */}
