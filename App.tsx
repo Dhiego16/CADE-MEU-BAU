@@ -1208,6 +1208,31 @@ const App: React.FC = () => {
                   <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
                   <span className="text-4xl font-black text-yellow-400">{saldoData.saldo_formatado}</span>
                 </div>
+                {/* Aviso saldo baixo */}
+                {(() => {
+                  const saldoNum = parseFloat(saldoData.saldo.replace('.', '').replace(',', '.'));
+                  if (saldoNum < 4.30) {
+                    return (
+                      <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
+                        <span className="text-base shrink-0 mt-0.5">⚠️</span>
+                        <p className="text-[9px] font-bold leading-relaxed text-red-400">
+                          Saldo insuficiente para uma passagem (R$ 4,30). Recarregue seu SitPass antes de embarcar.
+                          <span className={`block mt-1 ${theme.subtext} opacity-70`}>
+                            Se você já recarregou recentemente, ignore este aviso — o saldo pode não ter atualizado ainda.
+                          </span>
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {/* Aviso de saldo não real-time — conforme informação oficial do SitPass */}
+                <div className={`border ${lightTheme ? 'border-gray-200 bg-gray-50' : 'border-white/5 bg-black/20'} rounded-2xl px-4 py-3 flex items-start gap-2`}>
+                  <span className="text-base shrink-0 mt-0.5">ℹ️</span>
+                  <p className={`text-[9px] font-bold leading-relaxed ${theme.subtext}`}>
+                    O saldo informado aqui não é calculado em tempo real, mas sim o último valor registrado no sistema do SitPass.
+                  </p>
+                </div>
               </div>
             )}
 
