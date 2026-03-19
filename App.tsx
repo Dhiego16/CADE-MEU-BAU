@@ -422,16 +422,40 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // FIX: merge inteligente — só substitui objetos cujos horários mudaram
+  // Preserva a referência dos cards inalterados → memo() funciona → sem re-render visual
+  const mergeLines = useCallback((prev: BusLine[], next: BusLine[]): BusLine[] => {
+    if (prev.length !== next.length) return next;
+    let changed = false;
+    const merged = prev.map((oldLine, i) => {
+      const newLine = next[i];
+      if (!newLine) return oldLine;
+      if (
+        oldLine.nextArrival === newLine.nextArrival &&
+        oldLine.subsequentArrival === newLine.subsequentArrival &&
+        oldLine.destination === newLine.destination
+      ) {
+        return oldLine; // mesma referência → memo bloqueia re-render
+      }
+      changed = true;
+      return { ...oldLine, nextArrival: newLine.nextArrival, subsequentArrival: newLine.subsequentArrival };
+    });
+    return changed ? merged : prev;
+  }, []);
+
   const handleSearch = useCallback(async (forcedId?: string, forcedFilter?: string) => {
     const idToSearch = forcedId ?? stopId;
     if (!idToSearch || isSearchingRef.current) return;
     isSearchingRef.current = true;
-    setIsLoading(true);
+    // Só exibe skeleton na primeira busca (sem cards ainda)
+    setBusLines(prev => { if (prev.length === 0) setIsLoading(true); return prev; });
     setErrorMsg(null);
     setStaleData(false);
     try {
       const { lines, error } = await performSearch(idToSearch, forcedFilter ?? lineFilter);
-      setBusLines(lines);
+      // FIX: merge inteligente — só muda objetos cujos horários realmente mudaram
+      // Cards sem alteração mantêm a mesma referência → memo() bloqueia re-render
+      setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
       else if (error === 'not_found') setErrorMsg('not_found');
       else if (error === 'no_lines') setErrorMsg('no_lines');
@@ -439,12 +463,13 @@ const App: React.FC = () => {
       if (lines.length > 0) addToHistory(idToSearch);
     } catch { setStaleData(true); setErrorMsg('offline'); }
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
-  }, [stopId, lineFilter, performSearch, addToHistory]);
+  }, [stopId, lineFilter, performSearch, addToHistory, mergeLines]);
 
   // FIX: loadFavoritesSchedules agora identifica pontos inativos e avisa o usuário
   const loadFavoritesSchedules = useCallback(async () => {
     if (favorites.length === 0) return;
-    setIsFavoritesLoading(true);
+    // Só exibe skeleton na primeira carga (sem cards ainda)
+    setFavoriteBusLines(prev => { if (prev.length === 0) setIsFavoritesLoading(true); return prev; });
     setStaleData(false);
     try {
       const results = await Promise.all(favorites.map(fav => performSearch(fav.stopId, fav.lineNumber)));
@@ -460,11 +485,12 @@ const App: React.FC = () => {
       });
       setInactiveStops(newInactive);
 
-      setFavoriteBusLines(allLines);
+      // FIX: merge inteligente nos favoritos também
+      setFavoriteBusLines(prev => prev.length === 0 ? allLines : mergeLines(prev, allLines));
       if (hasOffline) setStaleData(true);
     } catch { setStaleData(true); }
     finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); }
-  }, [favorites, performSearch]);
+  }, [favorites, performSearch, mergeLines]);
 
   useEffect(() => {
     if (activeTab === 'favs' && prevTabRef.current !== 'favs' && favorites.length > 0) {
