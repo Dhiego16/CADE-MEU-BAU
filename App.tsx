@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { BusLine } from './types';
 
 interface FavoriteItem {
@@ -28,6 +28,28 @@ const shareLine = async (stopId: string, lineNumber: string) => {
   } catch { /* cancelado */ }
 };
 
+// ─── Formata CPF enquanto digita ─────────────────────────────────────────────
+const formatCpf = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+// ─── Valida CPF com dígitos verificadores ─────────────────────────────────────
+const isValidCpf = (cpf: string): boolean => {
+  const d = cpf.replace(/\D/g, '');
+  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i);
+    const r = (sum * 10) % 11;
+    return r === 10 || r === 11 ? 0 : r;
+  };
+  return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
+};
+
 const SkeletonCard = ({ light }: { light: boolean }) => (
   <div className={`${light ? 'bg-white border-gray-200' : 'bg-slate-900 border-white/10'} border p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl animate-pulse`}>
     <div className="flex items-center gap-4">
@@ -45,6 +67,145 @@ const SkeletonCard = ({ light }: { light: boolean }) => (
   </div>
 );
 
+// ─── Utilitários de tempo/urgência (fora do componente) ───────────────────────
+const getUrgencyColor = (timeStr: string) => {
+  if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
+  const clean = timeStr.toLowerCase();
+  if (clean.includes('agora')) return 'bg-red-600 text-white';
+  if (clean.includes('aprox')) return 'bg-blue-500 text-white';
+  const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
+  if (mins <= 3) return 'bg-red-600 text-white';
+  if (mins <= 8) return 'bg-yellow-500 text-black';
+  return 'bg-emerald-500 text-white';
+};
+
+const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
+  const isNoPrev = timeStr === 'SEM PREVISÃO';
+  const urgencyClasses = getUrgencyColor(timeStr);
+  const isApprox = timeStr.toLowerCase().includes('aprox');
+  if (isNoPrev) {
+    return (
+      <div className={`px-2 py-3 rounded-2xl ${urgencyClasses} font-black uppercase tracking-tighter w-full text-center text-[9px] opacity-40`}>
+        {timeStr}
+      </div>
+    );
+  }
+  return (
+    <div className={`flex flex-col items-center justify-center w-full rounded-2xl py-2 ${urgencyClasses} ${!isNext ? 'opacity-90' : ''}`}>
+      <span className={`font-black leading-none tracking-tighter ${isNext ? 'text-2xl' : 'text-xl'}`}>{timeStr}</span>
+      <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 opacity-80">MINUTO(S)</span>
+      {isApprox && (
+        <span className="text-[6px] font-black uppercase tracking-widest mt-1 opacity-80 text-center">
+          IMPOSSÍVEL RASTREAR O BAÚ AGORA, MOSTRANDO TEMPO ESPECULADO!
+        </span>
+      )}
+    </div>
+  );
+};
+
+// ─── BusLineCard movido para FORA do App (evita remount a cada render) ────────
+interface BusLineCardProps {
+  line: BusLine;
+  isRemoving?: boolean;
+  staggerIndex?: number;
+  stopId: string;
+  favorites: FavoriteItem[];
+  activeAlerts: Record<string, number>;
+  lightTheme: boolean;
+  theme: Record<string, string>;
+  onToggleFavorite: (line: BusLine) => void;
+  onStartLongPress: (key: string, nickname?: string) => void;
+  onCancelLongPress: () => void;
+  onRemoveAlert: (key: string) => void;
+  onShowAlertModal: (key: string) => void;
+  onShare: (stopId: string, lineNumber: string) => void;
+}
+
+const BusLineCard = memo(({
+  line, isRemoving = false, staggerIndex = 0,
+  stopId, favorites, activeAlerts, lightTheme, theme,
+  onToggleFavorite, onStartLongPress, onCancelLongPress,
+  onRemoveAlert, onShowAlertModal, onShare,
+}: BusLineCardProps) => {
+  const sId = line.stopSource ?? stopId;
+  const key = `${sId}::${line.number}`;
+  const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
+  const favItem = favorites.find(f => f.stopId === sId && f.lineNumber === line.number);
+
+  return (
+    <div
+      className={`${theme.card} border p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98]`}
+      style={{
+        opacity: isRemoving ? 0 : 1,
+        transform: isRemoving ? 'scale(0.92) translateY(-8px)' : undefined,
+        transition: 'opacity 0.35s ease, transform 0.35s ease',
+        animationDelay: `${staggerIndex * 60}ms`,
+      }}
+      onTouchStart={() => isFav && onStartLongPress(key, favItem?.nickname)}
+      onTouchEnd={onCancelLongPress}
+      onTouchMove={onCancelLongPress}
+      onMouseDown={() => isFav && onStartLongPress(key, favItem?.nickname)}
+      onMouseUp={onCancelLongPress}
+      onMouseLeave={onCancelLongPress}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="text-4xl font-black text-yellow-400 italic w-24 shrink-0 text-center leading-none tracking-tighter drop-shadow-[0_2px_10px_rgba(251,191,36,0.2)]">
+            {line.number}
+          </div>
+          <div className="min-w-0 flex flex-col justify-center">
+            {favItem?.nickname && (
+              <span className="text-[9px] font-black text-yellow-400 uppercase tracking-widest mb-0.5">✏️ {favItem.nickname}</span>
+            )}
+            <div className="mb-1 pr-2 min-w-0 flex flex-col">
+              <span className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>INDO PARA:</span>
+              <span className={`font-black text-[13px] uppercase ${theme.destText} leading-tight break-words`}>{line.destination}</span>
+            </div>
+            {line.stopSource && (
+              <div className={`text-[8px] font-bold ${theme.stopBadge} uppercase tracking-widest mb-1`}>📍 PONTO {line.stopSource}</div>
+            )}
+            <div className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${theme.subtext}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${line.nextArrival?.toLowerCase().includes('aprox') ? 'bg-red-500' : 'bg-emerald-500'}`} />
+              {line.nextArrival?.toLowerCase().includes('aprox') ? 'Offline' : 'Online agora'}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col items-center gap-2 shrink-0">
+          <button onClick={e => { e.stopPropagation(); onToggleFavorite(line); }}
+            className={`text-3xl transition-all duration-200 active:scale-150 p-2 ${isFav ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : theme.inactiveNav}`}>
+            {isFav ? '★' : '☆'}
+          </button>
+          <button onClick={e => {
+              e.stopPropagation();
+              if (activeAlerts[key]) { onRemoveAlert(key); }
+              else { onShowAlertModal(key); }
+              haptic(30);
+            }}
+            className={`text-lg p-1.5 transition-all active:scale-125 ${activeAlerts[key] ? 'text-yellow-400' : theme.subtext}`}
+            title={activeAlerts[key] ? `Alerta: ${activeAlerts[key]} min — toque para remover` : 'Criar alerta'}>
+            {activeAlerts[key] ? '🔔' : '🔕'}
+          </button>
+          <button onClick={e => { e.stopPropagation(); onShare(sId, line.number); haptic(30); }}
+            className={`text-lg p-1.5 transition-all active:scale-125 ${theme.subtext}`}>
+            🔗
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className={`flex-1 ${theme.timeCard1} rounded-[1.5rem] p-4 border flex flex-col items-center justify-center min-h-[95px]`}>
+          <span className={`block text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2`}>Chega em:</span>
+          {renderTimeDisplay(line.nextArrival ?? 'SEM PREVISÃO', true)}
+        </div>
+        <div className={`flex-1 ${theme.timeCard2} rounded-[1.5rem] p-4 border flex flex-col items-center justify-center min-h-[95px] opacity-90`}>
+          <span className={`block text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2`}>Próximo em:</span>
+          {renderTimeDisplay(line.subsequentArrival ?? 'SEM PREVISÃO', false)}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ─── App principal ────────────────────────────────────────────────────────────
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'sitpass'>('search');
   const [isSplash, setIsSplash] = useState(true);
@@ -60,9 +221,12 @@ const App: React.FC = () => {
   const [staleData, setStaleData] = useState(false);
   const [editingNickname, setEditingNickname] = useState<string | null>(null);
   const [nicknameInput, setNicknameInput] = useState('');
+
+  // ─── FIX: bug de tema claro no SitPass ───────────────────────────────────
   const [lightTheme, setLightTheme] = useState(() => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
   });
+
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showIosInstructions, setShowIosInstructions] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<Event | null>(null);
@@ -75,7 +239,6 @@ const App: React.FC = () => {
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_search_history') || '[]'); } catch { return []; }
   });
-
   const [activeAlerts, setActiveAlerts] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_alerts') || '{}'); } catch { return {}; }
   });
@@ -85,7 +248,10 @@ const App: React.FC = () => {
   const [showAlertModal, setShowAlertModal] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
+
+  // ─── SitPass: CPF com máscara e validação ────────────────────────────────
   const [cpfSitpass, setCpfSitpass] = useState('');
+  const [cpfError, setCpfError] = useState<string | null>(null);
   const [saldoData, setSaldoData] = useState<{
     cartaoNumero: string;
     cartaoDescricao: string;
@@ -95,14 +261,20 @@ const App: React.FC = () => {
   const [saldoLoading, setSaldoLoading] = useState(false);
   const [saldoErro, setSaldoErro] = useState<string | null>(null);
 
+  // ─── Favoritos com pontos inativos ───────────────────────────────────────
+  const [inactiveStops, setInactiveStops] = useState<Set<string>>(new Set());
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevTabRef = useRef<string>('');
 
+  // Refs estáveis para usar dentro de callbacks/intervals sem stale closure
+  const activeAlertsRef = useRef(activeAlerts);
+  useEffect(() => { activeAlertsRef.current = activeAlerts; }, [activeAlerts]);
+
   const baseUrl = 'https://bot-onibus.vercel.app/api/ponto';
 
-  // ─── Tema (usando "theme" para não conflitar com variável "t" de setTimeout) ──
   const theme = {
     bg:          lightTheme ? 'bg-gray-100'            : 'bg-black',
     text:        lightTheme ? 'text-gray-900'           : 'text-white',
@@ -119,6 +291,8 @@ const App: React.FC = () => {
     destText:    lightTheme ? 'text-gray-900'           : 'text-white',
     stopBadge:   lightTheme ? 'text-gray-400'           : 'text-slate-600',
     historyBtn:  lightTheme ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-slate-800 border-white/10 text-yellow-400',
+    // FIX: saldo text usa variável de tema em vez de text-white fixo
+    saldoText:   lightTheme ? 'text-gray-900'           : 'text-white',
   };
 
   // ─── Effects ──────────────────────────────────────────────────────────────
@@ -161,7 +335,6 @@ const App: React.FC = () => {
       if (favorites.length > 0) {
         setActiveTab('favs');
       } else {
-        // Primeira visita — mostra onboarding
         const seen = localStorage.getItem('cade_meu_bau_onboarding_done');
         if (!seen) setShowOnboarding(true);
       }
@@ -191,7 +364,7 @@ const App: React.FC = () => {
     return str.replace(/\s*min(utos?)?/gi, '');
   };
 
-  type SearchResult = { lines: BusLine[]; error?: 'offline' | 'not_found' | 'no_lines' | 'invalid_stop' };
+  type SearchResult = { lines: BusLine[]; error?: 'offline' | 'not_found' | 'no_lines' | 'invalid_stop' | 'inactive_stop' };
 
   const performSearch = useCallback(async (sId: string, lFilter: string): Promise<SearchResult> => {
     if (!sId) return { lines: [], error: 'invalid_stop' };
@@ -205,6 +378,7 @@ const App: React.FC = () => {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
+      // FIX: distingue ponto inativo (404) de genérico not_found
       if (res.status === 404) return { lines: [], error: 'not_found' };
       if (!res.ok) return { lines: [], error: 'offline' };
 
@@ -267,6 +441,7 @@ const App: React.FC = () => {
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
   }, [stopId, lineFilter, performSearch, addToHistory]);
 
+  // FIX: loadFavoritesSchedules agora identifica pontos inativos e avisa o usuário
   const loadFavoritesSchedules = useCallback(async () => {
     if (favorites.length === 0) return;
     setIsFavoritesLoading(true);
@@ -275,6 +450,16 @@ const App: React.FC = () => {
       const results = await Promise.all(favorites.map(fav => performSearch(fav.stopId, fav.lineNumber)));
       const allLines = results.flatMap(r => r.lines);
       const hasOffline = results.some(r => r.error === 'offline');
+
+      // Detecta pontos que retornaram not_found (possivelmente desativados)
+      const newInactive = new Set<string>();
+      results.forEach((r, i) => {
+        if (r.error === 'not_found' || r.error === 'inactive_stop') {
+          newInactive.add(favorites[i].stopId);
+        }
+      });
+      setInactiveStops(newInactive);
+
       setFavoriteBusLines(allLines);
       if (hasOffline) setStaleData(true);
     } catch { setStaleData(true); }
@@ -288,22 +473,31 @@ const App: React.FC = () => {
     prevTabRef.current = activeTab;
   }, [activeTab]); // eslint-disable-line
 
+  // FIX: timer estável — usa refs para evitar múltiplos intervals
+  const handleSearchRef = useRef(handleSearch);
+  const loadFavoritesRef = useRef(loadFavoritesSchedules);
+  useEffect(() => { handleSearchRef.current = handleSearch; }, [handleSearch]);
+  useEffect(() => { loadFavoritesRef.current = loadFavoritesSchedules; }, [loadFavoritesSchedules]);
+
   useEffect(() => {
     const shouldRun =
       (activeTab === 'search' && busLines.length > 0 && !isLoading) ||
       (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading);
+
     if (timerRef.current) clearInterval(timerRef.current);
     if (!shouldRun) return;
+
     timerRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          if (activeTab === 'search') handleSearch();
-          else loadFavoritesSchedules();
+          if (activeTab === 'search') handleSearchRef.current();
+          else loadFavoritesRef.current();
           return REFRESH_INTERVAL;
         }
         return prev - 1;
       });
     }, 1000);
+
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [activeTab, busLines.length, favoriteBusLines.length, isLoading, isFavoritesLoading]);
 
@@ -331,16 +525,18 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
   }, [favorites]);
 
-  const startLongPress = (key: string, currentNickname?: string) => {
+  // FIX: long press cancela também ao scroll
+  const startLongPress = useCallback((key: string, currentNickname?: string) => {
     longPressTimerRef.current = setTimeout(() => {
       haptic(100);
       setEditingNickname(key);
       setNicknameInput(currentNickname ?? '');
     }, 600);
-  };
-  const cancelLongPress = () => {
+  }, []);
+
+  const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-  };
+  }, []);
 
   const saveNickname = () => {
     if (!editingNickname) return;
@@ -354,7 +550,7 @@ const App: React.FC = () => {
     haptic(40);
   };
 
-  // ─── Notificações locais ──────────────────────────────────────────────────
+  // ─── Notificações ─────────────────────────────────────────────────────────
 
   const requestNotifPermission = async (): Promise<boolean> => {
     if (!('Notification' in window)) return false;
@@ -365,26 +561,37 @@ const App: React.FC = () => {
   };
 
   const sendNotification = async (title: string, body: string) => {
-  if (Notification.permission !== 'granted') return;
-  try {
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.ready;
-      await reg.showNotification(title, {
-        body,
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-72x72.png',
-        tag: 'cade-meu-bau',
-        renotify: true,
-        vibrate: [200, 100, 200],
-      } as NotificationOptions & { renotify: boolean; vibrate: number[] });
-    } else {
-      new Notification(title, { body, icon: '/icons/icon-192x192.png' });
+    if (Notification.permission !== 'granted') return;
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, {
+          body,
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/icon-72x72.png',
+          tag: 'cade-meu-bau',
+          renotify: true,
+          vibrate: [200, 100, 200],
+        } as NotificationOptions & { renotify: boolean; vibrate: number[] });
+      } else {
+        new Notification(title, { body, icon: '/icons/icon-192x192.png' });
+      }
+    } catch (err) {
+      console.warn('Notificação falhou:', err);
+      try { new Notification(title, { body }); } catch { /* ignore */ }
     }
-  } catch (err) {
-    console.warn('Notificação falhou:', err);
-    try { new Notification(title, { body }); } catch { /* ignore */ }
-  }
-};
+  };
+
+  // FIX: removeAlert estável via ref para não causar stale closure no checkAlerts
+  const removeAlert = useCallback((lineKey: string) => {
+    haptic(40);
+    setActiveAlerts(prev => {
+      const next = { ...prev };
+      delete next[lineKey];
+      localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const setAlert = async (lineKey: string, minutes: number) => {
     const granted = await requestNotifPermission();
@@ -402,66 +609,78 @@ const App: React.FC = () => {
     await sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
   };
 
-  const removeAlert = (lineKey: string) => {
-    haptic(40);
-    setActiveAlerts(prev => {
-      const next = { ...prev };
-      delete next[lineKey];
-      localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  // Verifica alertas a cada refresh de dados
+  // FIX: checkAlerts usa activeAlertsRef (ref estável) em vez de closure stale
   const checkAlerts = useCallback(async (lines: BusLine[]) => {
-  if (Object.keys(activeAlerts).length === 0) return;
-  for (const line of lines) {
-    const key = `${line.stopSource ?? ''}::${line.number}`;
-    const alertMinutes = activeAlerts[key];
-    if (alertMinutes === undefined) continue;
-    const nextStr = line.nextArrival ?? '';
-    if (nextStr === 'SEM PREVISÃO') continue;
-    const isNow = nextStr.toLowerCase().includes('agora');
-    const mins = isNow ? 0 : parseInt(nextStr.replace(/\D/g, '')) || 999;
-    if (mins <= alertMinutes) {
-      const msg = isNow
-        ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
-        : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
-      await sendNotification('🚍 Baú chegando!', msg);
-      haptic([100, 50, 100]);
-      removeAlert(key);
+    const alerts = activeAlertsRef.current;
+    if (Object.keys(alerts).length === 0) return;
+    for (const line of lines) {
+      const key = `${line.stopSource ?? ''}::${line.number}`;
+      const alertMinutes = alerts[key];
+      if (alertMinutes === undefined) continue;
+      const nextStr = line.nextArrival ?? '';
+      if (nextStr === 'SEM PREVISÃO') continue;
+      const isNow = nextStr.toLowerCase().includes('agora');
+      const mins = isNow ? 0 : parseInt(nextStr.replace(/\D/g, '')) || 999;
+      if (mins <= alertMinutes) {
+        const msg = isNow
+          ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
+          : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
+        await sendNotification('🚍 Baú chegando!', msg);
+        haptic([100, 50, 100]);
+        removeAlert(key);
+      }
     }
-  }
-}, [activeAlerts]);
+  }, [removeAlert]); // removeAlert é estável (useCallback sem deps)
 
-  // Roda checkAlerts sempre que os dados atualizam
   useEffect(() => {
     if (busLines.length > 0) checkAlerts(busLines);
-  }, [busLines]);
+  }, [busLines, checkAlerts]);
 
   useEffect(() => {
     if (favoriteBusLines.length > 0) checkAlerts(favoriteBusLines);
-  }, [favoriteBusLines]);
+  }, [favoriteBusLines, checkAlerts]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSearch();
+  // ─── SitPass com validação de CPF ─────────────────────────────────────────
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCpf(e.target.value);
+    setCpfSitpass(formatted);
+    setCpfError(null);
   };
+
   const consultarSaldo = async () => {
-    if (!cpfSitpass) return;
+    const cpfLimpo = cpfSitpass.replace(/\D/g, '');
+    if (!cpfLimpo) { setCpfError('Digite seu CPF.'); return; }
+    if (cpfLimpo.length !== 11) { setCpfError('CPF incompleto.'); return; }
+    if (!isValidCpf(cpfLimpo)) { setCpfError('CPF inválido. Verifique os dígitos.'); return; }
+
     setSaldoLoading(true);
     setSaldoErro(null);
     setSaldoData(null);
+    setCpfError(null);
+
+    // FIX: timeout na chamada SitPass
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+
     try {
-      const cpfLimpo = cpfSitpass.replace(/\D/g, '');
-      const res = await fetch(`https://sitpass.cj22233333.workers.dev/saldo?cpf=${cpfLimpo}`);
+      const res = await fetch(`https://sitpass.cj22233333.workers.dev/saldo?cpf=${cpfLimpo}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
       const data = await res.json();
       if (res.ok) setSaldoData(data);
       else setSaldoErro(data.erro ?? 'Erro ao consultar saldo.');
-    } catch {
-      setSaldoErro('Sem conexão. Tente novamente.');
+    } catch (err: unknown) {
+      clearTimeout(timeout);
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      setSaldoErro(isAbort ? 'Tempo esgotado. Tente novamente.' : 'Sem conexão. Tente novamente.');
     } finally {
       setSaldoLoading(false);
     }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSearch();
   };
 
   const handleInstall = async () => {
@@ -480,43 +699,6 @@ const App: React.FC = () => {
     haptic(30);
   };
 
-  // ─── UI Helpers ───────────────────────────────────────────────────────────
-
-  const getUrgencyColor = (timeStr: string) => {
-    if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
-    const clean = timeStr.toLowerCase();
-    if (clean.includes('agora')) return 'bg-red-600 text-white';
-    if (clean.includes('aprox')) return 'bg-blue-500 text-white';
-    const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
-    if (mins <= 3) return 'bg-red-600 text-white';
-    if (mins <= 8) return 'bg-yellow-500 text-black';
-    return 'bg-emerald-500 text-white';
-  };
-
-  const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
-    const isNoPrev = timeStr === 'SEM PREVISÃO';
-    const urgencyClasses = getUrgencyColor(timeStr);
-    const isApprox = timeStr.toLowerCase().includes('aprox');
-    if (isNoPrev) {
-      return (
-        <div className={`px-2 py-3 rounded-2xl ${urgencyClasses} font-black uppercase tracking-tighter w-full text-center text-[9px] opacity-40`}>
-          {timeStr}
-        </div>
-      );
-    }
-    return (
-      <div className={`flex flex-col items-center justify-center w-full rounded-2xl py-2 ${urgencyClasses} ${!isNext ? 'opacity-90' : ''}`}>
-        <span className={`font-black leading-none tracking-tighter ${isNext ? 'text-2xl' : 'text-xl'}`}>{timeStr}</span>
-        <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 opacity-80">MINUTO(S)</span>
-        {isApprox && (
-          <span className="text-[6px] font-black uppercase tracking-widest mt-1 opacity-80 text-center">
-            IMPOSSÍVEL RASTREAR O BAÚ AGORA, MOSTRANDO TEMPO ESPECULADO!
-          </span>
-        )}
-      </div>
-    );
-  };
-
   const groupedFavLines = favoriteBusLines.reduce<Record<string, BusLine[]>>((acc, line) => {
     const key = line.stopSource ?? 'desconhecido';
     if (!acc[key]) acc[key] = [];
@@ -527,86 +709,19 @@ const App: React.FC = () => {
   const favCount = favorites.length;
   const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-  // ─── BusLineCard ──────────────────────────────────────────────────────────
-
-  const BusLineCard = ({ line, isRemoving = false, staggerIndex = 0 }: {
-    line: BusLine; isRemoving?: boolean; staggerIndex?: number;
-  }) => {
-    const sId = line.stopSource ?? stopId;
-    const key = `${sId}::${line.number}`;
-    const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
-    const favItem = favorites.find(f => f.stopId === sId && f.lineNumber === line.number);
-    return (
-      <div
-        className={`${theme.card} border p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98]`}
-        style={{
-          opacity: isRemoving ? 0 : 1,
-          transform: isRemoving ? 'scale(0.92) translateY(-8px)' : undefined,
-          transition: 'opacity 0.35s ease, transform 0.35s ease',
-          animationDelay: `${staggerIndex * 60}ms`,
-        }}
-        onTouchStart={() => isFav && startLongPress(key, favItem?.nickname)}
-        onTouchEnd={cancelLongPress}
-        onTouchMove={cancelLongPress}
-        onMouseDown={() => isFav && startLongPress(key, favItem?.nickname)}
-        onMouseUp={cancelLongPress}
-        onMouseLeave={cancelLongPress}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="text-4xl font-black text-yellow-400 italic w-24 shrink-0 text-center leading-none tracking-tighter drop-shadow-[0_2px_10px_rgba(251,191,36,0.2)]">
-              {line.number}
-            </div>
-            <div className="min-w-0 flex flex-col justify-center">
-              {favItem?.nickname && (
-                <span className="text-[9px] font-black text-yellow-400 uppercase tracking-widest mb-0.5">✏️ {favItem.nickname}</span>
-              )}
-              <div className="mb-1 pr-2 min-w-0 flex flex-col">
-                <span className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>INDO PARA:</span>
-                <span className={`font-black text-[13px] uppercase ${theme.destText} leading-tight break-words`}>{line.destination}</span>
-              </div>
-              {line.stopSource && (
-                <div className={`text-[8px] font-bold ${theme.stopBadge} uppercase tracking-widest mb-1`}>📍 PONTO {line.stopSource}</div>
-              )}
-              <div className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${theme.subtext}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${line.nextArrival?.toLowerCase().includes('aprox') ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                {line.nextArrival?.toLowerCase().includes('aprox') ? 'Offline' : 'Online agora'}
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col items-center gap-2 shrink-0">
-            <button onClick={e => { e.stopPropagation(); toggleFavorite(line); }}
-              className={`text-3xl transition-all duration-200 active:scale-150 p-2 ${isFav ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : theme.inactiveNav}`}>
-              {isFav ? '★' : '☆'}
-            </button>
-            <button onClick={e => {
-                e.stopPropagation();
-                if (activeAlerts[key]) { removeAlert(key); } 
-                else { setShowAlertModal(key); }
-                haptic(30);
-              }}
-              className={`text-lg p-1.5 transition-all active:scale-125 ${activeAlerts[key] ? 'text-yellow-400' : theme.subtext}`}
-              title={activeAlerts[key] ? `Alerta: ${activeAlerts[key]} min — toque para remover` : 'Criar alerta'}>
-              {activeAlerts[key] ? '🔔' : '🔕'}
-            </button>
-            <button onClick={e => { e.stopPropagation(); shareLine(line.stopSource ?? stopId, line.number); haptic(30); }}
-              className={`text-lg p-1.5 transition-all active:scale-125 ${theme.subtext}`}>
-              🔗
-            </button>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <div className={`flex-1 ${theme.timeCard1} rounded-[1.5rem] p-4 border flex flex-col items-center justify-center min-h-[95px]`}>
-            <span className={`block text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2`}>Chega em:</span>
-            {renderTimeDisplay(line.nextArrival ?? 'SEM PREVISÃO', true)}
-          </div>
-          <div className={`flex-1 ${theme.timeCard2} rounded-[1.5rem] p-4 border flex flex-col items-center justify-center min-h-[95px] opacity-90`}>
-            <span className={`block text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2`}>Próximo em:</span>
-            {renderTimeDisplay(line.subsequentArrival ?? 'SEM PREVISÃO', false)}
-          </div>
-        </div>
-      </div>
-    );
+  // Props estáveis para BusLineCard (evita re-render desnecessário)
+  const cardProps = {
+    stopId,
+    favorites,
+    activeAlerts,
+    lightTheme,
+    theme,
+    onToggleFavorite: toggleFavorite,
+    onStartLongPress: startLongPress,
+    onCancelLongPress: cancelLongPress,
+    onRemoveAlert: removeAlert,
+    onShowAlertModal: setShowAlertModal,
+    onShare: shareLine,
   };
 
   // ─── Splash ───────────────────────────────────────────────────────────────
@@ -646,94 +761,51 @@ const App: React.FC = () => {
         .app-container { -webkit-overflow-scrolling: touch; }
       `}</style>
 
-      {/* Onboarding — primeira visita */}
+      {/* Onboarding */}
       {showOnboarding && (() => {
         const steps = [
-          {
-            icon: '📍',
-            title: 'Bem-vindo ao Cadê meu Baú!',
-            desc: 'Consulte em segundos quando o seu ônibus chega em qualquer ponto de Goiânia.',
-            tip: null,
-          },
-          {
-            icon: '🔢',
-            title: 'Encontre o número do ponto',
-            desc: 'O número está na plaquinha fixada no poste do ponto de ônibus.',
-            tip: '💡 Geralmente tem 5 dígitos. Ex: 31700, 42150',
-          },
-          {
-            icon: '🔍',
-            title: 'Digite e busque',
-            desc: 'Cole o número no campo "Número do Ponto" e toque em Localizar Baú. Pode filtrar também pelo número da linha.',
-            tip: '💡 Os dados atualizam sozinhos a cada 20 segundos!',
-          },
-          {
-            icon: '★',
-            title: 'Salve seus favoritos',
-            desc: 'Toque na estrela de uma linha para salvá-la. Na próxima vez ela já aparece atualizada automaticamente.',
-            tip: '💡 Segure o dedo num card salvo para dar um apelido a ele.',
-          },
+          { icon: '📍', title: 'Bem-vindo ao Cadê meu Baú!', desc: 'Consulte em segundos quando o seu ônibus chega em qualquer ponto de Goiânia.', tip: null },
+          { icon: '🔢', title: 'Encontre o número do ponto', desc: 'O número está na plaquinha fixada no poste do ponto de ônibus.', tip: '💡 Geralmente tem 5 dígitos. Ex: 31700, 42150' },
+          { icon: '🔍', title: 'Digite e busque', desc: 'Cole o número no campo "Número do Ponto" e toque em Localizar Baú. Pode filtrar também pelo número da linha.', tip: '💡 Os dados atualizam sozinhos a cada 20 segundos!' },
+          { icon: '★', title: 'Salve seus favoritos', desc: 'Toque na estrela de uma linha para salvá-la. Na próxima vez ela já aparece atualizada automaticamente.', tip: '💡 Segure o dedo num card salvo para dar um apelido a ele.' },
         ];
         const step = steps[onboardingStep];
         const isLast = onboardingStep === steps.length - 1;
         return (
-          <div className="fixed inset-0 bg-black/90 z-[200] flex items-end justify-center p-4"
-            style={{ animation: 'slideUp 0.3s ease-out' }}>
-            <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`}
-              style={{ animation: 'slideUp 0.3s ease-out' }}>
-
-              {/* Progress dots */}
+          <div className="fixed inset-0 bg-black/90 z-[200] flex items-end justify-center p-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
+            <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`} style={{ animation: 'slideUp 0.3s ease-out' }}>
               <div className="flex justify-center gap-2">
                 {steps.map((_, i) => (
                   <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === onboardingStep ? 'w-6 bg-yellow-400' : 'w-1.5 bg-white/20'}`} />
                 ))}
               </div>
-
               <div className="text-center space-y-3">
                 <div className="text-6xl">{step.icon}</div>
-                <p className="font-black text-lg uppercase tracking-tight text-white leading-tight">
-                  {step.title}
-                </p>
-                <p className={`text-sm ${theme.subtext} leading-relaxed`}>
-                  {step.desc}
-                </p>
+                <p className="font-black text-lg uppercase tracking-tight text-white leading-tight">{step.title}</p>
+                <p className={`text-sm ${theme.subtext} leading-relaxed`}>{step.desc}</p>
                 {step.tip && (
                   <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-2xl px-4 py-3">
                     <p className="text-[11px] font-bold text-yellow-400 leading-relaxed">{step.tip}</p>
                   </div>
                 )}
               </div>
-
               <div className="flex gap-3">
                 {onboardingStep > 0 && (
-                  <button
-                    onClick={() => setOnboardingStep(p => p - 1)}
+                  <button onClick={() => setOnboardingStep(p => p - 1)}
                     className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest border ${theme.subtext} ${lightTheme ? 'border-gray-300' : 'border-white/10'}`}>
                     Voltar
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    if (isLast) {
-                      localStorage.setItem('cade_meu_bau_onboarding_done', 'true');
-                      setShowOnboarding(false);
-                      haptic(50);
-                    } else {
-                      setOnboardingStep(p => p + 1);
-                      haptic(30);
-                    }
+                <button onClick={() => {
+                    if (isLast) { localStorage.setItem('cade_meu_bau_onboarding_done', 'true'); setShowOnboarding(false); haptic(50); }
+                    else { setOnboardingStep(p => p + 1); haptic(30); }
                   }}
                   className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform">
                   {isLast ? '🚍 Vamos lá!' : 'Próximo →'}
                 </button>
               </div>
-
               {!isLast && (
-                <button
-                  onClick={() => {
-                    localStorage.setItem('cade_meu_bau_onboarding_done', 'true');
-                    setShowOnboarding(false);
-                  }}
+                <button onClick={() => { localStorage.setItem('cade_meu_bau_onboarding_done', 'true'); setShowOnboarding(false); }}
                   className={`w-full text-center text-[9px] font-black uppercase tracking-widest ${theme.subtext} opacity-40`}>
                   Pular tutorial
                 </button>
@@ -743,19 +815,15 @@ const App: React.FC = () => {
         );
       })()}
 
-      {/* Modal alerta de chegada */}
+      {/* Modal alerta */}
       {showAlertModal && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4"
-          onClick={() => setShowAlertModal(null)}>
-          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`}
-            onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4" onClick={() => setShowAlertModal(null)}>
+          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-black uppercase tracking-widest text-yellow-400">🔔 Alertar quando chegar</p>
               <button onClick={() => setShowAlertModal(null)} className={`${theme.subtext} text-xl font-black`}>✕</button>
             </div>
-            <p className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>
-              Notificar quando o baú estiver a:
-            </p>
+            <p className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>Notificar quando o baú estiver a:</p>
             <div className="grid grid-cols-2 gap-3">
               {[2, 5, 10, 15].map(min => (
                 <button key={min} onClick={() => setAlert(showAlertModal, min)}
@@ -776,28 +844,19 @@ const App: React.FC = () => {
 
       {/* Modal nickname */}
       {editingNickname && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4"
-          onClick={() => setEditingNickname(null)}>
-          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`}
-            onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4" onClick={() => setEditingNickname(null)}>
+          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
             <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400">✏️ Apelido da Linha</p>
-            <input
-              id="nickname-input"
-              type="text"
-              placeholder="Ex: Meu trabalho, Casa da mãe..."
-              value={nicknameInput}
-              onChange={e => setNicknameInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveNickname()}
-              maxLength={30}
-              className={`w-full ${theme.input} border rounded-2xl px-4 py-4 font-black outline-none focus:border-yellow-400 transition-all text-base`}
-            />
+            <input id="nickname-input" type="text" placeholder="Ex: Meu trabalho, Casa da mãe..."
+              value={nicknameInput} onChange={e => setNicknameInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveNickname()} maxLength={30}
+              className={`w-full ${theme.input} border rounded-2xl px-4 py-4 font-black outline-none focus:border-yellow-400 transition-all text-base`} />
             <div className="flex gap-3">
               <button onClick={() => { setNicknameInput(''); saveNickname(); }}
                 className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest border ${theme.subtext} ${lightTheme ? 'border-gray-300' : 'border-white/10'}`}>
                 Remover apelido
               </button>
-              <button onClick={saveNickname}
-                className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest">
+              <button onClick={saveNickname} className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest">
                 Salvar
               </button>
             </div>
@@ -805,12 +864,10 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Modal instruções instalação */}
+      {/* Modal instalação iOS */}
       {showIosInstructions && (
-        <div className="fixed inset-0 bg-black/90 z-[100] flex items-end justify-center p-4"
-          onClick={() => setShowIosInstructions(false)}>
-          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`}
-            onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-end justify-center p-4" onClick={() => setShowIosInstructions(false)}>
+          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-black uppercase tracking-widest text-yellow-400">📲 Como instalar</p>
               <button onClick={() => setShowIosInstructions(false)} className={`${theme.subtext} text-xl font-black`}>✕</button>
@@ -861,6 +918,7 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
+          {/* FIX: spinner aparece mesmo se já existe resultado (double-tap) */}
           {(isLoading || isFavoritesLoading) && (
             <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
           )}
@@ -883,8 +941,7 @@ const App: React.FC = () => {
                 <p className="text-black/60 text-[9px] font-bold uppercase tracking-widest leading-tight mt-0.5">Acesso rápido • Funciona offline</p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={handleInstall}
-                  className="bg-black text-yellow-400 font-black text-[10px] uppercase tracking-widest px-3 py-2 rounded-xl active:scale-95 transition-transform">
+                <button onClick={handleInstall} className="bg-black text-yellow-400 font-black text-[10px] uppercase tracking-widest px-3 py-2 rounded-xl active:scale-95 transition-transform">
                   Instalar
                 </button>
                 <button onClick={dismissInstallBanner} className="text-black/40 font-black text-lg px-1">✕</button>
@@ -893,7 +950,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ABA BUSCA */}
+        {/* ─── ABA BUSCA ─────────────────────────────────────────────────────── */}
         {activeTab === 'search' && (
           <div className="page-enter space-y-5">
             <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
@@ -951,8 +1008,7 @@ const App: React.FC = () => {
                       </a>
                     )}
                     {errorMsg === 'offline' && (
-                      <button onClick={() => handleSearch()}
-                        className="mt-2 text-[9px] font-black uppercase tracking-widest underline opacity-70">
+                      <button onClick={() => handleSearch()} className="mt-2 text-[9px] font-black uppercase tracking-widest underline opacity-70">
                         Tentar novamente →
                       </button>
                     )}
@@ -971,7 +1027,7 @@ const App: React.FC = () => {
               <div className="space-y-4">
                 {busLines.map((line, i) => (
                   <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                    <BusLineCard line={line} staggerIndex={i} />
+                    <BusLineCard line={line} staggerIndex={i} {...cardProps} />
                   </div>
                 ))}
                 {busLines.length === 0 && !errorMsg && (
@@ -987,7 +1043,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ABA FAVORITOS */}
+        {/* ─── ABA FAVORITOS ─────────────────────────────────────────────────── */}
         {activeTab === 'favs' && (
           <div className="page-enter space-y-4">
             <div className="flex items-center justify-between px-2 mb-2">
@@ -1001,11 +1057,13 @@ const App: React.FC = () => {
                 </button>
               )}
             </div>
+
             {favorites.length > 0 && !isFavoritesLoading && (
               <p className={`text-[8px] font-black ${theme.subtext} uppercase tracking-widest px-2 opacity-50`}>
                 ✏️ Segure o dedo em um card para dar apelido
               </p>
             )}
+
             {isFavoritesLoading && (
               <div className="space-y-4">
                 {favorites.slice(0, 3).map((_, i) => (
@@ -1015,6 +1073,21 @@ const App: React.FC = () => {
                 ))}
               </div>
             )}
+
+            {/* FIX: aviso de pontos inativos */}
+            {inactiveStops.size > 0 && !isFavoritesLoading && (
+              <div className="border border-orange-500/30 bg-orange-500/10 text-orange-400 p-4 rounded-2xl flex items-start gap-3">
+                <span className="text-2xl shrink-0">⚠️</span>
+                <div>
+                  <p className="font-black text-[11px] uppercase tracking-widest">Pontos sem retorno</p>
+                  <p className="text-[9px] font-bold mt-1 opacity-80 leading-relaxed">
+                    {Array.from(inactiveStops).map(s => `Ponto ${s}`).join(', ')} não retornaram dados.
+                    Podem estar desativados ou sem linhas no momento.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
               <div key={pontoId} className="space-y-3">
                 <div className="flex items-center gap-2 px-1 pt-2">
@@ -1026,12 +1099,13 @@ const App: React.FC = () => {
                   const key = `${line.stopSource ?? stopId}::${line.number}`;
                   return (
                     <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} />
+                      <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} />
                     </div>
                   );
                 })}
               </div>
             ))}
+
             {favorites.length === 0 && (
               <div className="py-28 text-center opacity-20 px-10">
                 <p className="font-black text-[12px] uppercase tracking-[0.3em] mb-4">Garagem Vazia</p>
@@ -1043,24 +1117,29 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ABA SITPASS */}
+        {/* ─── ABA SITPASS ───────────────────────────────────────────────────── */}
         {activeTab === 'sitpass' && (
           <div className="page-enter space-y-5">
             <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
               <div className="relative">
                 <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>
-                  CPF (somente números)
+                  CPF
                 </span>
                 <input
                   type="text"
                   inputMode="numeric"
-                  placeholder="Ex: 12345678911"
+                  placeholder="000.000.000-00"
                   value={cpfSitpass}
-                  onChange={e => setCpfSitpass(e.target.value)}
+                  onChange={handleCpfChange}
                   onKeyDown={e => e.key === 'Enter' && consultarSaldo()}
-                  maxLength={11}
-                  className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl`}
+                  maxLength={14}
+                  className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl
+                    ${cpfError ? 'border-red-500 focus:border-red-500' : 'focus:border-yellow-400'}`}
                 />
+                {/* FIX: feedback de validação inline */}
+                {cpfError && (
+                  <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{cpfError}</p>
+                )}
               </div>
               <button
                 onClick={consultarSaldo}
@@ -1080,14 +1159,14 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* FIX: saldoText usa variável de tema para funcionar no modo claro */}
             {saldoData && (
-              <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4"
-                style={{ animation: 'slideUp 0.3s ease-out' }}>
+              <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3">
                   <span className="text-4xl">🎫</span>
                   <div>
                     <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>Bilhete Único</p>
-                    <p className="font-black text-sm uppercase text-white">{saldoData.cartaoDescricao}</p>
+                    <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{saldoData.cartaoDescricao}</p>
                     <p className={`text-[9px] font-bold ${theme.subtext}`}>🆔 {saldoData.cartaoNumero}</p>
                   </div>
                 </div>
@@ -1137,7 +1216,6 @@ const App: React.FC = () => {
           <span className="text-[9px] font-black uppercase tracking-[0.2em]">SitPass</span>
         </button>
       </nav>
-
     </div>
   );
 };
