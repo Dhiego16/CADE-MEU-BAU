@@ -207,7 +207,7 @@ const BusLineCard = memo(({
 
 // ─── App principal ────────────────────────────────────────────────────────────
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'sitpass'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'sitpass' | 'map'>('search');
   const [isSplash, setIsSplash] = useState(true);
   const [busLines, setBusLines] = useState<BusLine[]>([]);
   const [favoriteBusLines, setFavoriteBusLines] = useState<BusLine[]>([]);
@@ -274,6 +274,15 @@ const App: React.FC = () => {
 
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
+
+  // ─── Mapa ─────────────────────────────────────────────────────────────────
+  const [mapReady, setMapReady] = useState(false);
+  const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+  const [locationError, setLocationError] = useState(false);
+  const [selectedStop, setSelectedStop] = useState<{id: string; nome: string} | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
@@ -820,6 +829,120 @@ const App: React.FC = () => {
     onShowAlertModal: setShowAlertModal,
     onShare: shareLine,
   }), [stopId, favorites, activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, removeAlert]);
+
+
+  // ─── Inicializa o mapa Leaflet ───────────────────────────────────────────
+  useEffect(() => {
+    if (activeTab !== 'map') return;
+    if (leafletMapRef.current) return; // já inicializado
+
+    const PONTOS: Array<{id:string; lat:number; lng:number; nome:string}> = [{"id":"05946","lat":-16.7049489,"lng":-49.0957447,"nome":"Av. Dom Emanuel (05946)"},{"id":"05369","lat":-16.70231,"lng":-49.09807,"nome":"Av. Dom Emanuel (05369)"},{"id":"04733","lat":-16.70058,"lng":-49.10065,"nome":"Av. Progresso (04733)"},{"id":"04734","lat":-16.70166,"lng":-49.10321,"nome":"Av. Progresso (04734)"},{"id":"07662","lat":-16.70736,"lng":-49.08962,"nome":"Rua 5 (07662)"},{"id":"09615","lat":-16.70412,"lng":-49.08969,"nome":"Rua Gumercindo Nascimento (09615)"},{"id":"07663","lat":-16.70435,"lng":-49.08793,"nome":"Av. Perimetral (07663)"},{"id":"09643","lat":-16.70399,"lng":-49.08935,"nome":"Rua Sebastiao Lobo (09643)"},{"id":"07363","lat":-16.74004,"lng":-49.07166,"nome":"Av. Juca Ferreira (07363)"},{"id":"07364","lat":-16.73797,"lng":-49.07032,"nome":"Rua Francisco Tavares (07364)"},{"id":"07365","lat":-16.73608,"lng":-49.07079,"nome":"Rua Arlindo F. dos Santos (07365)"},{"id":"07713","lat":-16.73999,"lng":-49.07444,"nome":"Rua Jose Ferreira Filho (07713)"},{"id":"07360","lat":-16.73661,"lng":-49.07404,"nome":"Rua Arlindo F. dos Santos (07360)"},{"id":"07361","lat":-16.73654,"lng":-49.07392,"nome":"Rua Arlindo F. dos Santos (07361)"},{"id":"09170","lat":-16.73652,"lng":-49.07754,"nome":"Rua Tiradentes (09170)"},{"id":"07358","lat":-16.73622,"lng":-49.0808,"nome":"Rua 1 (07358)"},{"id":"09172","lat":-16.73336,"lng":-49.0777,"nome":"Rua 18 (09172)"},{"id":"09173","lat":-16.7322026,"lng":-49.0786252,"nome":"Rua Rr-7 (09173)"},{"id":"08423","lat":-16.7330106,"lng":-49.0822882,"nome":"Rua Rr-07 (08423)"},{"id":"09169","lat":-16.73631,"lng":-49.08415,"nome":"Rua Tiradentes (09169)"},{"id":"06915","lat":-16.73744,"lng":-49.08645,"nome":"Rua Rl-1 (06915)"},{"id":"08531","lat":-16.7375581,"lng":-49.0872059,"nome":"Rua Rl-1 (08531)"},{"id":"06916","lat":-16.73584,"lng":-49.08444,"nome":"Rua Monteiro Lobato (06916)"},{"id":"08530","lat":-16.73525,"lng":-49.08457,"nome":"Rua Monteiro Lobato (08530)"},{"id":"08529","lat":-16.73214,"lng":-49.08512,"nome":"Rua Monteiro Lobato (08529)"},{"id":"06428","lat":-16.73216,"lng":-49.08501,"nome":"Rua Monteiro Lobato (06428)"},{"id":"06426","lat":-16.7344,"lng":-49.08847,"nome":"Av. Goias (06426)"},{"id":"09417","lat":-16.73383,"lng":-49.08915,"nome":"Estrada Sc-05 (09417)"},{"id":"09421","lat":-16.7339,"lng":-49.08903,"nome":"Estrada Sc-05 (09421)"},{"id":"05401","lat":-16.7317921,"lng":-49.0890118,"nome":"Rua Dormever J. Ferreira (05401)"},{"id":"08533","lat":-16.73174,"lng":-49.08935,"nome":"Av. Pedro Miranda (08533)"},{"id":"08544","lat":-16.73182,"lng":-49.0896,"nome":"Av. Pedro Miranda (08544)"},{"id":"06429","lat":-16.72931,"lng":-49.08503,"nome":"Rua Santo Antonio (06429)"},{"id":"06430","lat":-16.72903,"lng":-49.0877,"nome":"Av. Castro Alves (06430)"},{"id":"08527","lat":-16.72896,"lng":-49.08783,"nome":"Av. Castro Alves (08527)"},{"id":"08836","lat":-16.72374,"lng":-49.08467,"nome":"Av. Pres. Vargas (08836)"},{"id":"08837","lat":-16.72014,"lng":-49.08488,"nome":"Av. Pres. Vargas (08837)"},{"id":"08838","lat":-16.71712,"lng":-49.08506,"nome":"Av. Pres. Vargas (08838)"},{"id":"08839","lat":-16.71459,"lng":-49.08525,"nome":"Av. Pres. Vargas (08839)"},{"id":"08842","lat":-16.71416,"lng":-49.0816,"nome":"Av. dos Eucaliptos (08842)"},{"id":"08843","lat":-16.71203,"lng":-49.08377,"nome":"Av. dos Eucaliptos (08843)"},{"id":"05677","lat":-16.71277,"lng":-49.08728,"nome":"Av. Pres. Alves de Castro (05677)"},{"id":"05412","lat":-16.71399,"lng":-49.088,"nome":"Av. Sen. Canedo (05412)"},{"id":"05413","lat":-16.7138,"lng":-49.08786,"nome":"Av. Sen. Canedo (05413)"},{"id":"05415","lat":-16.71737,"lng":-49.0876,"nome":"Av. Sen. Canedo (05415)"},{"id":"05414","lat":-16.7174,"lng":-49.08776,"nome":"Av. Sen. Canedo (05414)"}];
+
+    // Carrega Leaflet via script tag
+    const loadLeaflet = () => new Promise<void>((resolve) => {
+      if ((window as any).L) { resolve(); return; }
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => resolve();
+      document.head.appendChild(script);
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    });
+
+    loadLeaflet().then(() => {
+      if (!mapRef.current || leafletMapRef.current) return;
+      const L = (window as any).L;
+
+      // Centro padrão: Senador Canedo
+      const defaultCenter: [number, number] = [-16.7200, -49.0900];
+
+      const map = L.map(mapRef.current, {
+        center: defaultCenter,
+        zoom: 14,
+        zoomControl: false,
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Zoom control no canto direito
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      // Ícone customizado amarelo
+      const busIcon = L.divIcon({
+        html: `<div style="
+          width:32px; height:32px;
+          background:#fbbf24;
+          border-radius:50% 50% 50% 0;
+          transform:rotate(-45deg);
+          border:2px solid #000;
+          box-shadow:0 2px 8px rgba(0,0,0,0.4);
+          display:flex; align-items:center; justify-content:center;
+        "><span style="transform:rotate(45deg); font-size:14px; display:block; text-align:center; line-height:28px;">🚌</span></div>`,
+        className: '',
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32],
+      });
+
+      // Adiciona markers de todos os pontos
+      PONTOS.forEach(ponto => {
+        const marker = L.marker([ponto.lat, ponto.lng], { icon: busIcon })
+          .addTo(map)
+          .on('click', () => {
+            setSelectedStop({ id: ponto.id, nome: ponto.nome });
+            haptic(40);
+          });
+        markersRef.current.push(marker);
+      });
+
+      leafletMapRef.current = map;
+      setMapReady(true);
+
+      // Tenta pegar localização do usuário
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setUserLocation({ lat: latitude, lng: longitude });
+
+            // Marker do usuário
+            const userIcon = L.divIcon({
+              html: `<div style="
+                width:20px; height:20px;
+                background:#3b82f6;
+                border-radius:50%;
+                border:3px solid #fff;
+                box-shadow:0 0 0 3px rgba(59,130,246,0.4);
+              "></div>`,
+              className: '',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10],
+            });
+
+            L.marker([latitude, longitude], { icon: userIcon })
+              .addTo(map)
+              .bindPopup('Você está aqui');
+
+            // Centraliza no usuário e ajusta zoom
+            map.setView([latitude, longitude], 15);
+          },
+          () => {
+            setLocationError(true);
+          },
+          { timeout: 8000, enableHighAccuracy: true }
+        );
+      }
+    });
+
+    return () => {
+      // Não destroi o mapa ao trocar de aba — preserva estado
+    };
+  }, [activeTab]);
 
   // ─── Splash ───────────────────────────────────────────────────────────────
 
@@ -1409,8 +1532,64 @@ const App: React.FC = () => {
 
       </div>
 
+
+        {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
+        {activeTab === 'map' && (
+          <div className="page-enter" style={{height: 'calc(100vh - 180px)', position: 'relative'}}>
+
+            {/* Leaflet CSS */}
+            {!mapReady && (
+              <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            )}
+
+            {/* Container do mapa */}
+            <div ref={mapRef} style={{width:'100%', height:'100%', borderRadius:'1.5rem', overflow:'hidden'}} />
+
+            {/* Erro de localização */}
+            {locationError && (
+              <div className={`absolute top-4 left-4 right-4 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}>
+                📍 Localização negada — mostrando Senador Canedo
+              </div>
+            )}
+
+            {/* Bottom sheet do ponto selecionado */}
+            {selectedStop && (
+              <div className={`absolute bottom-0 left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
+                style={{animation: 'slideUp 0.3s ease-out'}}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
+                    <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
+                    <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
+                  </div>
+                  <button onClick={() => setSelectedStop(null)} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
+                </div>
+                <button
+                  onClick={() => {
+                    setStopId(selectedStop.id);
+                    setActiveTab('search');
+                    setSelectedStop(null);
+                    haptic([50,30,80]);
+                    setTimeout(() => handleSearch(selectedStop.id), 100);
+                  }}
+                  className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-transform">
+                  🚍 Ver ônibus deste ponto
+                </button>
+              </div>
+            )}
+
+            {/* Loader inicial */}
+            {!mapReady && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999]">
+                <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
+              </div>
+            )}
+          </div>
+        )}
+
       {/* Nav */}
-      <nav className={`fixed bottom-0 left-0 right-0 ${theme.nav} border-t px-10 pb-12 pt-5 flex justify-between items-center z-50`}>
+      <nav className={`fixed bottom-0 left-0 right-0 ${theme.nav} border-t px-6 pb-12 pt-5 flex justify-between items-center z-50`}>
         <button onClick={() => { setActiveTab('search'); haptic(30); }}
           className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'search' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
           <div className="text-2xl leading-none">{activeTab === 'search' ? '🔍' : '🔎'}</div>
@@ -1427,6 +1606,11 @@ const App: React.FC = () => {
             )}
           </div>
           <span className="text-[9px] font-black uppercase tracking-[0.2em]">Salvos</span>
+        </button>
+        <button onClick={() => { setActiveTab('map'); haptic(30); }}
+          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'map' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
+          <div className="text-2xl leading-none">🗺️</div>
+          <span className="text-[9px] font-black uppercase tracking-[0.2em]">Mapa</span>
         </button>
         <button onClick={() => { setActiveTab('sitpass'); haptic(30); }}
           className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'sitpass' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
