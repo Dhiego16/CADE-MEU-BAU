@@ -831,6 +831,17 @@ const App: React.FC = () => {
   }), [stopId, favorites, activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, removeAlert]);
 
 
+  // ─── Recalcula tamanho do mapa ao voltar para a aba ───────────────────────
+  useEffect(() => {
+    if (activeTab !== 'map') return;
+    if (!leafletMapRef.current) return;
+    // Pequeno delay para o display:block ter efeito antes do invalidateSize
+    const t = setTimeout(() => {
+      leafletMapRef.current.invalidateSize();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [activeTab]);
+
   // ─── Inicializa o mapa Leaflet ───────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'map') return;
@@ -1536,19 +1547,18 @@ const App: React.FC = () => {
         {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
 
 
-      {/* ─── ABA MAPA — fora do scroll, ocupa área entre header e nav ─── */}
-      {activeTab === 'map' && (
-        <div
-          className="page-enter"
-          style={{
-            position: 'fixed',
-            top: '64px',      // altura do header
-            left: 0,
-            right: 0,
-            bottom: '90px',   // altura da nav
-            zIndex: 40,
-          }}
-        >
+      {/* ─── ABA MAPA — sempre no DOM, visível/oculto via display ─── */}
+      <div
+        style={{
+          position: 'fixed',
+          top: '64px',
+          left: 0,
+          right: 0,
+          bottom: '90px',
+          zIndex: 40,
+          display: activeTab === 'map' ? 'block' : 'none',
+        }}
+      >
           {/* Container do mapa — ocupa 100% do espaço disponível */}
           <div
             ref={mapRef}
