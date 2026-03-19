@@ -1607,8 +1607,7 @@ const App: React.FC = () => {
               <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Nav */}
       <nav className={`fixed bottom-0 left-0 right-0 ${theme.nav} border-t px-6 pb-12 pt-5 flex justify-between items-center z-50`}>
