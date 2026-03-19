@@ -1576,8 +1576,8 @@ const App: React.FC = () => {
           {/* Bottom sheet do ponto selecionado */}
           {selectedStop && (
             <div
-              className={`absolute bottom-0 left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
-              style={{animation: 'slideUp 0.3s ease-out'}}>
+              className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
+              style={{bottom: 0, animation: 'slideUp 0.3s ease-out'}}>
               <div className="flex items-start justify-between">
                 <div>
                   <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
@@ -1623,7 +1623,7 @@ const App: React.FC = () => {
               }}
               style={{
                 position: 'absolute',
-                bottom: selectedStop ? '180px' : '16px',
+                bottom: selectedStop ? '220px' : '72px',
                 right: '16px',
                 zIndex: 1000,
                 width: '44px',
