@@ -251,6 +251,14 @@ const App: React.FC = () => {
 
   // ─── SitPass: CPF com máscara e validação ────────────────────────────────
   const [cpfSitpass, setCpfSitpass] = useState('');
+  const [saldoHistorico, setSaldoHistorico] = useState<{
+    saldo_formatado: string;
+    cartaoDescricao: string;
+    data: string;
+    hora: string;
+  } | null>(() => {
+    try { return JSON.parse(localStorage.getItem('cade_meu_bau_saldo_historico') || 'null'); } catch { return null; }
+  });
   const [cpfError, setCpfError] = useState<string | null>(null);
   const [saldoData, setSaldoData] = useState<{
     cartaoNumero: string;
@@ -744,7 +752,19 @@ const App: React.FC = () => {
       });
       clearTimeout(timeout);
       const data = await res.json();
-      if (res.ok) setSaldoData(data);
+      if (res.ok) {
+        setSaldoData(data);
+        // Salva última consulta no histórico
+        const agora = new Date();
+        const historico = {
+          saldo_formatado: data.saldo_formatado,
+          cartaoDescricao: data.cartaoDescricao,
+          data: agora.toLocaleDateString('pt-BR'),
+          hora: agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        };
+        setSaldoHistorico(historico);
+        localStorage.setItem('cade_meu_bau_saldo_historico', JSON.stringify(historico));
+      }
       else setSaldoErro(data.erro ?? 'Erro ao consultar saldo.');
     } catch (err: unknown) {
       clearTimeout(timeout);
@@ -1135,6 +1155,16 @@ const App: React.FC = () => {
                 )}
               </div>
             )}
+
+            {/* Botão de feedback */}
+            <a
+              href="https://forms.gle/JwtHNRw7pjaZtfV19"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => haptic(30)}
+              className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
+              <span>💬</span> Algo errado? Me avisa
+            </a>
           </div>
         )}
 
@@ -1209,6 +1239,16 @@ const App: React.FC = () => {
                 </p>
               </div>
             )}
+
+            {/* Botão de feedback */}
+            <a
+              href="https://forms.gle/JwtHNRw7pjaZtfV19"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => haptic(30)}
+              className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
+              <span>💬</span> Algo errado? Me avisa
+            </a>
           </div>
         )}
 
@@ -1327,13 +1367,43 @@ const App: React.FC = () => {
             )}
 
             {!saldoData && !saldoErro && !saldoLoading && (
-              <div className="py-20 text-center opacity-10 flex flex-col items-center">
-                <div className="text-9xl mb-6">🎫</div>
-                <p className={`font-black text-[12px] uppercase tracking-[0.5em] px-10 leading-relaxed ${theme.subtext}`}>
-                  Digite seu CPF para consultar o saldo
-                </p>
+              <div className="space-y-4">
+                {/* Histórico da última consulta */}
+                {saldoHistorico && (
+                  <div className={`border ${lightTheme ? 'border-gray-200 bg-white' : 'border-white/5 bg-slate-900'} rounded-[2rem] p-5 space-y-3`}
+                    style={{ animation: 'slideUp 0.3s ease-out' }}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>🕓 Última consulta</p>
+                      <p className={`text-[8px] font-bold ${theme.subtext}`}>{saldoHistorico.data} às {saldoHistorico.hora}</p>
+                    </div>
+                    <div className={`${theme.divider} h-px w-full`} />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`text-[9px] font-bold ${theme.subtext}`}>{saldoHistorico.cartaoDescricao}</p>
+                        <p className={`text-[8px] ${theme.subtext} opacity-50`}>Valor pode estar desatualizado</p>
+                      </div>
+                      <span className="text-2xl font-black text-yellow-400">{saldoHistorico.saldo_formatado}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="py-16 text-center opacity-10 flex flex-col items-center">
+                  <div className="text-9xl mb-6">🎫</div>
+                  <p className={`font-black text-[12px] uppercase tracking-[0.5em] px-10 leading-relaxed ${theme.subtext}`}>
+                    Digite seu CPF para consultar o saldo
+                  </p>
+                </div>
               </div>
             )}
+
+            {/* Botão de feedback */}
+            <a
+              href="https://forms.gle/JwtHNRw7pjaZtfV19"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => haptic(30)}
+              className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
+              <span>💬</span> Algo errado? Me avisa
+            </a>
           </div>
         )}
 
