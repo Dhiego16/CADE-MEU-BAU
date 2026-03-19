@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { BusLine } from './types';
 
 interface FavoriteItem {
@@ -473,11 +473,13 @@ const App: React.FC = () => {
     prevTabRef.current = activeTab;
   }, [activeTab]); // eslint-disable-line
 
-  // FIX: timer estável — usa refs para evitar múltiplos intervals
+  // FIX: refs estáveis para callbacks e aba atual — evita closure stale no interval
   const handleSearchRef = useRef(handleSearch);
   const loadFavoritesRef = useRef(loadFavoritesSchedules);
+  const activeTabRef = useRef(activeTab);
   useEffect(() => { handleSearchRef.current = handleSearch; }, [handleSearch]);
   useEffect(() => { loadFavoritesRef.current = loadFavoritesSchedules; }, [loadFavoritesSchedules]);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   useEffect(() => {
     const shouldRun =
@@ -485,12 +487,16 @@ const App: React.FC = () => {
       (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading);
 
     if (timerRef.current) clearInterval(timerRef.current);
-    if (!shouldRun) return;
+    if (!shouldRun) { setCountdown(REFRESH_INTERVAL); return; }
+
+    // Reinicia o countdown ao trocar de aba ou ao receber novos dados
+    setCountdown(REFRESH_INTERVAL);
 
     timerRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          if (activeTab === 'search') handleSearchRef.current();
+          // Lê a aba atual via ref — nunca stale
+          if (activeTabRef.current === 'search') handleSearchRef.current();
           else loadFavoritesRef.current();
           return REFRESH_INTERVAL;
         }
@@ -709,8 +715,9 @@ const App: React.FC = () => {
   const favCount = favorites.length;
   const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-  // Props estáveis para BusLineCard (evita re-render desnecessário)
-  const cardProps = {
+  // FIX: useMemo garante que o objeto só muda quando as dependências realmente mudam
+  // sem isso, o memo() no BusLineCard nunca funciona (objeto novo = referência nova)
+  const cardProps = useMemo(() => ({
     stopId,
     favorites,
     activeAlerts,
@@ -722,7 +729,7 @@ const App: React.FC = () => {
     onRemoveAlert: removeAlert,
     onShowAlertModal: setShowAlertModal,
     onShare: shareLine,
-  };
+  }), [stopId, favorites, activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, removeAlert]);
 
   // ─── Splash ───────────────────────────────────────────────────────────────
 
