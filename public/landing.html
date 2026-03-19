@@ -70,7 +70,6 @@
       overflow: hidden;
     }
 
-    /* Glowing orb */
     .hero::after {
       content: '';
       position: absolute;
@@ -263,6 +262,19 @@
     .mockup-time-val { font-family: 'Bebas Neue', sans-serif; font-size: 24px; line-height: 1; }
     .mockup-time-unit { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.7; }
 
+    /* ── MOCKUP SITPASS ── */
+    .mockup-sitpass {
+      background: rgba(251,191,36,0.05);
+      border: 1px solid rgba(251,191,36,0.15);
+      border-radius: 20px;
+      padding: 14px;
+      margin-top: 10px;
+    }
+    .mockup-sitpass-label { font-size: 7px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 6px; }
+    .mockup-sitpass-row { display: flex; align-items: center; justify-content: space-between; }
+    .mockup-sitpass-name { font-size: 9px; font-weight: 700; color: #aaa; }
+    .mockup-sitpass-saldo { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--yellow); line-height: 1; }
+
     /* ── FEATURES ── */
     .section {
       padding: 100px 24px;
@@ -378,7 +390,6 @@
       line-height: 1;
       color: rgba(251,191,36,0.15);
       width: 100px;
-      shrink: 0;
       flex-shrink: 0;
     }
 
@@ -592,7 +603,7 @@
             <div class="mockup-line-num">283</div>
             <div class="mockup-dest">
               <div class="mockup-dest-label">Indo para:</div>
-              <div class="mockup-dest-name">T. Praça da Bilblia</div>
+              <div class="mockup-dest-name">T. Praça da Biblia</div>
               <div class="mockup-status"><span class="mockup-dot"></span> Online agora</div>
             </div>
           </div>
@@ -606,6 +617,15 @@
               <div class="mockup-time-label">Próximo</div>
               <div class="mockup-time-val" style="font-size:10px; padding-top:6px; color:#475569;">SEM<br>PREV.</div>
             </div>
+          </div>
+        </div>
+
+        <!-- Mockup SitPass -->
+        <div class="mockup-sitpass">
+          <div class="mockup-sitpass-label">🎫 SitPass — Bilhete Único</div>
+          <div class="mockup-sitpass-row">
+            <div class="mockup-sitpass-name">Estudante</div>
+            <div class="mockup-sitpass-saldo">R$ 12,90</div>
           </div>
         </div>
 
@@ -677,9 +697,14 @@
         <p class="feature-desc">Configure para ser notificado quando o ônibus estiver a 2, 5, 10 ou 15 minutos do seu ponto.</p>
       </div>
       <div class="feature-card reveal">
+        <span class="feature-icon">🎫</span>
+        <div class="feature-title">Consulta SitPass</div>
+        <p class="feature-desc">Consulte o saldo do seu Bilhete Único direto no app pelo CPF. Aviso automático quando o saldo estiver abaixo do valor da passagem.</p>
+      </div>
+      <div class="feature-card reveal">
         <span class="feature-icon">📲</span>
         <div class="feature-title">Instala como App</div>
-        <p class="feature-desc">Funciona como um aplicativo nativo no seu celular. Sem precisar baixar nada na Play Store.</p>
+        <p class="feature-desc">Funciona como um aplicativo nativo no seu celular, com atualizações automáticas. Sem precisar baixar nada na Play Store.</p>
       </div>
       <div class="feature-card reveal">
         <span class="feature-icon">🔗</span>
@@ -690,6 +715,11 @@
         <span class="feature-icon">☀️</span>
         <div class="feature-title">Tema Claro e Escuro</div>
         <p class="feature-desc">Alterne entre os temas para usar no sol ou à noite sem cansar os olhos.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">💬</span>
+        <div class="feature-title">Canal de Feedback</div>
+        <p class="feature-desc">Encontrou algum erro ou quer sugerir algo? Tem um botão de feedback direto no app para me avisar na hora.</p>
       </div>
     </div>
   </section>
@@ -730,6 +760,13 @@
           <p class="step-desc">Toque na estrela ★ para salvar a linha. Na próxima vez que abrir o app, seus baús favoritos já aparecem atualizados automaticamente.</p>
         </div>
       </div>
+      <div class="step reveal">
+        <div class="step-num">05</div>
+        <div class="step-content">
+          <div class="step-title">Consulte seu saldo SitPass</div>
+          <p class="step-desc">Na aba SitPass, digite seu CPF para ver o saldo do Bilhete Único. O app avisa se o saldo estiver abaixo do valor da passagem (R$ 4,30) ou da meia tarifa (R$ 2,15).</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -753,19 +790,19 @@
     <div class="footer-logo">Cadê meu Baú?</div>
     <p class="footer-text">
       Monitor de ônibus em tempo real para Goiânia e região metropolitana.<br>
-      Dados fornecidos pela RMTC.
+      Dados fornecidos pela RMTC. Consulta de saldo via SitPass.
     </p>
     <div class="footer-links">
       <a href="https://cademeubau.vercel.app">Abrir App</a>
       <a href="https://www.rmtcgoiania.com.br" target="_blank">RMTC</a>
+      <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank">Feedback</a>
     </div>
     <p style="margin-top:24px; font-size:11px; color:#333;">
-      Feito com ❤️ em Senador Canedo · Não é afiliado à RMTC ou EIXO
+      Feito com ❤️ em Senador Canedo · Não é afiliado à RMTC, EIXO ou SitPass
     </p>
   </footer>
 
   <script>
-    // Scroll reveal
     const reveals = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry, i) => {
