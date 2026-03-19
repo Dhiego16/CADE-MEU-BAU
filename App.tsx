@@ -1600,6 +1600,51 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {/* Botão de reposicionar no usuário */}
+          {mapReady && (
+            <button
+              onClick={() => {
+                if (!leafletMapRef.current) return;
+                haptic(40);
+                if (userLocation) {
+                  leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
+                } else {
+                  // Tenta pegar localização novamente
+                  navigator.geolocation?.getCurrentPosition(
+                    (pos) => {
+                      const { latitude, longitude } = pos.coords;
+                      setUserLocation({ lat: latitude, lng: longitude });
+                      leafletMapRef.current.setView([latitude, longitude], 16, { animate: true });
+                    },
+                    () => setLocationError(true),
+                    { timeout: 6000, enableHighAccuracy: true }
+                  );
+                }
+              }}
+              style={{
+                position: 'absolute',
+                bottom: selectedStop ? '180px' : '16px',
+                right: '16px',
+                zIndex: 1000,
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: '#fbbf24',
+                border: '2px solid #000',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px',
+                cursor: 'pointer',
+                transition: 'bottom 0.3s ease',
+              }}
+              title="Minha localização"
+            >
+              📍
+            </button>
+          )}
+
           {/* Loader inicial */}
           {!mapReady && (
             <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
