@@ -287,6 +287,9 @@ const App: React.FC = () => {
   const leafletMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const busMarkersRef = useRef<any[]>([]);
+  const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
+  const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
@@ -934,6 +937,35 @@ const App: React.FC = () => {
     }, 50);
     return () => clearTimeout(t);
   }, [activeTab]);
+
+  // ─── Auto-refresh do tempo real no mapa ────────────────────────────────────
+  useEffect(() => { selectedStopRef.current = selectedStop; }, [selectedStop]);
+
+  useEffect(() => {
+    if (!selectedStop) {
+      // Limpa timer ao fechar o bottom sheet
+      if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current);
+      setMapRefreshCountdown(15);
+      return;
+    }
+
+    setMapRefreshCountdown(15);
+    if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current);
+
+    mapRefreshTimerRef.current = setInterval(() => {
+      setMapRefreshCountdown(prev => {
+        if (prev <= 1) {
+          // Só atualiza posição dos ônibus, não os horários
+          const stop = selectedStopRef.current;
+          if (stop) buscarLinhasPonto(stop.id);
+          return 15;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => { if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current); };
+  }, [selectedStop, buscarLinhasPonto]);
 
   // ─── Inicializa o mapa Leaflet ───────────────────────────────────────────
   useEffect(() => {
@@ -1670,23 +1702,34 @@ const App: React.FC = () => {
           {/* Bottom sheet do ponto selecionado */}
           {selectedStop && (
             <div
-              className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-5 space-y-3`}
-              style={{bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '65%', overflowY: 'auto'}}>
+              className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem]`}
+              style={{bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '60%', display: 'flex', flexDirection: 'column'}}>
 
-              {/* Cabeçalho */}
-              <div className="flex items-start justify-between">
+              {/* Cabeçalho fixo */}
+              <div className="flex items-start justify-between px-5 pt-5 pb-3 shrink-0">
                 <div>
                   <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
                   <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
                   <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
                 </div>
-                <button onClick={() => {
-                  setSelectedStop(null);
-                  setStopLines([]);
-                  busMarkersRef.current.forEach(m => m.remove());
-                  busMarkersRef.current = [];
-                }} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
+                <div className="flex items-center gap-3 shrink-0">
+                  {!stopLinesLoading && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className={`text-[9px] font-black tabular-nums ${theme.subtext}`}>{mapRefreshCountdown}s</span>
+                    </div>
+                  )}
+                  <button onClick={() => {
+                    setSelectedStop(null);
+                    setStopLines([]);
+                    busMarkersRef.current.forEach(m => m.remove());
+                    busMarkersRef.current = [];
+                  }} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
+                </div>
               </div>
+
+              {/* Área scrollável */}
+              <div style={{overflowY: 'auto', flex: 1, paddingBottom: '12px'}} className="px-5 space-y-3">
 
               {/* Loading */}
               {stopLinesLoading && (
@@ -1746,6 +1789,8 @@ const App: React.FC = () => {
                   🚍 {busMarkersRef.current.length} ônibus visíveis no mapa
                 </p>
               )}
+
+              </div>{/* fim área scrollável */}
             </div>
           )}
 
