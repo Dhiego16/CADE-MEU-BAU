@@ -28,6 +28,7 @@ const shareLine = async (stopId: string, lineNumber: string) => {
   } catch { /* cancelado */ }
 };
 
+// ─── Formata CPF enquanto digita ─────────────────────────────────────────────
 const formatCpf = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 11);
   return digits
@@ -36,6 +37,7 @@ const formatCpf = (value: string) => {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 };
 
+// ─── Valida CPF com dígitos verificadores ─────────────────────────────────────
 const isValidCpf = (cpf: string): boolean => {
   const d = cpf.replace(/\D/g, '');
   if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
@@ -65,6 +67,7 @@ const SkeletonCard = ({ light }: { light: boolean }) => (
   </div>
 );
 
+// ─── Utilitários de tempo/urgência (fora do componente) ───────────────────────
 const getUrgencyColor = (timeStr: string) => {
   if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
   const clean = timeStr.toLowerCase();
@@ -100,6 +103,7 @@ const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
   );
 };
 
+// ─── BusLineCard movido para FORA do App (evita remount a cada render) ────────
 interface BusLineCardProps {
   line: BusLine;
   isRemoving?: boolean;
@@ -128,26 +132,6 @@ const BusLineCard = memo(({
   const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
   const favItem = favorites.find(f => f.stopId === sId && f.lineNumber === line.number);
 
-  // FIX BUG #8: isMobile ref para evitar double-trigger de touch+mouse em dispositivos móveis
-  const isTouchRef = useRef(false);
-
-  const handleTouchStart = useCallback(() => {
-    isTouchRef.current = true;
-    if (isFav) onStartLongPress(key, favItem?.nickname);
-  }, [isFav, key, favItem?.nickname, onStartLongPress]);
-
-  const handleMouseDown = useCallback(() => {
-    // Ignora evento de mouse se o toque já foi registrado (mobile)
-    if (isTouchRef.current) return;
-    if (isFav) onStartLongPress(key, favItem?.nickname);
-  }, [isFav, key, favItem?.nickname, onStartLongPress]);
-
-  const handleTouchEnd = useCallback(() => {
-    // Reseta flag após pequeno delay para cobrir o mouseup que vem logo depois no mobile
-    setTimeout(() => { isTouchRef.current = false; }, 300);
-    onCancelLongPress();
-  }, [onCancelLongPress]);
-
   return (
     <div
       className={`${theme.card} border p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98]`}
@@ -157,10 +141,10 @@ const BusLineCard = memo(({
         transition: 'opacity 0.35s ease, transform 0.35s ease',
         animationDelay: `${staggerIndex * 60}ms`,
       }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      onTouchStart={() => isFav && onStartLongPress(key, favItem?.nickname)}
+      onTouchEnd={onCancelLongPress}
       onTouchMove={onCancelLongPress}
-      onMouseDown={handleMouseDown}
+      onMouseDown={() => isFav && onStartLongPress(key, favItem?.nickname)}
       onMouseUp={onCancelLongPress}
       onMouseLeave={onCancelLongPress}
     >
@@ -238,6 +222,7 @@ const App: React.FC = () => {
   const [editingNickname, setEditingNickname] = useState<string | null>(null);
   const [nicknameInput, setNicknameInput] = useState('');
 
+  // ─── FIX: bug de tema claro no SitPass ───────────────────────────────────
   const [lightTheme, setLightTheme] = useState(() => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
   });
@@ -264,7 +249,7 @@ const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  // SitPass
+  // ─── SitPass: CPF com máscara e validação ────────────────────────────────
   const [cpfSitpass, setCpfSitpass] = useState('');
   const [saldoHistorico, setSaldoHistorico] = useState<{
     saldo_formatado: string;
@@ -284,27 +269,31 @@ const App: React.FC = () => {
   const [saldoLoading, setSaldoLoading] = useState(false);
   const [saldoErro, setSaldoErro] = useState<string | null>(null);
 
+  // ─── Favoritos com pontos inativos ───────────────────────────────────────
   const [inactiveStops, setInactiveStops] = useState<Set<string>>(new Set());
+
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
-  // Mapa
+  // ─── Mapa ─────────────────────────────────────────────────────────────────
   const [mapReady, setMapReady] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [locationError, setLocationError] = useState(false);
   const [selectedStop, setSelectedStop] = useState<{id: string; nome: string} | null>(null);
+  const [stopLines, setStopLines] = useState<BusLine[]>([]);
+  const [stopLinesLoading, setStopLinesLoading] = useState(false);
+  const [stopLinesError, setStopLinesError] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const busMarkersRef = useRef<any[]>([]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevTabRef = useRef<string>('');
 
-  // FIX BUG #4: ref para controlar se notificação de alerta já foi disparada (evita duplicatas)
-  const alertFiredRef = useRef<Set<string>>(new Set());
-
+  // Refs estáveis para usar dentro de callbacks/intervals sem stale closure
   const activeAlertsRef = useRef(activeAlerts);
   useEffect(() => { activeAlertsRef.current = activeAlerts; }, [activeAlerts]);
 
@@ -326,6 +315,7 @@ const App: React.FC = () => {
     destText:    lightTheme ? 'text-gray-900'           : 'text-white',
     stopBadge:   lightTheme ? 'text-gray-400'           : 'text-slate-600',
     historyBtn:  lightTheme ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-slate-800 border-white/10 text-yellow-400',
+    // FIX: saldo text usa variável de tema em vez de text-white fixo
     saldoText:   lightTheme ? 'text-gray-900'           : 'text-white',
   };
 
@@ -380,32 +370,18 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_theme', lightTheme ? 'light' : 'dark');
   }, [lightTheme]);
 
-  // FIX BUG #6 e #7: limpa estado do SitPass ao sair da aba
-  useEffect(() => {
-    if (activeTab !== 'sitpass') {
-      setCpfError(null);
-      // Não limpa cpfSitpass e saldoData para preservar UX ao voltar
-      // Mas reseta o erro de saldo para não assustar
-      setSaldoErro(null);
-    }
-  }, [activeTab]);
-
-  // FIX BUG #5: limpa favoriteBusLines quando favorites fica vazio
-  useEffect(() => {
-    if (favorites.length === 0) {
-      setFavoriteBusLines([]);
-      setInactiveStops(new Set());
-    }
-  }, [favorites.length]);
-
   // ─── Detecção de atualização do Service Worker ────────────────────────────
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.ready.then((reg) => {
       swRegistrationRef.current = reg;
+
+      // Verifica se já há um SW aguardando (update pendente ao abrir o app)
       if (reg.waiting) {
         setShowUpdateBanner(true);
       }
+
+      // Escuta novas atualizações enquanto o app está aberto
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
         if (!newWorker) return;
@@ -416,6 +392,8 @@ const App: React.FC = () => {
         });
       });
     });
+
+    // Quando o SW muda (após skipWaiting), recarrega a página
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) {
@@ -465,6 +443,7 @@ const App: React.FC = () => {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
+      // FIX: distingue ponto inativo (404) de genérico not_found
       if (res.status === 404) return { lines: [], error: 'not_found' };
       if (!res.ok) return { lines: [], error: 'offline' };
 
@@ -508,18 +487,10 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // FIX: merge inteligente — só substitui objetos cujos horários mudaram
+  // Preserva a referência dos cards inalterados → memo() funciona → sem re-render visual
   const mergeLines = useCallback((prev: BusLine[], next: BusLine[]): BusLine[] => {
-    // FIX BUG #9: se tamanhos diferem, faz merge por id em vez de substituir abruptamente
-    if (prev.length !== next.length) {
-      // Tenta preservar cards que continuam existindo (mesmo id)
-      const nextIds = new Set(next.map(l => l.id));
-      const prevKept = prev.filter(l => nextIds.has(l.id));
-      if (prevKept.length === next.length) {
-        // Todos os ids batem — faz merge normal pela posição
-        return next;
-      }
-      return next;
-    }
+    if (prev.length !== next.length) return next;
     let changed = false;
     const merged = prev.map((oldLine, i) => {
       const newLine = next[i];
@@ -529,7 +500,7 @@ const App: React.FC = () => {
         oldLine.subsequentArrival === newLine.subsequentArrival &&
         oldLine.destination === newLine.destination
       ) {
-        return oldLine;
+        return oldLine; // mesma referência → memo bloqueia re-render
       }
       changed = true;
       return { ...oldLine, nextArrival: newLine.nextArrival, subsequentArrival: newLine.subsequentArrival };
@@ -537,22 +508,18 @@ const App: React.FC = () => {
     return changed ? merged : prev;
   }, []);
 
-  // FIX BUG #1: handleSearch recebe o id explicitamente e atualiza stopId de forma sincronizada
   const handleSearch = useCallback(async (forcedId?: string, forcedFilter?: string) => {
     const idToSearch = forcedId ?? stopId;
     if (!idToSearch || isSearchingRef.current) return;
-
-    // Se um id foi forçado (ex: clique no histórico), atualiza o state do input também
-    if (forcedId && forcedId !== stopId) {
-      setStopId(forcedId);
-    }
-
     isSearchingRef.current = true;
+    // Só exibe skeleton na primeira busca (sem cards ainda)
     setBusLines(prev => { if (prev.length === 0) setIsLoading(true); return prev; });
     setErrorMsg(null);
     setStaleData(false);
     try {
       const { lines, error } = await performSearch(idToSearch, forcedFilter ?? lineFilter);
+      // FIX: merge inteligente — só muda objetos cujos horários realmente mudaram
+      // Cards sem alteração mantêm a mesma referência → memo() bloqueia re-render
       setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
       else if (error === 'not_found') setErrorMsg('not_found');
@@ -563,8 +530,10 @@ const App: React.FC = () => {
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
   }, [stopId, lineFilter, performSearch, addToHistory, mergeLines]);
 
+  // FIX: loadFavoritesSchedules agora identifica pontos inativos e avisa o usuário
   const loadFavoritesSchedules = useCallback(async () => {
     if (favorites.length === 0) return;
+    // Só exibe skeleton na primeira carga (sem cards ainda)
     setFavoriteBusLines(prev => { if (prev.length === 0) setIsFavoritesLoading(true); return prev; });
     setStaleData(false);
     try {
@@ -572,6 +541,7 @@ const App: React.FC = () => {
       const allLines = results.flatMap(r => r.lines);
       const hasOffline = results.some(r => r.error === 'offline');
 
+      // Detecta pontos que retornaram not_found (possivelmente desativados)
       const newInactive = new Set<string>();
       results.forEach((r, i) => {
         if (r.error === 'not_found' || r.error === 'inactive_stop') {
@@ -580,6 +550,7 @@ const App: React.FC = () => {
       });
       setInactiveStops(newInactive);
 
+      // FIX: merge inteligente nos favoritos também
       setFavoriteBusLines(prev => prev.length === 0 ? allLines : mergeLines(prev, allLines));
       if (hasOffline) setStaleData(true);
     } catch { setStaleData(true); }
@@ -593,6 +564,7 @@ const App: React.FC = () => {
     prevTabRef.current = activeTab;
   }, [activeTab]); // eslint-disable-line
 
+  // FIX: refs estáveis para callbacks e aba atual — evita closure stale no interval
   const handleSearchRef = useRef(handleSearch);
   const loadFavoritesRef = useRef(loadFavoritesSchedules);
   const activeTabRef = useRef(activeTab);
@@ -608,11 +580,13 @@ const App: React.FC = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (!shouldRun) { setCountdown(REFRESH_INTERVAL); return; }
 
+    // Reinicia o countdown ao trocar de aba ou ao receber novos dados
     setCountdown(REFRESH_INTERVAL);
 
     timerRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
+          // Lê a aba atual via ref — nunca stale
           if (activeTabRef.current === 'search') handleSearchRef.current();
           else loadFavoritesRef.current();
           return REFRESH_INTERVAL;
@@ -648,6 +622,7 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
   }, [favorites]);
 
+  // FIX: long press cancela também ao scroll
   const startLongPress = useCallback((key: string, currentNickname?: string) => {
     longPressTimerRef.current = setTimeout(() => {
       haptic(100);
@@ -704,10 +679,9 @@ const App: React.FC = () => {
     }
   };
 
+  // FIX: removeAlert estável via ref para não causar stale closure no checkAlerts
   const removeAlert = useCallback((lineKey: string) => {
     haptic(40);
-    // FIX BUG #4: limpa também o controle de alerta disparado
-    alertFiredRef.current.delete(lineKey);
     setActiveAlerts(prev => {
       const next = { ...prev };
       delete next[lineKey];
@@ -723,8 +697,6 @@ const App: React.FC = () => {
       return;
     }
     haptic([40, 30, 60]);
-    // FIX BUG #4: limpa flag de disparado ao criar novo alerta
-    alertFiredRef.current.delete(lineKey);
     setActiveAlerts(prev => {
       const next = { ...prev, [lineKey]: minutes };
       localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
@@ -734,7 +706,7 @@ const App: React.FC = () => {
     await sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
   };
 
-  // FIX BUG #4: checkAlerts usa alertFiredRef para evitar notificações duplicadas
+  // FIX: checkAlerts usa activeAlertsRef (ref estável) em vez de closure stale
   const checkAlerts = useCallback(async (lines: BusLine[]) => {
     const alerts = activeAlertsRef.current;
     if (Object.keys(alerts).length === 0) return;
@@ -742,8 +714,6 @@ const App: React.FC = () => {
       const key = `${line.stopSource ?? ''}::${line.number}`;
       const alertMinutes = alerts[key];
       if (alertMinutes === undefined) continue;
-      // Pula se já disparou notificação para esta key neste ciclo
-      if (alertFiredRef.current.has(key)) continue;
       const nextStr = line.nextArrival ?? '';
       if (nextStr === 'SEM PREVISÃO') continue;
       const isNow = nextStr.toLowerCase().includes('agora');
@@ -752,13 +722,12 @@ const App: React.FC = () => {
         const msg = isNow
           ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
           : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
-        alertFiredRef.current.add(key);
         await sendNotification('🚍 Baú chegando!', msg);
         haptic([100, 50, 100]);
         removeAlert(key);
       }
     }
-  }, [removeAlert]);
+  }, [removeAlert]); // removeAlert é estável (useCallback sem deps)
 
   useEffect(() => {
     if (busLines.length > 0) checkAlerts(busLines);
@@ -768,7 +737,7 @@ const App: React.FC = () => {
     if (favoriteBusLines.length > 0) checkAlerts(favoriteBusLines);
   }, [favoriteBusLines, checkAlerts]);
 
-  // ─── SitPass ──────────────────────────────────────────────────────────────
+  // ─── SitPass com validação de CPF ─────────────────────────────────────────
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatCpf(e.target.value);
     setCpfSitpass(formatted);
@@ -786,6 +755,7 @@ const App: React.FC = () => {
     setSaldoData(null);
     setCpfError(null);
 
+    // FIX: timeout na chamada SitPass
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 7000);
 
@@ -797,6 +767,7 @@ const App: React.FC = () => {
       const data = await res.json();
       if (res.ok) {
         setSaldoData(data);
+        // Salva última consulta no histórico
         const agora = new Date();
         const historico = {
           saldo_formatado: data.saldo_formatado,
@@ -817,7 +788,6 @@ const App: React.FC = () => {
     }
   };
 
-  // FIX BUG #1: handleKeyDown para busca principal — usa valor atual do input, não state defasado
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
   };
@@ -848,6 +818,8 @@ const App: React.FC = () => {
   const favCount = favorites.length;
   const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
+  // FIX: useMemo garante que o objeto só muda quando as dependências realmente mudam
+  // sem isso, o memo() no BusLineCard nunca funciona (objeto novo = referência nova)
   const cardProps = useMemo(() => ({
     stopId,
     favorites,
@@ -862,12 +834,97 @@ const App: React.FC = () => {
     onShare: shareLine,
   }), [stopId, favorites, activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, removeAlert]);
 
-  // FIX BUG #2: invalidateSize com guard de null check
+
+  // ─── Busca linhas do ponto e markers de ônibus em tempo real ──────────────
+  const buscarLinhasPonto = useCallback(async (pontoId: string) => {
+    if (!pontoId) return;
+    setStopLinesLoading(true);
+    setStopLinesError(null);
+    setStopLines([]);
+
+    // Remove markers de ônibus anteriores
+    busMarkersRef.current.forEach(m => m.remove());
+    busMarkersRef.current = [];
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`https://bot-onibus.vercel.app/api/ponto?ponto=${pontoId}`, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!res.ok) { setStopLinesError('offline'); setStopLinesLoading(false); return; }
+      const data = await res.json();
+      if (!data?.horarios?.length) { setStopLinesError('not_found'); setStopLinesLoading(false); return; }
+
+      const norm = (t: unknown) => {
+        if (!t) return 'SEM PREVISÃO';
+        const s = String(t).trim();
+        return (!s || s === '....' || /^[-.\s]+$/.test(s)) ? 'SEM PREVISÃO' : s.replace(/\s*min(utos?)?/gi, '');
+      };
+
+      const lines: BusLine[] = data.horarios.map((item: Record<string, unknown>, i: number) => {
+        const raw = String(item.linha ?? '').trim();
+        return {
+          id: `map-${pontoId}-${item.linha}-${i}`,
+          number: raw.length === 1 ? `NS${raw}` : raw,
+          name: raw,
+          origin: '',
+          destination: String(item.destino ?? 'Destino não informado'),
+          schedules: [],
+          frequencyMinutes: 0,
+          status: 'Normal' as const,
+          nextArrival: norm(item.proximo ?? item.previsao),
+          subsequentArrival: norm(item.seguinte),
+          stopSource: pontoId,
+        };
+      });
+
+      setStopLines(lines);
+      setStopLinesLoading(false);
+
+      // Busca posição dos ônibus em tempo real para cada linha
+      if (!leafletMapRef.current) return;
+      const L = (window as any).L;
+      if (!L) return;
+
+      const linhasUnicas = [...new Set(lines.map(l => l.number))];
+
+      await Promise.all(linhasUnicas.map(async (numLinha) => {
+        try {
+          const r = await fetch(`/api/realtimebus?linha=${numLinha}`);
+          if (!r.ok) return;
+          const onibus = await r.json();
+          if (!Array.isArray(onibus)) return;
+
+          onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
+            if (!bus.lat || !bus.lng) return;
+            const busIcon = L.divIcon({
+              html: `<div style="position:relative;width:36px;height:36px;background:#000;border-radius:8px;border:2px solid #fbbf24;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-size:18px;">🚍<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fbbf24;"></div></div>`,
+              className: '',
+              iconSize: [36, 42],
+              iconAnchor: [18, 42],
+            });
+            const marker = L.marker([bus.lat, bus.lng], { icon: busIcon })
+              .addTo(leafletMapRef.current)
+              .bindPopup(`<b>Linha ${numLinha}</b><br>${bus.destino || 'N/A'}`);
+            busMarkersRef.current.push(marker);
+          });
+        } catch { /* ignora por linha */ }
+      }));
+
+    } catch {
+      setStopLinesError('offline');
+      setStopLinesLoading(false);
+    }
+  }, []);
+
+  // ─── Recalcula tamanho do mapa ao voltar para a aba ───────────────────────
   useEffect(() => {
     if (activeTab !== 'map') return;
     if (!leafletMapRef.current) return;
+    // Pequeno delay para o display:block ter efeito antes do invalidateSize
     const t = setTimeout(() => {
-      leafletMapRef.current?.invalidateSize();
+      leafletMapRef.current.invalidateSize();
     }, 50);
     return () => clearTimeout(t);
   }, [activeTab]);
@@ -875,158 +932,11 @@ const App: React.FC = () => {
   // ─── Inicializa o mapa Leaflet ───────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'map') return;
-    if (leafletMapRef.current) return;
+    if (leafletMapRef.current) return; // já inicializado
 
-    const PONTOS: Array<{id:string; lat:number; lng:number; nome:string}> = [
-      {"id":"05946","lat":-16.7049489,"lng":-49.0957447,"nome":"Av. Dom Emanuel (05946)"},
-      {"id":"05369","lat":-16.70231,"lng":-49.09807,"nome":"Av. Dom Emanuel (05369)"},
-      {"id":"04733","lat":-16.70058,"lng":-49.10065,"nome":"Av. Progresso (04733)"},
-      {"id":"04734","lat":-16.70166,"lng":-49.10321,"nome":"Av. Progresso (04734)"},
-      {"id":"07662","lat":-16.70736,"lng":-49.08962,"nome":"Rua 5 (07662)"},
-      {"id":"09615","lat":-16.70412,"lng":-49.08969,"nome":"Rua Gumercindo Nascimento (09615)"},
-      {"id":"07663","lat":-16.70435,"lng":-49.08793,"nome":"Av. Perimetral (07663)"},
-      {"id":"09643","lat":-16.70399,"lng":-49.08935,"nome":"Rua Sebastiao Lobo (09643)"},
-      {"id":"07363","lat":-16.74004,"lng":-49.07166,"nome":"Av. Juca Ferreira (07363)"},
-      {"id":"07364","lat":-16.73797,"lng":-49.07032,"nome":"Rua Francisco Tavares (07364)"},
-      {"id":"07365","lat":-16.73608,"lng":-49.07079,"nome":"Rua Arlindo F. dos Santos (07365)"},
-      {"id":"07713","lat":-16.73999,"lng":-49.07444,"nome":"Rua Jose Ferreira Filho (07713)"},
-      {"id":"07360","lat":-16.73661,"lng":-49.07404,"nome":"Rua Arlindo F. dos Santos (07360)"},
-      {"id":"07361","lat":-16.73654,"lng":-49.07392,"nome":"Rua Arlindo F. dos Santos (07361)"},
-      {"id":"09170","lat":-16.73652,"lng":-49.07754,"nome":"Rua Tiradentes (09170)"},
-      {"id":"07358","lat":-16.73622,"lng":-49.0808,"nome":"Rua 1 (07358)"},
-      {"id":"09172","lat":-16.73336,"lng":-49.0777,"nome":"Rua 18 (09172)"},
-      {"id":"09173","lat":-16.7322026,"lng":-49.0786252,"nome":"Rua Rr-7 (09173)"},
-      {"id":"08423","lat":-16.7330106,"lng":-49.0822882,"nome":"Rua Rr-07 (08423)"},
-      {"id":"09169","lat":-16.73631,"lng":-49.08415,"nome":"Rua Tiradentes (09169)"},
-      {"id":"06915","lat":-16.73744,"lng":-49.08645,"nome":"Rua Rl-1 (06915)"},
-      {"id":"08531","lat":-16.7375581,"lng":-49.0872059,"nome":"Rua Rl-1 (08531)"},
-      {"id":"06916","lat":-16.73584,"lng":-49.08444,"nome":"Rua Monteiro Lobato (06916)"},
-      {"id":"08530","lat":-16.73525,"lng":-49.08457,"nome":"Rua Monteiro Lobato (08530)"},
-      {"id":"08529","lat":-16.73214,"lng":-49.08512,"nome":"Rua Monteiro Lobato (08529)"},
-      {"id":"06428","lat":-16.73216,"lng":-49.08501,"nome":"Rua Monteiro Lobato (06428)"},
-      {"id":"06426","lat":-16.7344,"lng":-49.08847,"nome":"Av. Goias (06426)"},
-      {"id":"09417","lat":-16.73383,"lng":-49.08915,"nome":"Estrada Sc-05 (09417)"},
-      {"id":"09421","lat":-16.7339,"lng":-49.08903,"nome":"Estrada Sc-05 (09421)"},
-      {"id":"05401","lat":-16.7317921,"lng":-49.0890118,"nome":"Rua Dormever J. Ferreira (05401)"},
-      {"id":"08533","lat":-16.73174,"lng":-49.08935,"nome":"Av. Pedro Miranda (08533)"},
-      {"id":"08544","lat":-16.73182,"lng":-49.0896,"nome":"Av. Pedro Miranda (08544)"},
-      {"id":"06429","lat":-16.72931,"lng":-49.08503,"nome":"Rua Santo Antonio (06429)"},
-      {"id":"06430","lat":-16.72903,"lng":-49.0877,"nome":"Av. Castro Alves (06430)"},
-      {"id":"08527","lat":-16.72896,"lng":-49.08783,"nome":"Av. Castro Alves (08527)"},
-      {"id":"08836","lat":-16.72374,"lng":-49.08467,"nome":"Av. Pres. Vargas (08836)"},
-      {"id":"08837","lat":-16.72014,"lng":-49.08488,"nome":"Av. Pres. Vargas (08837)"},
-      {"id":"08838","lat":-16.71712,"lng":-49.08506,"nome":"Av. Pres. Vargas (08838)"},
-      {"id":"08839","lat":-16.71459,"lng":-49.08525,"nome":"Av. Pres. Vargas (08839)"},
-      {"id":"08842","lat":-16.71416,"lng":-49.0816,"nome":"Av. dos Eucaliptos (08842)"},
-      {"id":"08843","lat":-16.71203,"lng":-49.08377,"nome":"Av. dos Eucaliptos (08843)"},
-      {"id":"05677","lat":-16.71277,"lng":-49.08728,"nome":"Av. Pres. Alves de Castro (05677)"},
-      {"id":"05412","lat":-16.71399,"lng":-49.088,"nome":"Av. Sen. Canedo (05412)"},
-      {"id":"05413","lat":-16.7138,"lng":-49.08786,"nome":"Av. Sen. Canedo (05413)"},
-      {"id":"05415","lat":-16.71737,"lng":-49.0876,"nome":"Av. Sen. Canedo (05415)"},
-      {"id":"05414","lat":-16.7174,"lng":-49.08776,"nome":"Av. Sen. Canedo (05414)"},
-      {"id":"08528","lat":-16.72928,"lng":-49.08511,"nome":"Rua Santo Antonio (08528)"},
-      {"id":"31700","lat":-16.69654,"lng":-49.10258,"nome":"Term. Sen. Canedo - Saida (31700)"},
-      {"id":"31701","lat":-16.69663,"lng":-49.10271,"nome":"Term. Sen. Canedo - Entrada (31701)"},
-      {"id":"31726","lat":-16.69723,"lng":-49.10228,"nome":"Term. Sen. Canedo - Plataforma Oeste 6 (31726)"},
-      {"id":"31724","lat":-16.69764,"lng":-49.10196,"nome":"Term. Sen. Canedo - Plataforma Oeste 4 (31724)"},
-      {"id":"31723","lat":-16.69775,"lng":-49.10185,"nome":"Term. Sen. Canedo - Plataforma Oeste 3 (31723)"},
-      {"id":"31722","lat":-16.69788,"lng":-49.10175,"nome":"Term. Sen. Canedo - Plataforma Oeste 2 (31722)"},
-      {"id":"31716","lat":-16.69788,"lng":-49.10156,"nome":"Term. Sen. Canedo - Plataforma Leste 6 (31716)"},
-      {"id":"05295","lat":-16.69417,"lng":-49.09968,"nome":"Av. Central (05295)"},
-      {"id":"05294","lat":-16.69383,"lng":-49.09948,"nome":"Av. Central (05294)"},
-      {"id":"06817","lat":-16.69354,"lng":-49.09832,"nome":"Rua 18 (06817)"},
-      {"id":"09614","lat":-16.69611,"lng":-49.09646,"nome":"Rua Sen. Osires Teixeira (09614)"},
-      {"id":"09618","lat":-16.69669,"lng":-49.09809,"nome":"Rua Gumercindo Nascimento (09618)"},
-      {"id":"05391","lat":-16.69605,"lng":-49.096,"nome":"Rua Ver. Jose Eduardo (05391)"},
-      {"id":"09617","lat":-16.69898,"lng":-49.09554,"nome":"Rua Gumercindo Nascimento (09617)"},
-      {"id":"05394","lat":-16.69863,"lng":-49.09314,"nome":"Rua Ver. Jose Eduardo (05394)"},
-      {"id":"09616","lat":-16.70141,"lng":-49.09275,"nome":"Rua Gumercindo Nascimento (09616)"},
-      {"id":"05395","lat":-16.70137,"lng":-49.09004,"nome":"Rua Ver. Jose Eduardo (05395)"},
-      {"id":"09610","lat":-16.70246,"lng":-49.08801,"nome":"Rua Sebastião Lobo (09610)"},
-      {"id":"06372","lat":-16.70501,"lng":-49.09454,"nome":"Rua Ademar de Barros (06372)"},
-      {"id":"08325","lat":-16.70761,"lng":-49.09131,"nome":"Rua Getulio Vargas (08325)"},
-      {"id":"05408","lat":-16.70857,"lng":-49.08765,"nome":"Rua 5 (05408)"},
-      {"id":"08129","lat":-16.70906,"lng":-49.09104,"nome":"Av. Perimetral (08129)"},
-      {"id":"06819","lat":-16.71018,"lng":-49.0854,"nome":"Rua 5 (06819)"},
-      {"id":"06818","lat":-16.71019,"lng":-49.08526,"nome":"Rua 5 (06818)"},
-      {"id":"05678","lat":-16.71178,"lng":-49.08504,"nome":"Av. Pres. Alves de Castro (05678)"},
-      {"id":"08841","lat":-16.71509,"lng":-49.07912,"nome":"Av. dos Eucaliptos (08841)"},
-      {"id":"08840","lat":-16.71333,"lng":-49.075,"nome":"Av. Campina Verde (08840)"},
-      {"id":"05942","lat":-16.71069,"lng":-49.07207,"nome":"Rodovia GO - 403 (05942)"},
-      {"id":"05681","lat":-16.71104,"lng":-49.06942,"nome":"Rodovia GO - 403 (05681)"},
-      {"id":"05704","lat":-16.71044,"lng":-49.06039,"nome":"Rodovia GO - 403 (05704)"},
-      {"id":"05705","lat":-16.71519,"lng":-49.05189,"nome":"Rodovia GO - 403 (05705)"},
-      {"id":"05706","lat":-16.71856,"lng":-49.04522,"nome":"Rodovia GO - 403 (05706)"},
-      {"id":"05718","lat":-16.71844,"lng":-49.0452,"nome":"Rodovia GO - 403 (05718)"},
-      {"id":"05682","lat":-16.71893,"lng":-49.04202,"nome":"Rodovia GO - 403 (05682)"},
-      {"id":"05685","lat":-16.71882,"lng":-49.04201,"nome":"Rodovia GO - 403 (05685)"},
-      {"id":"05717","lat":-16.7191,"lng":-49.03975,"nome":"Rodovia GO - 403 (05717)"},
-      {"id":"05707","lat":-16.71928,"lng":-49.03927,"nome":"Rodovia GO - 403 (05707)"},
-      {"id":"05697","lat":-16.71703,"lng":-48.99721,"nome":"Rua Antonio Goncalves (05697)"},
-      {"id":"05696","lat":-16.71708,"lng":-48.99838,"nome":"Rua Joao S. do Nascimento (05696)"},
-      {"id":"05695","lat":-16.71628,"lng":-49.00009,"nome":"Rua Joao S. do Nascimento (05695)"},
-      {"id":"05694","lat":-16.71561,"lng":-49.00153,"nome":"Rua Joao S. do Nascimento (05694)"},
-      {"id":"07140","lat":-16.71442,"lng":-49.00259,"nome":"Rua 29 de Abril (07140)"},
-      {"id":"05698","lat":-16.71466,"lng":-48.99605,"nome":"Rua Antonio Goncalves (05698)"},
-      {"id":"05699","lat":-16.71361,"lng":-48.99858,"nome":"Rua Santos Dumont (05699)"},
-      {"id":"08130","lat":-16.71241,"lng":-49.00126,"nome":"Rua Santos Dumont (08130)"},
-      {"id":"08131","lat":-16.70919,"lng":-49.00244,"nome":"Rua Jp 6 (08131)"},
-      {"id":"08340","lat":-16.70991,"lng":-49.00483,"nome":"Rua Jp 3 (08340)"},
-      {"id":"08937","lat":-16.71003,"lng":-49.00882,"nome":"Rua Bj-01 (08937)"},
-      {"id":"05711","lat":-16.71246,"lng":-49.00469,"nome":"Rodovia GO - 403 (05711)"},
-      {"id":"08936","lat":-16.71074,"lng":-49.00773,"nome":"Rodovia GO-403 (08936)"},
-      {"id":"05710","lat":-16.71365,"lng":-49.01492,"nome":"Rodovia GO - 403 (05710)"},
-      {"id":"05714","lat":-16.71352,"lng":-49.01503,"nome":"Rodovia GO - 403 (05714)"},
-      {"id":"05709","lat":-16.71764,"lng":-49.02199,"nome":"Rodovia GO - 403 (05709)"},
-      {"id":"05708","lat":-16.72042,"lng":-49.02909,"nome":"Rodovia GO - 403 (05708)"},
-      {"id":"05684","lat":-16.71984,"lng":-49.03355,"nome":"Rodovia GO - 403 (05684)"},
-      {"id":"05683","lat":-16.71991,"lng":-49.03394,"nome":"Rodovia GO - 403 (05683)"},
-      {"id":"05941","lat":-16.71063,"lng":-49.07659,"nome":"Av. Campina Verde (05941)"},
-      {"id":"08828","lat":-16.7084,"lng":-49.07968,"nome":"Av. Campina Verde (08828)"},
-      {"id":"08829","lat":-16.70842,"lng":-49.07981,"nome":"Av. Campina Verde (08829)"},
-      {"id":"08102","lat":-16.70705,"lng":-49.08155,"nome":"Av. Comendador Francisco Avelino Maia (08102)"},
-      {"id":"08103","lat":-16.70691,"lng":-49.08152,"nome":"Av. Comendador Francisco Avelino Maia (08103)"},
-      {"id":"06658","lat":-16.70315,"lng":-49.08601,"nome":"Av. Comendador Francisco Avelino Maia (06658)"},
-      {"id":"09271","lat":-16.71702,"lng":-49.08958,"nome":"Rua 104 (09271)"},
-      {"id":"06716","lat":-16.71713,"lng":-49.09015,"nome":"Rua 105 (06716)"},
-      {"id":"09270","lat":-16.71911,"lng":-49.08953,"nome":"Rua 112 (09270)"},
-      {"id":"05416","lat":-16.71901,"lng":-49.08883,"nome":"Rua 112 (05416)"},
-      {"id":"05403","lat":-16.72181,"lng":-49.08981,"nome":"Rua 105 (05403)"},
-      {"id":"05399","lat":-16.72204,"lng":-49.08823,"nome":"Rua 101 (05399)"},
-      {"id":"05404","lat":-16.72532,"lng":-49.08963,"nome":"Rua 105 (05404)"},
-      {"id":"05400","lat":-16.72902,"lng":-49.08923,"nome":"Rua Dormever J. Ferreira (05400)"},
-      {"id":"05380","lat":-16.69665,"lng":-49.10631,"nome":"Rua Dr. Jose Carneiro (05380)"},
-      {"id":"09373","lat":-16.69511,"lng":-49.10716,"nome":"Rua Jc-19 (09373)"},
-      {"id":"05381","lat":-16.69413,"lng":-49.10882,"nome":"Rua Dr. Jose Carneiro (05381)"},
-      {"id":"05384","lat":-16.6918808,"lng":-49.1110563,"nome":"Rua Dr. Jose Carneiro (05384)"},
-      {"id":"05383","lat":-16.69167,"lng":-49.11117,"nome":"Rua Dr. Jose Carneiro (05383)"},
-      {"id":"05373","lat":-16.68812,"lng":-49.11623,"nome":"Av. Comercio (05373)"},
-      {"id":"05372","lat":-16.68817,"lng":-49.11651,"nome":"Av. Comercio (05372)"},
-      {"id":"05375","lat":-16.69099,"lng":-49.11768,"nome":"Av. Comercio (05375)"},
-      {"id":"05374","lat":-16.69018,"lng":-49.11896,"nome":"Av. Comercio (05374)"},
-      {"id":"05959","lat":-16.69334,"lng":-49.12027,"nome":"Rua S-13 (05959)"},
-      {"id":"05379","lat":-16.6933,"lng":-49.12062,"nome":"Av. do Comercio (05379)"},
-      {"id":"05377","lat":-16.69507,"lng":-49.11797,"nome":"Rua Jc 10 (05377)"},
-      {"id":"06282","lat":-16.69513,"lng":-49.12346,"nome":"Av. do Comercio (06282)"},
-      {"id":"06283","lat":-16.6974,"lng":-49.1231,"nome":"Rua Mb 4 (06283)"},
-      {"id":"06284","lat":-16.69985,"lng":-49.12441,"nome":"Rua Mb 18 (06284)"},
-      {"id":"06907","lat":-16.70339,"lng":-49.12651,"nome":"Rua Mb 18 (06907)"},
-      {"id":"09722","lat":-16.70359,"lng":-49.12387,"nome":"Rua da Divisa (09722)"},
-      {"id":"09736","lat":-16.70397,"lng":-49.12392,"nome":"Rua da Divisa (09736)"},
-      {"id":"07567","lat":-16.70614,"lng":-49.12474,"nome":"Rua Jc - 38 (07567)"},
-      {"id":"06909","lat":-16.70594,"lng":-49.1223,"nome":"Av. Iva G. Carneiro (06909)"},
-      {"id":"09605","lat":-16.71277,"lng":-49.13463,"nome":"Av. via Lactea (09605)"},
-      {"id":"09602","lat":-16.71749,"lng":-49.13585,"nome":"Rua Marte (09602)"},
-      {"id":"09601","lat":-16.71509,"lng":-49.1369,"nome":"Av. via Lactea (09601)"},
-      {"id":"09604","lat":-16.71512,"lng":-49.13667,"nome":"Av. via Lactea (09604)"},
-      {"id":"07045","lat":-16.72408,"lng":-49.13829,"nome":"Av. Contorno Leste (07045)"},
-      {"id":"07042","lat":-16.72412,"lng":-49.13904,"nome":"Av. Contorno Leste (07042)"},
-      {"id":"07044","lat":-16.72628,"lng":-49.14053,"nome":"Av. Eixo Principal (07044)"},
-      {"id":"07111","lat":-16.72842,"lng":-49.14122,"nome":"Av. Contorno (07111)"},
-      {"id":"07109","lat":-16.72733,"lng":-49.14385,"nome":"Rua do Contorno Oeste (07109)"},
-      {"id":"07110","lat":-16.73057,"lng":-49.14421,"nome":"Av. Contorno (07110)"},
-    ];
+    const PONTOS: Array<{id:string; lat:number; lng:number; nome:string}> = [{"id":"05946","lat":-16.7049489,"lng":-49.0957447,"nome":"Av. Dom Emanuel (05946)"},{"id":"05369","lat":-16.70231,"lng":-49.09807,"nome":"Av. Dom Emanuel (05369)"},{"id":"04733","lat":-16.70058,"lng":-49.10065,"nome":"Av. Progresso (04733)"},{"id":"04734","lat":-16.70166,"lng":-49.10321,"nome":"Av. Progresso (04734)"},{"id":"07662","lat":-16.70736,"lng":-49.08962,"nome":"Rua 5 (07662)"},{"id":"09615","lat":-16.70412,"lng":-49.08969,"nome":"Rua Gumercindo Nascimento (09615)"},{"id":"07663","lat":-16.70435,"lng":-49.08793,"nome":"Av. Perimetral (07663)"},{"id":"09643","lat":-16.70399,"lng":-49.08935,"nome":"Rua Sebastiao Lobo (09643)"},{"id":"07363","lat":-16.74004,"lng":-49.07166,"nome":"Av. Juca Ferreira (07363)"},{"id":"07364","lat":-16.73797,"lng":-49.07032,"nome":"Rua Francisco Tavares (07364)"},{"id":"07365","lat":-16.73608,"lng":-49.07079,"nome":"Rua Arlindo F. dos Santos (07365)"},{"id":"07713","lat":-16.73999,"lng":-49.07444,"nome":"Rua Jose Ferreira Filho (07713)"},{"id":"07360","lat":-16.73661,"lng":-49.07404,"nome":"Rua Arlindo F. dos Santos (07360)"},{"id":"07361","lat":-16.73654,"lng":-49.07392,"nome":"Rua Arlindo F. dos Santos (07361)"},{"id":"09170","lat":-16.73652,"lng":-49.07754,"nome":"Rua Tiradentes (09170)"},{"id":"07358","lat":-16.73622,"lng":-49.0808,"nome":"Rua 1 (07358)"},{"id":"09172","lat":-16.73336,"lng":-49.0777,"nome":"Rua 18 (09172)"},{"id":"09173","lat":-16.7322026,"lng":-49.0786252,"nome":"Rua Rr-7 (09173)"},{"id":"08423","lat":-16.7330106,"lng":-49.0822882,"nome":"Rua Rr-07 (08423)"},{"id":"09169","lat":-16.73631,"lng":-49.08415,"nome":"Rua Tiradentes (09169)"},{"id":"06915","lat":-16.73744,"lng":-49.08645,"nome":"Rua Rl-1 (06915)"},{"id":"08531","lat":-16.7375581,"lng":-49.0872059,"nome":"Rua Rl-1 (08531)"},{"id":"06916","lat":-16.73584,"lng":-49.08444,"nome":"Rua Monteiro Lobato (06916)"},{"id":"08530","lat":-16.73525,"lng":-49.08457,"nome":"Rua Monteiro Lobato (08530)"},{"id":"08529","lat":-16.73214,"lng":-49.08512,"nome":"Rua Monteiro Lobato (08529)"},{"id":"06428","lat":-16.73216,"lng":-49.08501,"nome":"Rua Monteiro Lobato (06428)"},{"id":"06426","lat":-16.7344,"lng":-49.08847,"nome":"Av. Goias (06426)"},{"id":"09417","lat":-16.73383,"lng":-49.08915,"nome":"Estrada Sc-05 (09417)"},{"id":"09421","lat":-16.7339,"lng":-49.08903,"nome":"Estrada Sc-05 (09421)"},{"id":"05401","lat":-16.7317921,"lng":-49.0890118,"nome":"Rua Dormever J. Ferreira (05401)"},{"id":"08533","lat":-16.73174,"lng":-49.08935,"nome":"Av. Pedro Miranda (08533)"},{"id":"08544","lat":-16.73182,"lng":-49.0896,"nome":"Av. Pedro Miranda (08544)"},{"id":"06429","lat":-16.72931,"lng":-49.08503,"nome":"Rua Santo Antonio (06429)"},{"id":"06430","lat":-16.72903,"lng":-49.0877,"nome":"Av. Castro Alves (06430)"},{"id":"08527","lat":-16.72896,"lng":-49.08783,"nome":"Av. Castro Alves (08527)"},{"id":"08836","lat":-16.72374,"lng":-49.08467,"nome":"Av. Pres. Vargas (08836)"},{"id":"08837","lat":-16.72014,"lng":-49.08488,"nome":"Av. Pres. Vargas (08837)"},{"id":"08838","lat":-16.71712,"lng":-49.08506,"nome":"Av. Pres. Vargas (08838)"},{"id":"08839","lat":-16.71459,"lng":-49.08525,"nome":"Av. Pres. Vargas (08839)"},{"id":"08842","lat":-16.71416,"lng":-49.0816,"nome":"Av. dos Eucaliptos (08842)"},{"id":"08843","lat":-16.71203,"lng":-49.08377,"nome":"Av. dos Eucaliptos (08843)"},{"id":"05677","lat":-16.71277,"lng":-49.08728,"nome":"Av. Pres. Alves de Castro (05677)"},{"id":"05412","lat":-16.71399,"lng":-49.088,"nome":"Av. Sen. Canedo (05412)"},{"id":"05413","lat":-16.7138,"lng":-49.08786,"nome":"Av. Sen. Canedo (05413)"},{"id":"05415","lat":-16.71737,"lng":-49.0876,"nome":"Av. Sen. Canedo (05415)"},{"id":"05414","lat":-16.7174,"lng":-49.08776,"nome":"Av. Sen. Canedo (05414)"}];
 
+    // Carrega Leaflet via script tag
     const loadLeaflet = () => new Promise<void>((resolve) => {
       if ((window as any).L) { resolve(); return; }
       const script = document.createElement('script');
@@ -1043,6 +953,7 @@ const App: React.FC = () => {
       if (!mapRef.current || leafletMapRef.current) return;
       const L = (window as any).L;
 
+      // Centro padrão: Senador Canedo
       const defaultCenter: [number, number] = [-16.7200, -49.0900];
 
       const map = L.map(mapRef.current, {
@@ -1056,8 +967,10 @@ const App: React.FC = () => {
         maxZoom: 19,
       }).addTo(map);
 
+      // Zoom control no canto direito
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+      // Ícone customizado amarelo
       const busIcon = L.divIcon({
         html: `<div style="
           width:32px; height:32px;
@@ -1074,11 +987,13 @@ const App: React.FC = () => {
         popupAnchor: [0, -32],
       });
 
+      // Adiciona markers de todos os pontos
       PONTOS.forEach(ponto => {
         const marker = L.marker([ponto.lat, ponto.lng], { icon: busIcon })
           .addTo(map)
           .on('click', () => {
             setSelectedStop({ id: ponto.id, nome: ponto.nome });
+            buscarLinhasPonto(ponto.id);
             haptic(40);
           });
         markersRef.current.push(marker);
@@ -1087,12 +1002,14 @@ const App: React.FC = () => {
       leafletMapRef.current = map;
       setMapReady(true);
 
+      // Tenta pegar localização do usuário
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const { latitude, longitude } = pos.coords;
             setUserLocation({ lat: latitude, lng: longitude });
 
+            // Marker do usuário
             const userIcon = L.divIcon({
               html: `<div style="
                 width:20px; height:20px;
@@ -1110,6 +1027,7 @@ const App: React.FC = () => {
               .addTo(map)
               .bindPopup('Você está aqui');
 
+            // Centraliza no usuário e ajusta zoom
             map.setView([latitude, longitude], 15);
           },
           () => {
@@ -1319,6 +1237,7 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
+          {/* FIX: spinner aparece mesmo se já existe resultado (double-tap) */}
           {(isLoading || isFavoritesLoading) && (
             <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
           )}
@@ -1331,7 +1250,7 @@ const App: React.FC = () => {
 
       <div className="flex-grow overflow-y-auto app-container px-4 pt-4 pb-32 space-y-5">
 
-        {/* Banner de atualização */}
+        {/* Banner de atualização disponível */}
         {showUpdateBanner && (
           <div style={{ animation: 'slideUp 0.4s ease-out' }}>
             <div className="bg-emerald-500 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(16,185,129,0.4)]">
@@ -1395,12 +1314,7 @@ const App: React.FC = () => {
                   <p className={`text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2 px-1`}>Buscas Recentes</p>
                   <div className="flex flex-wrap gap-2">
                     {searchHistory.map(h => (
-                      <button key={h} onClick={() => {
-                          // FIX BUG #1: passa o id explicitamente, não depende de setState ser síncrono
-                          setStopId(h);
-                          handleSearch(h);
-                          haptic(30);
-                        }}
+                      <button key={h} onClick={() => { setStopId(h); handleSearch(h); haptic(30); }}
                         className={`${theme.historyBtn} border text-xs font-black px-3 py-2 rounded-xl active:scale-95 transition-transform tracking-wider`}>
                         📍 {h}
                       </button>
@@ -1464,6 +1378,7 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1506,6 +1421,7 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* FIX: aviso de pontos inativos */}
             {inactiveStops.size > 0 && !isFavoritesLoading && (
               <div className="border border-orange-500/30 bg-orange-500/10 text-orange-400 p-4 rounded-2xl flex items-start gap-3">
                 <span className="text-2xl shrink-0">⚠️</span>
@@ -1519,28 +1435,23 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* FIX BUG #10: staggerIndex global acumulado entre grupos */}
-            {!isFavoritesLoading && (() => {
-              let globalIndex = 0;
-              return Object.entries(groupedFavLines).map(([pontoId, lines]) => (
-                <div key={pontoId} className="space-y-3">
-                  <div className="flex items-center gap-2 px-1 pt-2">
-                    <span className="text-yellow-400 text-sm">📍</span>
-                    <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
-                    <div className={`flex-1 h-px ${theme.divider}`} />
-                  </div>
-                  {lines.map((line) => {
-                    const key = `${line.stopSource ?? stopId}::${line.number}`;
-                    const idx = globalIndex++;
-                    return (
-                      <div key={line.id} className="stagger-card" style={{ animationDelay: `${idx * 60}ms` }}>
-                        <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={idx} {...cardProps} />
-                      </div>
-                    );
-                  })}
+            {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
+              <div key={pontoId} className="space-y-3">
+                <div className="flex items-center gap-2 px-1 pt-2">
+                  <span className="text-yellow-400 text-sm">📍</span>
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
+                  <div className={`flex-1 h-px ${theme.divider}`} />
                 </div>
-              ));
-            })()}
+                {lines.map((line, i) => {
+                  const key = `${line.stopSource ?? stopId}::${line.number}`;
+                  return (
+                    <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
+                      <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} />
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
 
             {favorites.length === 0 && (
               <div className="py-28 text-center opacity-20 px-10">
@@ -1551,6 +1462,7 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1581,6 +1493,7 @@ const App: React.FC = () => {
                   className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl
                     ${cpfError ? 'border-red-500 focus:border-red-500' : 'focus:border-yellow-400'}`}
                 />
+                {/* FIX: feedback de validação inline */}
                 {cpfError && (
                   <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{cpfError}</p>
                 )}
@@ -1603,6 +1516,7 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* FIX: saldoText usa variável de tema para funcionar no modo claro */}
             {saldoData && (
               <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3">
@@ -1618,12 +1532,14 @@ const App: React.FC = () => {
                   <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
                   <span className="text-4xl font-black text-yellow-400">{saldoData.saldo_formatado}</span>
                 </div>
+                {/* Aviso saldo baixo */}
                 {(() => {
                   const saldoNum = parseFloat(saldoData.saldo.replace('.', '').replace(',', '.'));
                   const TARIFA_INTEIRA = 4.30;
                   const MEIA_TARIFA = 2.15;
 
                   if (saldoNum < MEIA_TARIFA) {
+                    // Abaixo até da meia tarifa
                     return (
                       <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
                         <span className="text-base shrink-0 mt-0.5">⚠️</span>
@@ -1638,6 +1554,7 @@ const App: React.FC = () => {
                   }
 
                   if (saldoNum < TARIFA_INTEIRA) {
+                    // Tem meia tarifa mas não tem tarifa inteira
                     return (
                       <div className="space-y-2">
                         <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
@@ -1658,8 +1575,10 @@ const App: React.FC = () => {
                       </div>
                     );
                   }
+
                   return null;
                 })()}
+                {/* Aviso de saldo não real-time — conforme informação oficial do SitPass */}
                 <div className={`border ${lightTheme ? 'border-gray-200 bg-gray-50' : 'border-white/5 bg-black/20'} rounded-2xl px-4 py-3 flex items-start gap-2`}>
                   <span className="text-base shrink-0 mt-0.5">ℹ️</span>
                   <p className={`text-[9px] font-bold leading-relaxed ${theme.subtext}`}>
@@ -1671,6 +1590,7 @@ const App: React.FC = () => {
 
             {!saldoData && !saldoErro && !saldoLoading && (
               <div className="space-y-4">
+                {/* Histórico da última consulta */}
                 {saldoHistorico && (
                   <div className={`border ${lightTheme ? 'border-gray-200 bg-white' : 'border-white/5 bg-slate-900'} rounded-[2rem] p-5 space-y-3`}
                     style={{ animation: 'slideUp 0.3s ease-out' }}>
@@ -1697,6 +1617,7 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1710,7 +1631,11 @@ const App: React.FC = () => {
 
       </div>
 
-      {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
+
+        {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
+
+
+      {/* ─── ABA MAPA — sempre no DOM, visível/oculto via display ─── */}
       <div
         style={{
           position: 'fixed',
@@ -1722,92 +1647,154 @@ const App: React.FC = () => {
           display: activeTab === 'map' ? 'block' : 'none',
         }}
       >
-        <div ref={mapRef} style={{width: '100%', height: '100%'}} />
-
-        {locationError && (
-          <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
-            style={{backdropFilter: 'blur(8px)'}}>
-            📍 Localização negada — mostrando Senador Canedo
-          </div>
-        )}
-
-        {selectedStop && (
+          {/* Container do mapa — ocupa 100% do espaço disponível */}
           <div
-            className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-6 space-y-4`}
-            style={{bottom: 0, animation: 'slideUp 0.3s ease-out'}}>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
-                <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
-                <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
-              </div>
-              <button onClick={() => setSelectedStop(null)} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
+            ref={mapRef}
+            style={{width: '100%', height: '100%'}}
+          />
+
+          {/* Erro de localização */}
+          {locationError && (
+            <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
+              style={{backdropFilter: 'blur(8px)'}}>
+              📍 Localização negada — mostrando Senador Canedo
             </div>
+          )}
+
+          {/* Bottom sheet do ponto selecionado */}
+          {selectedStop && (
+            <div
+              className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem] p-5 space-y-3`}
+              style={{bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '65%', overflowY: 'auto'}}>
+
+              {/* Cabeçalho */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
+                  <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
+                  <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
+                </div>
+                <button onClick={() => {
+                  setSelectedStop(null);
+                  setStopLines([]);
+                  busMarkersRef.current.forEach(m => m.remove());
+                  busMarkersRef.current = [];
+                }} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
+              </div>
+
+              {/* Loading */}
+              {stopLinesLoading && (
+                <div className="flex items-center gap-3 py-2">
+                  <div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Buscando ônibus...</p>
+                </div>
+              )}
+
+              {/* Erro */}
+              {stopLinesError && !stopLinesLoading && (
+                <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3">
+                  <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">
+                    {stopLinesError === 'offline' ? '📡 Sem conexão' : '🔍 Nenhuma linha encontrada'}
+                  </p>
+                </div>
+              )}
+
+              {/* Lista de linhas */}
+              {!stopLinesLoading && stopLines.length > 0 && (
+                <div className="space-y-2">
+                  {stopLines.map((line) => {
+                    const getColor = (t: string) => {
+                      if (!t || t === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
+                      if (t.toLowerCase().includes('agora')) return 'bg-red-600 text-white';
+                      const m = parseInt(t) || 999;
+                      if (m <= 3) return 'bg-red-600 text-white';
+                      if (m <= 8) return 'bg-yellow-500 text-black';
+                      return 'bg-emerald-500 text-white';
+                    };
+                    return (
+                      <div key={line.id} className={`${theme.card} border rounded-2xl px-4 py-3 flex items-center gap-3`}>
+                        <span className="text-yellow-400 font-black text-xl w-14 text-center shrink-0">{line.number}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Indo para</p>
+                          <p className={`font-black text-[11px] uppercase truncate ${theme.destText}`}>{line.destination}</p>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <div className={`${getColor(line.nextArrival ?? '')} rounded-xl px-2 py-1.5 text-center min-w-[44px]`}>
+                            <p className="font-black text-sm leading-none">{line.nextArrival === 'SEM PREVISÃO' ? '—' : line.nextArrival}</p>
+                            <p className="text-[6px] font-black uppercase opacity-70 mt-0.5">min</p>
+                          </div>
+                          <div className={`${getColor(line.subsequentArrival ?? '')} rounded-xl px-2 py-1.5 text-center min-w-[44px] opacity-80`}>
+                            <p className="font-black text-sm leading-none">{line.subsequentArrival === 'SEM PREVISÃO' ? '—' : line.subsequentArrival}</p>
+                            <p className="text-[6px] font-black uppercase opacity-70 mt-0.5">min</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Info markers */}
+              {!stopLinesLoading && busMarkersRef.current.length > 0 && (
+                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} text-center pb-1`}>
+                  🚍 {busMarkersRef.current.length} ônibus visíveis no mapa
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Botão de reposicionar no usuário */}
+          {mapReady && (
             <button
               onClick={() => {
-                setStopId(selectedStop.id);
-                setActiveTab('search');
-                setSelectedStop(null);
-                haptic([50,30,80]);
-                setTimeout(() => handleSearch(selectedStop.id), 100);
+                if (!leafletMapRef.current) return;
+                haptic(40);
+                if (userLocation) {
+                  leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
+                } else {
+                  // Tenta pegar localização novamente
+                  navigator.geolocation?.getCurrentPosition(
+                    (pos) => {
+                      const { latitude, longitude } = pos.coords;
+                      setUserLocation({ lat: latitude, lng: longitude });
+                      leafletMapRef.current.setView([latitude, longitude], 16, { animate: true });
+                    },
+                    () => setLocationError(true),
+                    { timeout: 6000, enableHighAccuracy: true }
+                  );
+                }
               }}
-              className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-transform">
-              🚍 Ver ônibus deste ponto
+              style={{
+                position: 'absolute',
+                bottom: selectedStop ? '220px' : '72px',
+                right: '16px',
+                zIndex: 1000,
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: '#fbbf24',
+                border: '2px solid #000',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px',
+                cursor: 'pointer',
+                transition: 'bottom 0.3s ease',
+              }}
+              title="Minha localização"
+            >
+              📍
             </button>
-          </div>
-        )}
+          )}
 
-        {/* FIX BUG #3: botão de localização com bottom dinâmico calculado de forma mais robusta */}
-        {mapReady && (
-          <button
-            onClick={() => {
-              if (!leafletMapRef.current) return;
-              haptic(40);
-              if (userLocation) {
-                leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
-              } else {
-                navigator.geolocation?.getCurrentPosition(
-                  (pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    setUserLocation({ lat: latitude, lng: longitude });
-                    leafletMapRef.current?.setView([latitude, longitude], 16, { animate: true });
-                  },
-                  () => setLocationError(true),
-                  { timeout: 6000, enableHighAccuracy: true }
-                );
-              }
-            }}
-            style={{
-              position: 'absolute',
-              // FIX BUG #3: usa valor fixo maior quando o bottom sheet está aberto para não sumir
-              bottom: selectedStop ? '240px' : '72px',
-              right: '16px',
-              zIndex: 1000,
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              background: '#fbbf24',
-              border: '2px solid #000',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px',
-              cursor: 'pointer',
-              transition: 'bottom 0.3s ease',
-            }}
-            title="Minha localização"
-          >
-            📍
-          </button>
-        )}
-
-        {!mapReady && (
-          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
-            <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-            <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
-          </div>
-        )}
+          {/* Loader inicial */}
+          {!mapReady && (
+            <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
+              <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+              <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
+            </div>
+          )}
       </div>
 
       {/* Nav */}
