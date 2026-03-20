@@ -1849,26 +1849,28 @@ const App: React.FC = () => {
       {/* Nav */}
       <nav className={`fixed bottom-0 left-0 right-0 ${theme.nav} border-t px-6 pb-12 pt-5 flex justify-between items-center z-50`}>
         <button onClick={() => { setActiveTab('search'); haptic(30); }}
-          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'search' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
-          <div className="text-2xl leading-none">{activeTab === 'search' ? '🔍' : '🔎'}</div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em]">Busca</span>
+          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'search' ? 'scale-125 opacity-100' : 'opacity-40'}`}>
+          <img src="/buscar.png" alt="Busca" style={{width:28, height:28, objectFit:'contain'}} />
+          <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${activeTab === 'search' ? 'text-yellow-400' : theme.inactiveNav}`}>Busca</span>
         </button>
         <button onClick={() => { setActiveTab('favs'); haptic(30); }}
-          className={`flex flex-col items-center gap-2 transition-all duration-300 relative ${activeTab === 'favs' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
-          <div className="text-2xl leading-none relative">
-            {activeTab === 'favs' ? '★' : '☆'}
+          className={`flex flex-col items-center gap-2 transition-all duration-300 relative ${activeTab === 'favs' ? 'scale-125 opacity-100' : 'opacity-40'}`}>
+          <div className="relative" style={{width:28, height:28}}>
+            <span className={`text-2xl leading-none ${activeTab === 'favs' ? 'text-yellow-400' : theme.inactiveNav}`}>
+              {activeTab === 'favs' ? '★' : '☆'}
+            </span>
             {favCount > 0 && (
-              <span className="absolute -top-2 -right-3 bg-yellow-400 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">
+              <span className="absolute -top-2 -right-2 bg-yellow-400 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">
                 {favCount > 9 ? '9+' : favCount}
               </span>
             )}
           </div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em]">Salvos</span>
+          <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${activeTab === 'favs' ? 'text-yellow-400' : theme.inactiveNav}`}>Salvos</span>
         </button>
         <button onClick={() => { setActiveTab('map'); haptic(30); }}
-          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'map' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
-          <div className="text-2xl leading-none">🗺️</div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em]">Mapa</span>
+          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'map' ? 'scale-125 opacity-100' : 'opacity-40'}`}>
+          <img src="/mapa.png" alt="Mapa" style={{width:28, height:28, objectFit:'contain'}} />
+          <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${activeTab === 'map' ? 'text-yellow-400' : theme.inactiveNav}`}>Mapa</span>
         </button>
         <button onClick={() => { setActiveTab('sitpass'); haptic(30); }}
           className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'sitpass' ? 'scale-125 opacity-100' : 'opacity-40'}`}>
