@@ -292,6 +292,7 @@ const App: React.FC = () => {
   const markersRef = useRef<any[]>([]);
   const busMarkersRef = useRef<any[]>([]);
   const busMarkersMapRef = useRef<Map<string, any>>(new Map()); // numero -> marker
+  const pontosDataRef = useRef<Array<{id:string; lat:number; lng:number; nome:string; marker:any}>>([]);
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
@@ -1039,24 +1040,58 @@ const App: React.FC = () => {
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
       // Ícone customizado amarelo
-      const busIcon = L.icon({
+      const pontoIcon = L.icon({
         iconUrl: '/ponto.png',
         iconSize: [36, 36],
         iconAnchor: [18, 36],
         popupAnchor: [0, -36],
       });
 
-      // Adiciona markers de todos os pontos
+      // Função para calcular distância em metros entre dois pontos
+      const calcDist = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      };
+
+      // Cria todos os markers mas começa ocultos — serão filtrados após geolocalização
       PONTOS.forEach(ponto => {
-        const marker = L.marker([ponto.lat, ponto.lng], { icon: busIcon })
+        const marker = L.marker([ponto.lat, ponto.lng], { icon: pontoIcon, opacity: 0 })
           .addTo(map)
           .on('click', () => {
             setSelectedStop({ id: ponto.id, nome: ponto.nome });
             buscarLinhasPonto(ponto.id);
             haptic(40);
+            // Oculta todos exceto o selecionado
+            const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
+            const ul = (window as any).__userLat;
+            const ulng = (window as any).__userLng;
+            if (fn && ul) fn(ul, ulng, ponto.id);
           });
         markersRef.current.push(marker);
+        pontosDataRef.current.push({ ...ponto, marker });
       });
+
+      // Função que filtra markers por raio de 500m do usuário
+      const filtrarMarkersPorRaio = (userLat: number, userLng: number, selectedId?: string) => {
+        pontosDataRef.current.forEach(p => {
+          if (selectedId) {
+            // Com ponto selecionado: mostra só ele
+            p.marker.setOpacity(p.id === selectedId ? 1 : 0);
+            p.marker.options?.interactive !== undefined && (p.marker.options.interactive = p.id === selectedId);
+          } else {
+            // Sem seleção: mostra só os dentro de 500m
+            const dist = calcDist(userLat, userLng, p.lat, p.lng);
+            const visivel = dist <= 500;
+            p.marker.setOpacity(visivel ? 1 : 0);
+          }
+        });
+      };
+
+      // Expõe a função para uso externo via ref
+      (leafletMapRef as any).filtrarMarkersPorRaio = filtrarMarkersPorRaio;
 
       leafletMapRef.current = map;
       setMapReady(true);
@@ -1067,6 +1102,8 @@ const App: React.FC = () => {
           (pos) => {
             const { latitude, longitude } = pos.coords;
             setUserLocation({ lat: latitude, lng: longitude });
+            (window as any).__userLat = latitude;
+            (window as any).__userLng = longitude;
 
             // Marker do usuário
             const userIcon = L.divIcon({
@@ -1088,6 +1125,10 @@ const App: React.FC = () => {
 
             // Centraliza no usuário e ajusta zoom
             map.setView([latitude, longitude], 15);
+
+            // Filtra markers por raio de 500m
+            const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
+            if (fn) fn(latitude, longitude);
           },
           () => {
             setLocationError(true);
@@ -1749,6 +1790,12 @@ const App: React.FC = () => {
                     busMarkersRef.current.forEach(m => m.remove());
                     busMarkersRef.current = [];
                   busMarkersMapRef.current.clear();
+                  // Restaura markers no raio ao fechar
+                  const fn2 = (leafletMapRef as any).filtrarMarkersPorRaio;
+                  const ul2 = (window as any).__userLat;
+                  const ulng2 = (window as any).__userLng;
+                  if (fn2 && ul2) fn2(ul2, ulng2);
+                  else pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
                   }} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
                 </div>
               </div>
@@ -1833,6 +1880,8 @@ const App: React.FC = () => {
                     (pos) => {
                       const { latitude, longitude } = pos.coords;
                       setUserLocation({ lat: latitude, lng: longitude });
+            (window as any).__userLat = latitude;
+            (window as any).__userLng = longitude;
                       leafletMapRef.current.setView([latitude, longitude], 16, { animate: true });
                     },
                     () => setLocationError(true),
