@@ -1016,20 +1016,11 @@ const App: React.FC = () => {
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
       // Ícone customizado amarelo
-      const busIcon = L.divIcon({
-        html: `<div style="
-          width:32px; height:32px;
-          background:#fbbf24;
-          border-radius:50% 50% 50% 0;
-          transform:rotate(-45deg);
-          border:2px solid #000;
-          box-shadow:0 2px 8px rgba(0,0,0,0.4);
-          display:flex; align-items:center; justify-content:center;
-        "><span style="transform:rotate(45deg); font-size:14px; display:block; text-align:center; line-height:28px;">🚌</span></div>`,
-        className: '',
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32],
+      const busIcon = L.icon({
+        iconUrl: '/ponto.png',
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+        popupAnchor: [0, -36],
       });
 
       // Adiciona markers de todos os pontos
@@ -1880,9 +1871,9 @@ const App: React.FC = () => {
           <span className="text-[9px] font-black uppercase tracking-[0.2em]">Mapa</span>
         </button>
         <button onClick={() => { setActiveTab('sitpass'); haptic(30); }}
-          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'sitpass' ? 'text-yellow-400 scale-125' : theme.inactiveNav}`}>
-          <div className="text-2xl leading-none">🎫</div>
-          <span className="text-[9px] font-black uppercase tracking-[0.2em]">SitPass</span>
+          className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === 'sitpass' ? 'scale-125 opacity-100' : 'opacity-40'}`}>
+          <img src="/sitpass.png" alt="SitPass" style={{width:28, height:28, objectFit:'contain'}} />
+          <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${activeTab === 'sitpass' ? 'text-yellow-400' : theme.inactiveNav}`}>SitPass</span>
         </button>
       </nav>
     </div>
