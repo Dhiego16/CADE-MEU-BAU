@@ -904,9 +904,6 @@ const App: React.FC = () => {
 
       const linhasUnicas = [...new Set(lines.map(l => l.number))];
 
-      // Coleta todos os números de ônibus retornados neste refresh
-      const numerosAtivos = new Set<string>();
-
       await Promise.all(linhasUnicas.map(async (numLinha) => {
         try {
           const r = await fetch(`/api/realtimebus?linha=${numLinha}`);
@@ -918,8 +915,6 @@ const App: React.FC = () => {
             if (!bus.lat || !bus.lng) return;
 
             const busKey = `${numLinha}-${bus.numero}`;
-            numerosAtivos.add(busKey);
-
             const existingMarker = busMarkersMapRef.current.get(busKey);
 
             if (existingMarker) {
@@ -927,11 +922,11 @@ const App: React.FC = () => {
               existingMarker.setLatLng([bus.lat, bus.lng]);
             } else {
               // Cria marker novo apenas se não existia
-              const busIcon = L.divIcon({
-                html: `<div style="position:relative;width:36px;height:36px;background:#000;border-radius:8px;border:2px solid #fbbf24;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-size:18px;"><img src="/onibus_realtime.png" style="width:22px;height:22px;object-fit:contain;" /><div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fbbf24;"></div></div>`,
-                className: '',
-                iconSize: [36, 42],
-                iconAnchor: [18, 42],
+              const busIcon = L.icon({
+                iconUrl: '/onibus_realtime.png',
+                iconSize: [40, 40],
+                iconAnchor: [20, 40],
+                popupAnchor: [0, -40],
               });
               const marker = L.marker([bus.lat, bus.lng], { icon: busIcon })
                 .addTo(leafletMapRef.current)
