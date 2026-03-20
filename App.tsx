@@ -943,14 +943,7 @@ const App: React.FC = () => {
         } catch { /* ignora por linha */ }
       }));
 
-      // Remove markers de ônibus que não foram retornados neste refresh
-      busMarkersMapRef.current.forEach((marker, key) => {
-        if (!numerosAtivos.has(key)) {
-          marker.remove();
-          busMarkersMapRef.current.delete(key);
-          busMarkersRef.current = busMarkersRef.current.filter(m => m !== marker);
-        }
-      });
+      // Ônibus ficam visíveis no mapa independente da posição
 
     } catch {
       setStopLinesError('offline');
@@ -1093,6 +1086,14 @@ const App: React.FC = () => {
       // Expõe a função para uso externo via ref
       (leafletMapRef as any).filtrarMarkersPorRaio = filtrarMarkersPorRaio;
 
+      // Filtra por centro do mapa ao mover — raio dinâmico
+      const atualizarRaio = () => {
+        const center = map.getCenter();
+        filtrarMarkersPorRaio(center.lat, center.lng);
+      };
+      map.on('moveend', atualizarRaio);
+      map.on('zoomend', atualizarRaio);
+
       leafletMapRef.current = map;
       setMapReady(true);
 
@@ -1123,18 +1124,19 @@ const App: React.FC = () => {
               .addTo(map)
               .bindPopup('Você está aqui');
 
-            // Centraliza no usuário e ajusta zoom
+            // Centraliza no usuário e aplica raio inicial pelo centro
             map.setView([latitude, longitude], 15);
-
-            // Filtra markers por raio de 500m
-            const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
-            if (fn) fn(latitude, longitude);
           },
           () => {
             setLocationError(true);
+            // Sem localização: mostra todos os pontos
+            pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
           },
           { timeout: 8000, enableHighAccuracy: true }
         );
+      } else {
+        // Sem geolocation: mostra todos
+        pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
       }
     });
 
