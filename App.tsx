@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
-import PONTOS_DATA from '../pontos.json';
+import PONTOS_DATA from './pontos.json';
 import { BusLine } from './types';
 
 interface FavoriteItem {
