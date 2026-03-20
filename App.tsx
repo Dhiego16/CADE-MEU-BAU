@@ -842,9 +842,14 @@ const App: React.FC = () => {
   // ─── Busca linhas do ponto e markers de ônibus em tempo real ──────────────
   const buscarLinhasPonto = useCallback(async (pontoId: string) => {
     if (!pontoId) return;
-    setStopLinesLoading(true);
-    setStopLinesError(null);
-    setStopLines([]);
+
+    const isFirstLoad = stopLines.length === 0;
+
+    // Só mostra loading e limpa na primeira carga
+    if (isFirstLoad) {
+      setStopLinesLoading(true);
+      setStopLinesError(null);
+    }
 
     // Remove markers de ônibus anteriores
     busMarkersRef.current.forEach(m => m.remove());
@@ -883,7 +888,8 @@ const App: React.FC = () => {
         };
       });
 
-      setStopLines(lines);
+      // Merge inteligente — só atualiza cards cujos horários mudaram
+      setStopLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       setStopLinesLoading(false);
 
       // Busca posição dos ônibus em tempo real para cada linha
@@ -926,7 +932,7 @@ const App: React.FC = () => {
       setStopLinesError('offline');
       setStopLinesLoading(false);
     }
-  }, []);
+  }, [stopLines, mergeLines]);
 
   // ─── Recalcula tamanho do mapa ao voltar para a aba ───────────────────────
   useEffect(() => {
