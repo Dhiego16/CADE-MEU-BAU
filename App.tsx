@@ -291,6 +291,7 @@ const App: React.FC = () => {
   const leafletMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const busMarkersRef = useRef<any[]>([]);
+  const busMarkersMapRef = useRef<Map<string, any>>(new Map()); // numero -> marker
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
@@ -902,34 +903,53 @@ const App: React.FC = () => {
 
       const linhasUnicas = [...new Set(lines.map(l => l.number))];
 
+      // Coleta todos os números de ônibus retornados neste refresh
+      const numerosAtivos = new Set<string>();
+
       await Promise.all(linhasUnicas.map(async (numLinha) => {
         try {
-          console.log(`[Mapa] Buscando ônibus em tempo real — linha ${numLinha}`);
           const r = await fetch(`/api/realtimebus?linha=${numLinha}`);
-          console.log(`[Mapa] Status da resposta linha ${numLinha}:`, r.status);
-          if (!r.ok) { console.warn(`[Mapa] Erro na linha ${numLinha}:`, r.status); return; }
+          if (!r.ok) return;
           const onibus = await r.json();
-          console.log(`[Mapa] Ônibus retornados linha ${numLinha}:`, onibus);
-          if (!Array.isArray(onibus)) { console.warn(`[Mapa] Resposta não é array:`, onibus); return; }
-          if (onibus.length === 0) { console.log(`[Mapa] Nenhum ônibus em operação na linha ${numLinha}`); return; }
+          if (!Array.isArray(onibus) || onibus.length === 0) return;
 
           onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
-            console.log(`[Mapa] Ônibus ${bus.numero} — lat:${bus.lat} lng:${bus.lng} destino:${bus.destino}`);
-            if (!bus.lat || !bus.lng) { console.warn(`[Mapa] Ônibus sem coordenadas:`, bus); return; }
-            const busIcon = L.divIcon({
-              html: `<div style="position:relative;width:36px;height:36px;background:#000;border-radius:8px;border:2px solid #fbbf24;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-size:18px;">🚍<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fbbf24;"></div></div>`,
-              className: '',
-              iconSize: [36, 42],
-              iconAnchor: [18, 42],
-            });
-            const marker = L.marker([bus.lat, bus.lng], { icon: busIcon })
-              .addTo(leafletMapRef.current)
-              .bindPopup(`<b>Linha ${numLinha}</b><br>${bus.destino || 'N/A'}`);
-            busMarkersRef.current.push(marker);
+            if (!bus.lat || !bus.lng) return;
+
+            const busKey = `${numLinha}-${bus.numero}`;
+            numerosAtivos.add(busKey);
+
+            const existingMarker = busMarkersMapRef.current.get(busKey);
+
+            if (existingMarker) {
+              // FIX: só move o marker existente, sem recriar — sem piscar
+              existingMarker.setLatLng([bus.lat, bus.lng]);
+            } else {
+              // Cria marker novo apenas se não existia
+              const busIcon = L.divIcon({
+                html: `<div style="position:relative;width:36px;height:36px;background:#000;border-radius:8px;border:2px solid #fbbf24;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-size:18px;">🚍<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fbbf24;"></div></div>`,
+                className: '',
+                iconSize: [36, 42],
+                iconAnchor: [18, 42],
+              });
+              const marker = L.marker([bus.lat, bus.lng], { icon: busIcon })
+                .addTo(leafletMapRef.current)
+                .bindPopup(`<b>Linha ${numLinha}</b><br>${bus.destino || 'N/A'}`);
+              busMarkersMapRef.current.set(busKey, marker);
+              busMarkersRef.current.push(marker);
+            }
           });
-          console.log(`[Mapa] ${busMarkersRef.current.length} markers de ônibus no mapa`);
-        } catch (err) { console.error(`[Mapa] Erro na linha ${numLinha}:`, err); }
+        } catch { /* ignora por linha */ }
       }));
+
+      // Remove markers de ônibus que não foram retornados neste refresh
+      busMarkersMapRef.current.forEach((marker, key) => {
+        if (!numerosAtivos.has(key)) {
+          marker.remove();
+          busMarkersMapRef.current.delete(key);
+          busMarkersRef.current = busMarkersRef.current.filter(m => m !== marker);
+        }
+      });
 
     } catch {
       setStopLinesError('offline');
@@ -1728,6 +1748,7 @@ const App: React.FC = () => {
                     setStopLines([]);
                     busMarkersRef.current.forEach(m => m.remove());
                     busMarkersRef.current = [];
+                  busMarkersMapRef.current.clear();
                   }} className={`${theme.subtext} text-xl font-black p-1`}>✕</button>
                 </div>
               </div>
