@@ -1,9 +1,12 @@
-
 {
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": false,
@@ -17,5 +20,13 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["types.ts", "constants.ts", "services", "components", "App.tsx", "index.tsx"]
+  "include": [
+    "types.ts",
+    "constants.ts",
+    "services",
+    "components",
+    "App.tsx",
+    "index.tsx",
+    "../pontos.json"
+  ]
 }
