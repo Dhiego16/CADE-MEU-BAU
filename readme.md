@@ -78,6 +78,8 @@ O deploy é automático via **Vercel** a cada push na branch `main`.
 │   ├── App.tsx          # Componente principal
 │   ├── index.tsx        # Entry point React
 │   └── types.ts         # Tipos TypeScript
+├── api/
+│   └── saldo.js         # Serverless Function Vercel — consulta saldo SitPass (/api/saldo?cpf=)
 ├── public/
 │   ├── logo.png         # Logo do app
 │   ├── manifest.json    # Manifesto PWA
@@ -100,7 +102,7 @@ O deploy é automático via **Vercel** a cada push na branch `main`.
 - **Leaflet.js** — mapa interativo de pontos
 - **PWA** — Service Worker + Web App Manifest + `skipWaiting` auto-update
 - **API de horários** — [bot-onibus.vercel.app](https://bot-onibus.vercel.app) (dados RMTC/EIXO Goiânia)
-- **API de saldo** — Cloudflare Workers (`sitpass.cj22233333.workers.dev`) para consulta SitPass
+- **API de saldo** — Vercel Serverless Function (`/api/saldo`) com scraping do SitPass via `fetch` + retry + timeout (fallback ao Cloudflare Workers)
 
 ---
 
