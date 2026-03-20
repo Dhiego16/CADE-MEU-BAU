@@ -297,7 +297,7 @@ const App: React.FC = () => {
   const activeAlertsRef = useRef(activeAlerts);
   useEffect(() => { activeAlertsRef.current = activeAlerts; }, [activeAlerts]);
 
-  const baseUrl = 'https://bot-onibus.vercel.app/api/ponto';
+  const baseUrl = '/api/ponto';
 
   const theme = {
     bg:          lightTheme ? 'bg-gray-100'            : 'bg-black',
