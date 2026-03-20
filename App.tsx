@@ -173,8 +173,9 @@ const BusLineCard = memo(({
         </div>
         <div className="flex flex-col items-center gap-2 shrink-0">
           <button onClick={e => { e.stopPropagation(); onToggleFavorite(line); }}
-            className={`text-3xl transition-all duration-200 active:scale-150 p-2 ${isFav ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : theme.inactiveNav}`}>
-            {isFav ? '★' : '☆'}
+            className="transition-all duration-200 active:scale-150 p-2">
+            <img src={isFav ? '/favorito.png' : '/no_favorito.png'} alt="Favorito"
+              style={{width:28, height:28, objectFit:'contain', opacity: isFav ? 1 : 0.4}} />
           </button>
           <button onClick={e => {
               e.stopPropagation();
@@ -182,13 +183,15 @@ const BusLineCard = memo(({
               else { onShowAlertModal(key); }
               haptic(30);
             }}
-            className={`text-lg p-1.5 transition-all active:scale-125 ${activeAlerts[key] ? 'text-yellow-400' : theme.subtext}`}
+            className="p-1.5 transition-all active:scale-125"
             title={activeAlerts[key] ? `Alerta: ${activeAlerts[key]} min — toque para remover` : 'Criar alerta'}>
-            {activeAlerts[key] ? '🔔' : '🔕'}
+            <img src={activeAlerts[key] ? '/alert_on.png' : '/alert_off.png'} alt="Alerta"
+              style={{width:24, height:24, objectFit:'contain', opacity: activeAlerts[key] ? 1 : 0.4}} />
           </button>
           <button onClick={e => { e.stopPropagation(); onShare(sId, line.number); haptic(30); }}
-            className={`text-lg p-1.5 transition-all active:scale-125 ${theme.subtext}`}>
-            🔗
+            className="p-1.5 transition-all active:scale-125">
+            <img src="/share.png" alt="Compartilhar"
+              style={{width:24, height:24, objectFit:'contain', opacity: 0.5}} />
           </button>
         </div>
       </div>
@@ -1556,7 +1559,7 @@ const App: React.FC = () => {
             {saldoData && (
               <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3">
-                  <span className="text-4xl">🎫</span>
+                  <img src="/sitpass.png" alt="SitPass" style={{width:48, height:48, objectFit:'contain', borderRadius:8}} />
                   <div>
                     <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>Bilhete Único</p>
                     <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{saldoData.cartaoDescricao}</p>
@@ -1635,17 +1638,20 @@ const App: React.FC = () => {
                       <p className={`text-[8px] font-bold ${theme.subtext}`}>{saldoHistorico.data} às {saldoHistorico.hora}</p>
                     </div>
                     <div className={`${theme.divider} h-px w-full`} />
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className={`text-[9px] font-bold ${theme.subtext}`}>{saldoHistorico.cartaoDescricao}</p>
-                        <p className={`text-[8px] ${theme.subtext} opacity-50`}>Valor pode estar desatualizado</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <img src="/sitpass.png" alt="SitPass" style={{width:36, height:36, objectFit:'contain', borderRadius:6}} />
+                        <div>
+                          <p className={`text-[9px] font-bold ${theme.subtext}`}>{saldoHistorico.cartaoDescricao}</p>
+                          <p className={`text-[8px] ${theme.subtext} opacity-50`}>Valor pode estar desatualizado</p>
+                        </div>
                       </div>
-                      <span className="text-2xl font-black text-yellow-400">{saldoHistorico.saldo_formatado}</span>
+                      <span className="text-2xl font-black text-yellow-400 shrink-0">{saldoHistorico.saldo_formatado}</span>
                     </div>
                   </div>
                 )}
                 <div className="py-16 text-center opacity-10 flex flex-col items-center">
-                  <div className="text-9xl mb-6">🎫</div>
+                  <img src="/sitpass.png" alt="SitPass" className="mb-6" style={{width:100, height:100, objectFit:'contain', opacity:0.2, borderRadius:12}} />
                   <p className={`font-black text-[12px] uppercase tracking-[0.5em] px-10 leading-relaxed ${theme.subtext}`}>
                     Digite seu CPF para consultar o saldo
                   </p>
@@ -1856,9 +1862,7 @@ const App: React.FC = () => {
         <button onClick={() => { setActiveTab('favs'); haptic(30); }}
           className={`flex flex-col items-center gap-2 transition-all duration-300 relative ${activeTab === 'favs' ? 'scale-125 opacity-100' : 'opacity-40'}`}>
           <div className="relative" style={{width:28, height:28}}>
-            <span className={`text-2xl leading-none ${activeTab === 'favs' ? 'text-yellow-400' : theme.inactiveNav}`}>
-              {activeTab === 'favs' ? '★' : '☆'}
-            </span>
+            <img src="/salvos.png" alt="Salvos" style={{width:28, height:28, objectFit:'contain'}} />
             {favCount > 0 && (
               <span className="absolute -top-2 -right-2 bg-yellow-400 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">
                 {favCount > 9 ? '9+' : favCount}
