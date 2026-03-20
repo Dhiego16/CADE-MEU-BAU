@@ -891,13 +891,18 @@ const App: React.FC = () => {
 
       await Promise.all(linhasUnicas.map(async (numLinha) => {
         try {
+          console.log(`[Mapa] Buscando ônibus em tempo real — linha ${numLinha}`);
           const r = await fetch(`/api/realtimebus?linha=${numLinha}`);
-          if (!r.ok) return;
+          console.log(`[Mapa] Status da resposta linha ${numLinha}:`, r.status);
+          if (!r.ok) { console.warn(`[Mapa] Erro na linha ${numLinha}:`, r.status); return; }
           const onibus = await r.json();
-          if (!Array.isArray(onibus)) return;
+          console.log(`[Mapa] Ônibus retornados linha ${numLinha}:`, onibus);
+          if (!Array.isArray(onibus)) { console.warn(`[Mapa] Resposta não é array:`, onibus); return; }
+          if (onibus.length === 0) { console.log(`[Mapa] Nenhum ônibus em operação na linha ${numLinha}`); return; }
 
           onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
-            if (!bus.lat || !bus.lng) return;
+            console.log(`[Mapa] Ônibus ${bus.numero} — lat:${bus.lat} lng:${bus.lng} destino:${bus.destino}`);
+            if (!bus.lat || !bus.lng) { console.warn(`[Mapa] Ônibus sem coordenadas:`, bus); return; }
             const busIcon = L.divIcon({
               html: `<div style="position:relative;width:36px;height:36px;background:#000;border-radius:8px;border:2px solid #fbbf24;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-size:18px;">🚍<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fbbf24;"></div></div>`,
               className: '',
@@ -909,7 +914,8 @@ const App: React.FC = () => {
               .bindPopup(`<b>Linha ${numLinha}</b><br>${bus.destino || 'N/A'}`);
             busMarkersRef.current.push(marker);
           });
-        } catch { /* ignora por linha */ }
+          console.log(`[Mapa] ${busMarkersRef.current.length} markers de ônibus no mapa`);
+        } catch (err) { console.error(`[Mapa] Erro na linha ${numLinha}:`, err); }
       }));
 
     } catch {
