@@ -294,13 +294,10 @@ const App: React.FC = () => {
   const busMarkersMapRef = useRef<Map<string, any>>(new Map()); // numero -> marker
   const pontosDataRef = useRef<Array<{id:string; lat:number; lng:number; nome:string; marker:any}>>([]);
   const modoAoVivoRef = useRef(false); // quando true, raio dinâmico fica desativado
-  const modoAoVivoRef = useRef(false); // quando true, raio dinâmico fica desativado
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
   const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({}); // lineNumber -> tem ônibus ao vivo
   const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const liveTrackingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [liveCountdown, setLiveCountdown] = useState(10);
   const liveTrackingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [liveCountdown, setLiveCountdown] = useState(10);
   const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
