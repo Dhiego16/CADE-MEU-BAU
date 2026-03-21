@@ -1312,13 +1312,59 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Bottom sheet do ponto selecionado */}
+        {/* Bottom sheet do ponto selecionado — draggable */}
         {selectedStop && (
           <div
             className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem]`}
-            style={{bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '60%', display: 'flex', flexDirection: 'column'}}>
+            style={{
+              bottom: 0,
+              animation: 'slideUp 0.3s ease-out',
+              maxHeight: '75%',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 0.3s ease',
+            }}
+            onTouchStart={(e) => {
+              const startY = e.touches[0].clientY;
+              const el = e.currentTarget;
+              let lastY = startY;
+              const onMove = (ev: TouchEvent) => {
+                const dy = ev.touches[0].clientY - startY;
+                lastY = ev.touches[0].clientY;
+                if (dy > 0) el.style.transform = `translateY(${dy}px)`;
+              };
+              const onEnd = () => {
+                const dy = lastY - startY;
+                el.style.transform = '';
+                if (dy > 80) {
+                  // puxou pra baixo o suficiente — fecha
+                  setSelectedStop(null);
+                  setStopLines([]);
+                  busMarkersMapRef.current.forEach(m => m.remove());
+                  busMarkersMapRef.current.clear();
+                  busMarkersRef.current = [];
+                  modoAoVivoRef.current = false;
+                  setLiveTrackingLine(null);
+                  const loc = userLocationRef.current;
+                  if (filtrarMarkersPorRaioRef.current && loc) {
+                    filtrarMarkersPorRaioRef.current(loc.lat, loc.lng);
+                  } else {
+                    pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
+                  }
+                }
+                document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('touchend', onEnd);
+              };
+              document.addEventListener('touchmove', onMove, { passive: true });
+              document.addEventListener('touchend', onEnd);
+            }}
+          >
+            {/* Alça de drag */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0 cursor-grab">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
 
-            <div className="flex items-start justify-between px-5 pt-5 pb-3 shrink-0">
+            <div className="flex items-start justify-between px-5 pt-2 pb-3 shrink-0">
               <div>
                 <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
                 <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
@@ -1410,49 +1456,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Botão de reposicionar no usuário */}
-        {mapReady && (
-          <button
-            onClick={() => {
-              if (!leafletMapRef.current) return;
-              haptic(40);
-              if (userLocation) {
-                leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
-              } else {
-                navigator.geolocation?.getCurrentPosition(
-                  (pos) => {
-                    const { latitude, longitude } = pos.coords;
-                    userLocationRef.current = { lat: latitude, lng: longitude };
-                    setUserLocation({ lat: latitude, lng: longitude });
-                    leafletMapRef.current!.setView([latitude, longitude], 16, { animate: true });
-                  },
-                  () => setLocationError(true),
-                  { timeout: 6000, enableHighAccuracy: true }
-                );
-              }
-            }}
-            style={{
-              position: 'absolute',
-              bottom: selectedStop ? '220px' : '72px',
-              right: '16px',
-              zIndex: 1000,
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              background: '#fbbf24',
-              border: '2px solid #000',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'bottom 0.3s ease',
-            }}
-            title="Minha localização"
-          >
-            📍
-          </button>
-        )}
+
 
         {/* Loader inicial */}
         {!mapReady && (
