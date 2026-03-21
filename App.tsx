@@ -627,7 +627,7 @@ const App: React.FC = () => {
                         </button>
                       )}
                       {isActive && activeMiniMap && (
-                        <MiniMap stopLat={activeMiniMap.stopLat} stopLng={activeMiniMap.stopLng} stopNome={activeMiniMap.stopNome} lineNumber={activeMiniMap.lineNumber} destination={activeMiniMap.destination} refreshKey={miniMapRefreshKey onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
+                        <MiniMap stopLat={activeMiniMap.stopLat} stopLng={activeMiniMap.stopLng} stopNome={activeMiniMap.stopNome} lineNumber={activeMiniMap.lineNumber} destination={activeMiniMap.destination} refreshKey={miniMapRefreshKey} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
                       )}
                     </div>
                   );
@@ -836,7 +836,7 @@ const App: React.FC = () => {
                     </div>
                     {/* MiniMap no bottom sheet do mapa */}
                     {isMapMiniActive && activeMiniMap && stopCoordsMap && (
-                      <MiniMap stopLat={stopCoordsMap.lat} stopLng={stopCoordsMap.lng} stopNome={selectedStop.nome} lineNumber={line.number} destination={line.destination} refreshKey={miniMapRefreshKey onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
+                      <MiniMap stopLat={stopCoordsMap.lat} stopLng={stopCoordsMap.lng} stopNome={selectedStop.nome} lineNumber={line.number} destination={line.destination} refreshKey={miniMapRefreshKey} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
                     )}
                   </div>
                 );
