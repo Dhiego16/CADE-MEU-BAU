@@ -293,10 +293,16 @@ const App: React.FC = () => {
   const busMarkersRef = useRef<any[]>([]);
   const busMarkersMapRef = useRef<Map<string, any>>(new Map()); // numero -> marker
   const pontosDataRef = useRef<Array<{id:string; lat:number; lng:number; nome:string; marker:any}>>([]);
+  const modoAoVivoRef = useRef(false); // quando true, raio dinâmico fica desativado
+  const modoAoVivoRef = useRef(false); // quando true, raio dinâmico fica desativado
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
   const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({}); // lineNumber -> tem ônibus ao vivo
   const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveTrackingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [liveCountdown, setLiveCountdown] = useState(10);
+  const liveTrackingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [liveCountdown, setLiveCountdown] = useState(10);
   const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -713,15 +719,17 @@ const App: React.FC = () => {
     setLiveTrackingLine({ lineNumber, stopId: pontoId, stopLat: lat, stopLng: lng });
     setActiveTab('map');
     haptic([50, 30, 80]);
+    modoAoVivoRef.current = true;
 
     // Aguarda o mapa estar pronto e centraliza no ponto
     setTimeout(() => {
       if (!leafletMapRef.current) return;
       leafletMapRef.current.setView([lat, lng], 16, { animate: true });
 
-      // Mostra só o ponto selecionado
-      const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
-      if (fn) fn(lat, lng, pontoId);
+      // Oculta TODOS os pontos exceto o selecionado (independente de raio)
+      pontosDataRef.current.forEach(p => {
+        p.marker.setOpacity(p.id === pontoId ? 1 : 0);
+      });
 
       // Busca ônibus ao vivo da linha específica
       const L = (window as any).L;
@@ -1019,6 +1027,60 @@ const App: React.FC = () => {
     return () => clearTimeout(t);
   }, [activeTab]);
 
+  // ─── Auto-refresh do rastreamento ao vivo (10s) ────────────────────────────
+  useEffect(() => {
+    if (!liveTrackingLine) {
+      if (liveTrackingTimerRef.current) clearInterval(liveTrackingTimerRef.current);
+      setLiveCountdown(10);
+      return;
+    }
+
+    const { lineNumber } = liveTrackingLine;
+
+    const atualizarPosicao = async () => {
+      if (!leafletMapRef.current) return;
+      const L = (window as any).L;
+      if (!L) return;
+      try {
+        const r = await fetch(`/api/realtimebus?linha=${lineNumber}`);
+        if (!r.ok) return;
+        const onibus = await r.json();
+        if (!Array.isArray(onibus)) return;
+
+        onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
+          if (!bus.lat || !bus.lng) return;
+          const busKey = `${lineNumber}-${bus.numero}`;
+          const existing = busMarkersMapRef.current.get(busKey);
+          if (existing) {
+            existing.setLatLng([bus.lat, bus.lng]);
+          } else {
+            const icon = L.icon({ iconUrl: '/onibus_realtime.png', iconSize: [40, 40], iconAnchor: [20, 40] });
+            const marker = L.marker([bus.lat, bus.lng], { icon })
+              .addTo(leafletMapRef.current)
+              .bindPopup(`<b>Linha ${lineNumber}</b><br>${bus.destino || 'N/A'}`);
+            busMarkersMapRef.current.set(busKey, marker);
+            busMarkersRef.current.push(marker);
+          }
+        });
+      } catch { /* ignora */ }
+    };
+
+    setLiveCountdown(10);
+    if (liveTrackingTimerRef.current) clearInterval(liveTrackingTimerRef.current);
+
+    liveTrackingTimerRef.current = setInterval(() => {
+      setLiveCountdown(prev => {
+        if (prev <= 1) {
+          atualizarPosicao();
+          return 10;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => { if (liveTrackingTimerRef.current) clearInterval(liveTrackingTimerRef.current); };
+  }, [liveTrackingLine]);
+
   // ─── Auto-refresh do tempo real no mapa ────────────────────────────────────
   useEffect(() => { selectedStopRef.current = selectedStop; }, [selectedStop]);
 
@@ -1144,7 +1206,9 @@ const App: React.FC = () => {
       (leafletMapRef as any).filtrarMarkersPorRaio = filtrarMarkersPorRaio;
 
       // Filtra por centro do mapa ao mover — raio dinâmico
+      // Desativado quando usuário veio do botão "Acompanhar ao vivo"
       const atualizarRaio = () => {
+        if (modoAoVivoRef.current) return;
         const center = map.getCenter();
         filtrarMarkersPorRaio(center.lat, center.lng);
       };
@@ -1825,8 +1889,38 @@ const App: React.FC = () => {
             style={{width: '100%', height: '100%'}}
           />
 
+          {/* Banner de rastreamento ao vivo */}
+          {liveTrackingLine && (
+            <div className="absolute top-3 left-3 right-3 z-[1001] rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+              style={{background:'rgba(29,78,216,0.95)', backdropFilter:'blur(8px)', border:'1px solid rgba(96,165,250,0.3)'}}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+                <p className="text-white font-black text-[10px] uppercase tracking-widest truncate">
+                  Rastreando linha {liveTrackingLine.lineNumber} ao vivo
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-blue-200 font-black text-[10px] tabular-nums">{liveCountdown}s</span>
+                <button onClick={() => {
+                  setLiveTrackingLine(null);
+                  busMarkersRef.current.forEach(m => m.remove());
+                  busMarkersRef.current = [];
+                  busMarkersMapRef.current.clear();
+                  const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
+                  const ul = (window as any).__userLat;
+                  const ulng = (window as any).__userLng;
+                  if (fn && ul) fn(ul, ulng);
+                  else pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
+                  haptic(30);
+                }}>
+                  <img src="/fechar.png" alt="Parar" style={{width:20,height:20,objectFit:'contain',opacity:0.8}} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Erro de localização */}
-          {locationError && (
+          {locationError && !liveTrackingLine && (
             <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
               style={{backdropFilter: 'blur(8px)'}}>
               <img src="/localizacao.png" alt="" style={{width:16, height:16, objectFit:"contain"}} /> Localização negada — mostrando Senador Canedo
@@ -1859,11 +1953,12 @@ const App: React.FC = () => {
                     busMarkersRef.current.forEach(m => m.remove());
                     busMarkersRef.current = [];
                   busMarkersMapRef.current.clear();
-                  // Restaura markers no raio ao fechar
+                  // Desativa modo ao vivo e restaura raio normal
+                  modoAoVivoRef.current = false;
+                  setLiveTrackingLine(null);
                   const fn2 = (leafletMapRef as any).filtrarMarkersPorRaio;
-                  const ul2 = (window as any).__userLat;
-                  const ulng2 = (window as any).__userLng;
-                  if (fn2 && ul2) fn2(ul2, ulng2);
+                  const mapCenter = leafletMapRef.current?.getCenter();
+                  if (fn2 && mapCenter) fn2(mapCenter.lat, mapCenter.lng);
                   else pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
                   }} className="p-1 active:scale-95 transition-transform"><img src="/fechar.png" alt="Fechar" style={{width:20,height:20,objectFit:"contain"}} /></button>
                 </div>
