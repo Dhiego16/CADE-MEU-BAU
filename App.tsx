@@ -294,6 +294,10 @@ const App: React.FC = () => {
   const busMarkersMapRef = useRef<Map<string, any>>(new Map()); // numero -> marker
   const pontosDataRef = useRef<Array<{id:string; lat:number; lng:number; nome:string; marker:any}>>([]);
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
+  const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({}); // lineNumber -> tem ônibus ao vivo
+  const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
+  const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({}); // lineNumber -> tem ônibus ao vivo
+  const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
 
@@ -534,7 +538,20 @@ const App: React.FC = () => {
       else if (error === 'not_found') setErrorMsg('not_found');
       else if (error === 'no_lines') setErrorMsg('no_lines');
       else if (error === 'invalid_stop') setErrorMsg('invalid_stop');
-      if (lines.length > 0) addToHistory(idToSearch);
+      if (lines.length > 0) {
+        addToHistory(idToSearch);
+        // Verifica quais linhas têm ônibus ao vivo (em paralelo, sem bloquear a UI)
+        const liveMap: Record<string, boolean> = {};
+        await Promise.all([...new Set(lines.map(l => l.number))].map(async (num) => {
+          try {
+            const r = await fetch(`/api/realtimebus?linha=${num}`);
+            if (!r.ok) return;
+            const data = await r.json();
+            if (Array.isArray(data) && data.length > 0) liveMap[num] = true;
+          } catch { /* ignora */ }
+        }));
+        setLiveLineMap(liveMap);
+      }
     } catch { setStaleData(true); setErrorMsg('offline'); }
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
   }, [stopId, lineFilter, performSearch, addToHistory, mergeLines]);
@@ -687,6 +704,53 @@ const App: React.FC = () => {
       try { new Notification(title, { body }); } catch { /* ignore */ }
     }
   };
+
+  // ─── Abre rastreamento ao vivo no mapa ────────────────────────────────────
+  const abrirRastreamentoAoVivo = useCallback((lineNumber: string, pontoId: string) => {
+    // Acha as coordenadas do ponto no JSON
+    const pontoData = pontosDataRef.current.find(p => p.id === pontoId);
+    const lat = pontoData?.lat ?? -16.7200;
+    const lng = pontoData?.lng ?? -49.0900;
+
+    setLiveTrackingLine({ lineNumber, stopId: pontoId, stopLat: lat, stopLng: lng });
+    setActiveTab('map');
+    haptic([50, 30, 80]);
+
+    // Aguarda o mapa estar pronto e centraliza no ponto
+    setTimeout(() => {
+      if (!leafletMapRef.current) return;
+      leafletMapRef.current.setView([lat, lng], 16, { animate: true });
+
+      // Mostra só o ponto selecionado
+      const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
+      if (fn) fn(lat, lng, pontoId);
+
+      // Busca ônibus ao vivo da linha específica
+      const L = (window as any).L;
+      if (!L) return;
+
+      busMarkersRef.current.forEach(m => m.remove());
+      busMarkersRef.current = [];
+      busMarkersMapRef.current.clear();
+
+      fetch(`/api/realtimebus?linha=${lineNumber}`)
+        .then(r => r.json())
+        .then(onibus => {
+          if (!Array.isArray(onibus)) return;
+          onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
+            if (!bus.lat || !bus.lng) return;
+            const busKey = `${lineNumber}-${bus.numero}`;
+            const icon = L.icon({ iconUrl: '/onibus_realtime.png', iconSize: [40, 40], iconAnchor: [20, 40] });
+            const marker = L.marker([bus.lat, bus.lng], { icon })
+              .addTo(leafletMapRef.current)
+              .bindPopup(`<b>Linha ${lineNumber}</b><br>${bus.destino || 'N/A'}`);
+            busMarkersMapRef.current.set(busKey, marker);
+            busMarkersRef.current.push(marker);
+          });
+        })
+        .catch(() => {});
+    }, 300);
+  }, []);
 
   // FIX: removeAlert estável via ref para não causar stale closure no checkAlerts
   const removeAlert = useCallback((lineKey: string) => {
@@ -1462,6 +1526,16 @@ const App: React.FC = () => {
                 {busLines.map((line, i) => (
                   <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
                     <BusLineCard line={line} staggerIndex={i} {...cardProps} />
+                    {liveLineMap[line.number] && (
+                      <button
+                        onClick={() => abrirRastreamentoAoVivo(line.number, line.stopSource ?? stopId)}
+                        className="w-full mt-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+                        style={{background: 'linear-gradient(90deg, #1d4ed8, #2563eb)', color: '#fff', boxShadow: '0 4px 15px rgba(37,99,235,0.4)'}}>
+                        <img src="/onibus_realtime.png" alt="" style={{width:18,height:18,objectFit:'contain'}} />
+                        Acompanhar linha {line.number} ao vivo
+                        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      </button>
+                    )}
                   </div>
                 ))}
                 {busLines.length === 0 && !errorMsg && (
