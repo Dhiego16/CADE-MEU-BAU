@@ -93,6 +93,20 @@ const buscarOnibusLinha = async (
         busMarkersRef.current.push(marker);
       }
     });
+
+    // Se estiver no modo rastreamento ao vivo (filtro com coordenadas do ponto),
+    // centraliza o mapa mostrando sempre o ponto e o ônibus juntos
+    if (filtro && busesToShow.length > 0) {
+      const bus = busesToShow[0];
+      const minLat = Math.min(filtro.stopLat, bus.lat);
+      const maxLat = Math.max(filtro.stopLat, bus.lat);
+      const minLng = Math.min(filtro.stopLng, bus.lng);
+      const maxLng = Math.max(filtro.stopLng, bus.lng);
+      map.fitBounds(
+        [[minLat, minLng], [maxLat, maxLng]],
+        { padding: [60, 60], animate: true, maxZoom: 17 }
+      );
+    }
   } catch { /* ignora por linha */ }
 };
 
@@ -264,7 +278,7 @@ const App: React.FC = () => {
 
     setTimeout(() => {
       if (!leafletMapRef.current) return;
-      leafletMapRef.current.setView([lat, lng], 16, { animate: true });
+      leafletMapRef.current.setView([lat, lng], 15, { animate: true }); // zoom inicial no ponto; fitBounds ajusta após carregar o ônibus
 
       pontosDataRef.current.forEach(p => {
         p.marker.setOpacity(p.id === pontoId ? 1 : 0);

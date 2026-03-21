@@ -1,3 +1,4 @@
+
 export interface BusSchedule {
   time: string;
   type: 'Dia Útil' | 'Sábado' | 'Domingo/Feriado';
@@ -71,6 +72,7 @@ export interface LeafletMarker {
 
 export interface LeafletMap {
   setView: (center: [number, number], zoom: number, options?: object) => void;
+  fitBounds: (bounds: [[number, number], [number, number]], options?: object) => void;
   getCenter: () => { lat: number; lng: number };
   invalidateSize: () => void;
   on: (event: string, handler: () => void) => void;
@@ -92,7 +94,7 @@ export interface LiveTrackingLine {
   stopId: string;
   stopLat: number;
   stopLng: number;
-  destination: string;
+  destination: string; // adicionado para filtro por destino
 }
 
 export interface LeafletLib {
