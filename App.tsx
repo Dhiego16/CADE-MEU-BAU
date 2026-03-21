@@ -956,7 +956,7 @@ const App: React.FC = () => {
                     {searchHistory.map(h => (
                       <button key={h} onClick={() => { setStopId(h); handleSearch(h); haptic(30); }}
                         className={`${theme.historyBtn} border text-xs font-black px-3 py-2 rounded-xl active:scale-95 transition-transform tracking-wider`}>
-                        <img src="/localizacao.png" alt="" style={{width:12, height:12, objectFit:"contain"}} /> {h}
+                        📍 {h}
                       </button>
                     ))}
                   </div>
@@ -967,14 +967,14 @@ const App: React.FC = () => {
             {errorMsg && (() => {
               const errors: Record<string, { icon: string; title: string; desc: string; color: string }> = {
                 offline:      { icon: '/informacao.png', title: 'Sem conexão', desc: 'Verifique sua internet e tente novamente.', color: 'border-slate-500/30 text-slate-400 bg-slate-500/10' },
-                not_found:    { icon: '/localizacao.png', title: 'Ponto não encontrado', desc: `O ponto "${stopId}" não existe ou está inativo. Confira o número na placa do ponto.`, color: 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' },
+                not_found:    { icon: '📍', title: 'Ponto não encontrado', desc: `O ponto "${stopId}" não existe ou está inativo. Confira o número na placa do ponto.`, color: 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' },
                 no_lines:     { icon: '/onibus_realtime.png', title: 'Linha não opera aqui', desc: `A linha "${lineFilter}" não para neste ponto ou não está em operação agora.`, color: 'border-orange-500/30 text-orange-400 bg-orange-500/10' },
                 invalid_stop: { icon: '/alerta.png', title: 'Número inválido', desc: 'Digite um número de ponto válido. Ex: 31700', color: 'border-red-500/30 text-red-400 bg-red-500/10' },
               };
               const e = errors[errorMsg] ?? errors['offline'];
               return (
                 <div className={`border p-4 rounded-2xl flex items-start gap-3 ${e.color}`}>
-                  <img src={e.icon} alt="Ícone" style={{width:28,height:28,objectFit:"contain",flexShrink:0}} />
+                  {e.icon.startsWith("/") ? <img src={e.icon} alt="Ícone" style={{width:28,height:28,objectFit:"contain",flexShrink:0}} /> : <span style={{fontSize:24,flexShrink:0,lineHeight:1}}>{e.icon}</span>}
                   <div>
                     <p className="font-black text-[11px] uppercase tracking-widest">{e.title}</p>
                     <p className="text-[9px] font-bold mt-1 opacity-80 leading-relaxed">{e.desc}</p>
@@ -1031,7 +1031,7 @@ const App: React.FC = () => {
             <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer"
               onClick={() => haptic(30)}
               className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
-              <img src="/feedback_mensage.png" alt="" style={{width:18, height:18, objectFit:"contain"}} /> Algo errado? Me avisa
+              💬 Algo errado? Me avisa
             </a>
           </div>
         )}
@@ -1070,7 +1070,7 @@ const App: React.FC = () => {
             {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
               <div key={pontoId} className="space-y-3">
                 <div className="flex items-center gap-2 px-1 pt-2">
-                  <img src="/localizacao.png" alt="" style={{width:16,height:16,objectFit:"contain"}} />
+                  📍
                   <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
                   <div className={`flex-1 h-px ${theme.divider}`} />
                 </div>
@@ -1097,7 +1097,7 @@ const App: React.FC = () => {
             <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer"
               onClick={() => haptic(30)}
               className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
-              <img src="/feedback_mensage.png" alt="" style={{width:18, height:18, objectFit:"contain"}} /> Algo errado? Me avisa
+              💬 Algo errado? Me avisa
             </a>
           </div>
         )}
@@ -1232,7 +1232,7 @@ const App: React.FC = () => {
             <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer"
               onClick={() => haptic(30)}
               className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
-              <img src="/feedback_mensage.png" alt="" style={{width:18, height:18, objectFit:"contain"}} /> Algo errado? Me avisa
+              💬 Algo errado? Me avisa
             </a>
           </div>
         )}
@@ -1294,7 +1294,7 @@ const App: React.FC = () => {
         {locationError && !liveTrackingLine && (
           <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
             style={{backdropFilter: 'blur(8px)'}}>
-            <img src="/localizacao.png" alt="" style={{width:16, height:16, objectFit:"contain"}} /> Localização negada — mostrando Senador Canedo
+            📍 Localização negada — mostrando Senador Canedo
           </div>
         )}
 
@@ -1306,7 +1306,7 @@ const App: React.FC = () => {
 
             <div className="flex items-start justify-between px-5 pt-5 pb-3 shrink-0">
               <div>
-                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}><img src="/localizacao.png" alt="" style={{width:14, height:14, objectFit:"contain"}} /> Ponto selecionado</p>
+                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
                 <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
                 <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
               </div>
@@ -1436,7 +1436,7 @@ const App: React.FC = () => {
             }}
             title="Minha localização"
           >
-            <img src="/localizacao.png" alt="Localização" style={{width:24,height:24,objectFit:'contain'}} />
+            📍
           </button>
         )}
 
