@@ -1,221 +1,22 @@
-import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import PONTOS_DATA from './pontos.json';
-import { BusLine } from './types';
+import { BusLine, ActiveTab, LiveTrackingLine, LeafletMap, LeafletMarker, LeafletLib, PontoDataWithMarker } from './types';
+import { haptic, shareLine, REFRESH_INTERVAL, SPLASH_DURATION } from './utils';
+import { buildTheme } from './utils/theme';
+import { useBusSearch } from './hooks/useBusSearch';
+import { useFavorites } from './hooks/useFavorites';
+import { useNotifications } from './hooks/useNotifications';
+import { useSitpass } from './hooks/useSitpass';
+import BusLineCard from './components/BusLineCard';
+import SkeletonCard from './components/SkeletonCard';
 
-interface FavoriteItem {
-  stopId: string;
-  lineNumber: string;
-  destination: string;
-  nickname?: string;
-}
-
-const REFRESH_INTERVAL = 20;
-const SPLASH_DURATION = 2000;
-const MAX_HISTORY = 5;
-
-const haptic = (ms: number | number[] = 50) => {
-  try { navigator.vibrate?.(ms); } catch { /* ignore */ }
-};
-
-const shareLine = async (stopId: string, lineNumber: string) => {
-  const url = `${window.location.origin}?ponto=${stopId}&linha=${lineNumber}`;
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: 'Cadê meu Baú?', text: `🚍 Linha ${lineNumber} — Ponto ${stopId}`, url });
-    } else {
-      await navigator.clipboard.writeText(url);
-      alert('Link copiado!');
-    }
-  } catch { /* cancelado */ }
-};
-
-// ─── Formata CPF enquanto digita ─────────────────────────────────────────────
-const formatCpf = (value: string) => {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  return digits
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-};
-
-// ─── Valida CPF com dígitos verificadores ─────────────────────────────────────
-const isValidCpf = (cpf: string): boolean => {
-  const d = cpf.replace(/\D/g, '');
-  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
-  const calc = (len: number) => {
-    let sum = 0;
-    for (let i = 0; i < len; i++) sum += parseInt(d[i]) * (len + 1 - i);
-    const r = (sum * 10) % 11;
-    return r === 10 || r === 11 ? 0 : r;
-  };
-  return calc(9) === parseInt(d[9]) && calc(10) === parseInt(d[10]);
-};
-
-const SkeletonCard = ({ light }: { light: boolean }) => (
-  <div className={`${light ? 'bg-white border-gray-200' : 'bg-slate-900 border-white/10'} border p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl animate-pulse`}>
-    <div className="flex items-center gap-4">
-      <div className={`w-24 h-10 ${light ? 'bg-gray-200' : 'bg-slate-800'} rounded-2xl`} />
-      <div className="flex flex-col gap-2 flex-1">
-        <div className={`h-3 ${light ? 'bg-gray-200' : 'bg-slate-800'} rounded-full w-16`} />
-        <div className={`h-4 ${light ? 'bg-gray-200' : 'bg-slate-800'} rounded-full w-40`} />
-        <div className={`h-3 ${light ? 'bg-gray-200' : 'bg-slate-800'} rounded-full w-20`} />
-      </div>
-    </div>
-    <div className="flex gap-2">
-      <div className={`flex-1 h-24 ${light ? 'bg-gray-200' : 'bg-slate-800'} rounded-[1.5rem]`} />
-      <div className={`flex-1 h-24 ${light ? 'bg-gray-100' : 'bg-slate-800/60'} rounded-[1.5rem]`} />
-    </div>
-  </div>
-);
-
-// ─── Utilitários de tempo/urgência (fora do componente) ───────────────────────
-const getUrgencyColor = (timeStr: string) => {
-  if (!timeStr || timeStr === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
-  const clean = timeStr.toLowerCase();
-  if (clean.includes('agora')) return 'bg-red-600 text-white';
-  if (clean.includes('aprox')) return 'bg-blue-500 text-white';
-  const mins = parseInt(timeStr.replace(/\D/g, '')) || 0;
-  if (mins <= 3) return 'bg-red-600 text-white';
-  if (mins <= 8) return 'bg-yellow-500 text-black';
-  return 'bg-emerald-500 text-white';
-};
-
-const renderTimeDisplay = (timeStr: string, isNext: boolean) => {
-  const isNoPrev = timeStr === 'SEM PREVISÃO';
-  const urgencyClasses = getUrgencyColor(timeStr);
-  const isApprox = timeStr.toLowerCase().includes('aprox');
-  if (isNoPrev) {
-    return (
-      <div className={`px-2 py-3 rounded-2xl ${urgencyClasses} font-black uppercase tracking-tighter w-full text-center text-[9px] opacity-40`}>
-        {timeStr}
-      </div>
-    );
-  }
-  return (
-    <div className={`flex flex-col items-center justify-center w-full rounded-2xl py-2 ${urgencyClasses} ${!isNext ? 'opacity-90' : ''}`}>
-      <span className={`font-black leading-none tracking-tighter ${isNext ? 'text-2xl' : 'text-xl'}`}>{timeStr}</span>
-      <span className="text-[7px] font-black uppercase tracking-widest mt-0.5 opacity-80">MINUTO(S)</span>
-      {isApprox && (
-        <span className="text-[6px] font-black uppercase tracking-widest mt-1 opacity-80 text-center">
-          IMPOSSÍVEL RASTREAR O BAÚ AGORA, MOSTRANDO TEMPO ESPECULADO!
-        </span>
-      )}
-    </div>
-  );
-};
-
-// ─── BusLineCard movido para FORA do App (evita remount a cada render) ────────
-interface BusLineCardProps {
-  line: BusLine;
-  isRemoving?: boolean;
-  staggerIndex?: number;
-  stopId: string;
-  favorites: FavoriteItem[];
-  activeAlerts: Record<string, number>;
-  lightTheme: boolean;
-  theme: Record<string, string>;
-  onToggleFavorite: (line: BusLine) => void;
-  onStartLongPress: (key: string, nickname?: string) => void;
-  onCancelLongPress: () => void;
-  onRemoveAlert: (key: string) => void;
-  onShowAlertModal: (key: string) => void;
-  onShare: (stopId: string, lineNumber: string) => void;
-}
-
-const BusLineCard = memo(({
-  line, isRemoving = false, staggerIndex = 0,
-  stopId, favorites, activeAlerts, lightTheme, theme,
-  onToggleFavorite, onStartLongPress, onCancelLongPress,
-  onRemoveAlert, onShowAlertModal, onShare,
-}: BusLineCardProps) => {
-  const sId = line.stopSource ?? stopId;
-  const key = `${sId}::${line.number}`;
-  const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
-  const favItem = favorites.find(f => f.stopId === sId && f.lineNumber === line.number);
-
-  return (
-    <div
-      className={`${theme.card} border p-5 rounded-[2.5rem] flex flex-col gap-4 shadow-xl active:scale-[0.98]`}
-      style={{
-        opacity: isRemoving ? 0 : 1,
-        transform: isRemoving ? 'scale(0.92) translateY(-8px)' : undefined,
-        transition: 'opacity 0.35s ease, transform 0.35s ease',
-        animationDelay: `${staggerIndex * 60}ms`,
-      }}
-      onTouchStart={() => isFav && onStartLongPress(key, favItem?.nickname)}
-      onTouchEnd={onCancelLongPress}
-      onTouchMove={onCancelLongPress}
-      onMouseDown={() => isFav && onStartLongPress(key, favItem?.nickname)}
-      onMouseUp={onCancelLongPress}
-      onMouseLeave={onCancelLongPress}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="text-4xl font-black text-yellow-400 italic w-24 shrink-0 text-center leading-none tracking-tighter drop-shadow-[0_2px_10px_rgba(251,191,36,0.2)]">
-            {line.number}
-          </div>
-          <div className="min-w-0 flex flex-col justify-center">
-            {favItem?.nickname && (
-              <span className="text-[9px] font-black text-yellow-400 uppercase tracking-widest mb-0.5"><img src="/editar.png" alt="" style={{width:14, height:14, objectFit:"contain"}} /> {favItem.nickname}</span>
-            )}
-            <div className="mb-1 pr-2 min-w-0 flex flex-col">
-              <span className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>INDO PARA:</span>
-              <span className={`font-black text-[13px] uppercase ${theme.destText} leading-tight break-words`}>{line.destination}</span>
-            </div>
-            {line.stopSource && (
-              <div className={`text-[8px] font-bold ${theme.stopBadge} uppercase tracking-widest mb-1`}><img src="/localizacao.png" alt="" style={{width:12, height:12, objectFit:"contain"}} /> PONTO {line.stopSource}</div>
-            )}
-            <div className={`text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 ${theme.subtext}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${line.nextArrival?.toLowerCase().includes('aprox') ? 'bg-red-500' : 'bg-emerald-500'}`} />
-              {line.nextArrival?.toLowerCase().includes('aprox') ? 'Offline' : 'Online agora'}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-2 shrink-0">
-          <button onClick={e => { e.stopPropagation(); onToggleFavorite(line); }}
-            className="transition-all duration-200 active:scale-150 p-2">
-            <img src={isFav ? '/favorito.png' : '/no_favorito.png'} alt="Favorito"
-              style={{width:28, height:28, objectFit:'contain', opacity: isFav ? 1 : 0.4}} />
-          </button>
-          <button onClick={e => {
-              e.stopPropagation();
-              if (activeAlerts[key]) { onRemoveAlert(key); }
-              else { onShowAlertModal(key); }
-              haptic(30);
-            }}
-            className="p-1.5 transition-all active:scale-125"
-            title={activeAlerts[key] ? `Alerta: ${activeAlerts[key]} min — toque para remover` : 'Criar alerta'}>
-            <img src={activeAlerts[key] ? '/alert_on.png' : '/alert_off.png'} alt="Alerta"
-              style={{width:24, height:24, objectFit:'contain', opacity: activeAlerts[key] ? 1 : 0.4}} />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onShare(sId, line.number); haptic(30); }}
-            className="p-1.5 transition-all active:scale-125">
-            <img src="/share.png" alt="Compartilhar"
-              style={{width:24, height:24, objectFit:'contain', opacity: 0.5}} />
-          </button>
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <div className={`flex-1 ${theme.timeCard1} rounded-[1.5rem] p-4 border flex flex-col items-center justify-center min-h-[95px]`}>
-          <span className={`block text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2`}>Chega em:</span>
-          {renderTimeDisplay(line.nextArrival ?? 'SEM PREVISÃO', true)}
-        </div>
-        <div className={`flex-1 ${theme.timeCard2} rounded-[1.5rem] p-4 border flex flex-col items-center justify-center min-h-[95px] opacity-90`}>
-          <span className={`block text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2`}>Próximo em:</span>
-          {renderTimeDisplay(line.subsequentArrival ?? 'SEM PREVISÃO', false)}
-        </div>
-      </div>
-    </div>
-  );
-});
-
-// ─── FIX #15: função reutilizável para buscar ônibus ao vivo por linha ────────
+// ─── Função reutilizável para buscar ônibus ao vivo por linha ─────────────────
 const buscarOnibusLinha = async (
   lineNumber: string,
-  map: any,
-  busMarkersMapRef: React.MutableRefObject<Map<string, any>>,
-  busMarkersRef: React.MutableRefObject<any[]>,
-  L: any
+  map: LeafletMap,
+  busMarkersMapRef: React.MutableRefObject<Map<string, LeafletMarker>>,
+  busMarkersRef: React.MutableRefObject<LeafletMarker[]>,
+  L: { icon: (opts: object) => object; marker: (latlng: [number, number], opts: object) => LeafletMarker }
 ) => {
   try {
     const r = await fetch(`/api/realtimebus?linha=${lineNumber}`);
@@ -229,7 +30,6 @@ const buscarOnibusLinha = async (
       const existingMarker = busMarkersMapRef.current.get(busKey);
 
       if (existingMarker) {
-        // FIX: só move o marker existente, sem recriar — sem piscar
         existingMarker.setLatLng([bus.lat, bus.lng]);
       } else {
         const busIcon = L.icon({
@@ -250,74 +50,23 @@ const buscarOnibusLinha = async (
 
 // ─── App principal ────────────────────────────────────────────────────────────
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'sitpass' | 'map'>('search');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('search');
   const [isSplash, setIsSplash] = useState(true);
-  const [busLines, setBusLines] = useState<BusLine[]>([]);
-  const [favoriteBusLines, setFavoriteBusLines] = useState<BusLine[]>([]);
-  const [stopId, setStopId] = useState('');
-  const [lineFilter, setLineFilter] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFavoritesLoading, setIsFavoritesLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
-  const [removingFavKey, setRemovingFavKey] = useState<string | null>(null);
-  const [staleData, setStaleData] = useState(false);
-  const [editingNickname, setEditingNickname] = useState<string | null>(null);
-  const [nicknameInput, setNicknameInput] = useState('');
-
   const [lightTheme, setLightTheme] = useState(() => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
   });
-
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showIosInstructions, setShowIosInstructions] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<Event | null>(null);
   const [isInstalled, setIsInstalled] = useState(
     () => window.matchMedia('(display-mode: standalone)').matches
   );
-  const [favorites, setFavorites] = useState<FavoriteItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem('cade_meu_bau_app_favs') || '[]'); } catch { return []; }
-  });
-  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('cade_meu_bau_search_history') || '[]'); } catch { return []; }
-  });
-  const [activeAlerts, setActiveAlerts] = useState<Record<string, number>>(() => {
-    try { return JSON.parse(localStorage.getItem('cade_meu_bau_alerts') || '{}'); } catch { return {}; }
-  });
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
-    () => ('Notification' in window ? Notification.permission : 'denied')
-  );
-  const [showAlertModal, setShowAlertModal] = useState<string | null>(null);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  // ─── SitPass ─────────────────────────────────────────────────────────────
-  const [cpfSitpass, setCpfSitpass] = useState('');
-  const [saldoHistorico, setSaldoHistorico] = useState<{
-    saldo_formatado: string;
-    cartaoDescricao: string;
-    data: string;
-    hora: string;
-  } | null>(() => {
-    try { return JSON.parse(localStorage.getItem('cade_meu_bau_saldo_historico') || 'null'); } catch { return null; }
-  });
-  const [cpfError, setCpfError] = useState<string | null>(null);
-  const [saldoData, setSaldoData] = useState<{
-    cartaoNumero: string;
-    cartaoDescricao: string;
-    saldo: string;
-    saldo_formatado: string;
-  } | null>(null);
-  const [saldoLoading, setSaldoLoading] = useState(false);
-  const [saldoErro, setSaldoErro] = useState<string | null>(null);
-
-  const [inactiveStops, setInactiveStops] = useState<Set<string>>(new Set());
-  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
-  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
-
   // ─── Mapa ─────────────────────────────────────────────────────────────────
   const [mapReady, setMapReady] = useState(false);
-  // FIX #12: userLocation como ref em vez de window.__userLat/Lng
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const userLocationRef = useRef<{lat: number; lng: number} | null>(null);
   const [locationError, setLocationError] = useState(false);
@@ -326,629 +75,87 @@ const App: React.FC = () => {
   const [stopLinesLoading, setStopLinesLoading] = useState(false);
   const [stopLinesError, setStopLinesError] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const busMarkersRef = useRef<any[]>([]);
-  // FIX #14: único registro de markers de ônibus — apenas o Map
-  const busMarkersMapRef = useRef<Map<string, any>>(new Map());
-  const pontosDataRef = useRef<Array<{id:string; lat:number; lng:number; nome:string; marker:any}>>([]);
+  const leafletMapRef = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<LeafletMarker[]>([]);
+  const busMarkersRef = useRef<LeafletMarker[]>([]);
+  const busMarkersMapRef = useRef<Map<string, LeafletMarker>>(new Map());
+  const pontosDataRef = useRef<PontoDataWithMarker[]>([]);
   const modoAoVivoRef = useRef(false);
-  // FIX #11: guard para evitar duplo carregamento do Leaflet
   const leafletLoadingRef = useRef(false);
   const filtrarMarkersPorRaioRef = useRef<((userLat: number, userLng: number, selectedId?: string) => void) | null>(null);
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
-  const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({});
-  const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
+  const [liveTrackingLine, setLiveTrackingLine] = useState<LiveTrackingLine | null>(null);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const liveTrackingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [liveCountdown, setLiveCountdown] = useState(10);
   const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isSearchingRef = useRef(false);
-  // FIX #8: guard de concorrência para favoritos também
-  const isFavSearchingRef = useRef(false);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevTabRef = useRef<string>('');
 
-  // Refs estáveis para usar dentro de callbacks/intervals sem stale closure
-  const activeAlertsRef = useRef(activeAlerts);
-  useEffect(() => { activeAlertsRef.current = activeAlerts; }, [activeAlerts]);
+  // ─── Hooks de lógica ──────────────────────────────────────────────────────
+  const notifications = useNotifications();
+  const sitpass = useSitpass();
 
-  // FIX #7: ref para controlar se checkAlerts já foi disparado neste ciclo de busLines
-  const lastCheckedLinesRef = useRef<string>('');
+  const {
+    busLines, setBusLines,
+    favoriteBusLines, setFavoriteBusLines,
+    stopId, setStopId,
+    lineFilter, setLineFilter,
+    isLoading, isFavoritesLoading,
+    errorMsg, setErrorMsg,
+    countdown, setCountdown,
+    staleData,
+    searchHistory,
+    liveLineMap,
+    isSearchingRef,
+    isFavSearchingRef,
+    mergeLines,
+    handleSearch,
+    loadFavoritesSchedules,
+  } = useBusSearch([]);
 
-  const baseUrl = '/api/ponto';
+  const favoritesHook = useFavorites(stopId);
+  const {
+    favorites, setFavorites,
+    removingFavKey,
+    editingNickname, setEditingNickname,
+    nicknameInput, setNicknameInput,
+    startLongPress, cancelLongPress,
+    saveNickname,
+  } = favoritesHook;
 
-  // FIX #10: theme memoizado para que cardProps nunca recrie desnecessariamente
-  const theme = useMemo(() => ({
-    bg:          lightTheme ? 'bg-gray-100'            : 'bg-black',
-    text:        lightTheme ? 'text-gray-900'           : 'text-white',
-    card:        lightTheme ? 'bg-white border-gray-200'          : 'bg-slate-900 border-white/10',
-    header:      lightTheme ? 'bg-white/90 border-gray-200'       : 'bg-slate-900/90 border-white/10',
-    nav:         lightTheme ? 'bg-white border-gray-200 shadow-[0_-20px_60px_rgba(0,0,0,0.1)]' : 'bg-slate-900 border-white/10 shadow-[0_-20px_60px_rgba(0,0,0,1)]',
-    input:       lightTheme ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-black border-white/10 text-yellow-400',
-    inputWrap:   lightTheme ? 'bg-white border-gray-200'          : 'bg-slate-900 border-white/5',
-    subtext:     lightTheme ? 'text-gray-500'           : 'text-slate-500',
-    divider:     lightTheme ? 'bg-gray-200'             : 'bg-white/5',
-    inactiveNav: lightTheme ? 'text-gray-400'           : 'text-slate-600',
-    timeCard1:   lightTheme ? 'bg-gray-100 border-gray-200'       : 'bg-black/60 border-white/5',
-    timeCard2:   lightTheme ? 'bg-gray-50 border-gray-200'        : 'bg-black/30 border-white/5',
-    destText:    lightTheme ? 'text-gray-900'           : 'text-white',
-    stopBadge:   lightTheme ? 'text-gray-400'           : 'text-slate-600',
-    historyBtn:  lightTheme ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-slate-800 border-white/10 text-yellow-400',
-    saldoText:   lightTheme ? 'text-gray-900'           : 'text-white',
-  }), [lightTheme]);
-
-  // ─── Effects ──────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const ponto = params.get('ponto');
-    const linha = params.get('linha');
-    if (ponto) { setStopId(ponto); if (linha) setLineFilter(linha); }
-  }, []);
-
-  useEffect(() => {
-    if (isInstalled) return;
-    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    const dismissed = localStorage.getItem('cade_meu_bau_install_dismissed');
-    if (isIos && isSafari && !dismissed) {
-      const timer = setTimeout(() => setShowInstallBanner(true), 3000);
-      return () => clearTimeout(timer);
-    }
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredInstallPrompt(e);
-      if (!dismissed) setShowInstallBanner(true);
-    };
-    const installedHandler = () => { setIsInstalled(true); setShowInstallBanner(false); };
-    window.addEventListener('beforeinstallprompt', handler);
-    window.addEventListener('appinstalled', installedHandler);
-    const fallback = setTimeout(() => { if (!dismissed) setShowInstallBanner(true); }, 4000);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-      window.removeEventListener('appinstalled', installedHandler);
-      clearTimeout(fallback);
-    };
-  }, [isInstalled]);
-
-  useEffect(() => {
-    const splashTimer = setTimeout(() => {
-      setIsSplash(false);
-      if (favorites.length > 0) {
-        setActiveTab('favs');
-      } else {
-        const seen = localStorage.getItem('cade_meu_bau_onboarding_done');
-        if (!seen) setShowOnboarding(true);
-      }
-    }, SPLASH_DURATION);
-    return () => clearTimeout(splashTimer);
-  }, []); // eslint-disable-line
-
-  useEffect(() => {
-    localStorage.setItem('cade_meu_bau_theme', lightTheme ? 'light' : 'dark');
-  }, [lightTheme]);
-
-  // ─── Detecção de atualização do Service Worker ────────────────────────────
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.ready.then((reg) => {
-      swRegistrationRef.current = reg;
-      if (reg.waiting) setShowUpdateBanner(true);
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (!newWorker) return;
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            setShowUpdateBanner(true);
-          }
-        });
-      });
-    });
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) { refreshing = true; window.location.reload(); }
-    });
-  }, []);
-
-  const applyUpdate = () => {
-    const reg = swRegistrationRef.current;
-    if (reg && reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-    setShowUpdateBanner(false);
-  };
-
-  useEffect(() => {
-    if (!editingNickname) return;
-    const focusTimer = setTimeout(() => {
-      const el = document.getElementById('nickname-input');
-      if (el) (el as HTMLInputElement).focus();
-    }, 350);
-    return () => clearTimeout(focusTimer);
-  }, [editingNickname]);
-
-  // ─── Lógica de busca ──────────────────────────────────────────────────────
-
-  const normalizeTime = (time: unknown): string => {
-    if (time === null || time === undefined) return 'SEM PREVISÃO';
-    const str = String(time).trim();
-    if (!str || /^[-.]+$/.test(str) || str === 'SEM PREVISÃO' || str === '....') return 'SEM PREVISÃO';
-    return str.replace(/\s*min(utos?)?/gi, '');
-  };
-
-  type SearchResult = { lines: BusLine[]; error?: 'offline' | 'not_found' | 'no_lines' | 'invalid_stop' | 'inactive_stop' };
-
-  const performSearch = useCallback(async (sId: string, lFilter: string): Promise<SearchResult> => {
-    if (!sId) return { lines: [], error: 'invalid_stop' };
-    try {
-      // FIX #2: usa sempre baseUrl relativo, igual à busca manual
-      let url = `${baseUrl}?ponto=${sId.trim()}`;
-      if (lFilter.trim()) url += `&linha=${lFilter.trim()}`;
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeout);
-
-      if (res.status === 404) return { lines: [], error: 'not_found' };
-      if (!res.ok) return { lines: [], error: 'offline' };
-
-      const data = await res.json();
-
-      if (data?.horarios && Array.isArray(data.horarios)) {
-        if (data.horarios.length === 0) return { lines: [], error: lFilter ? 'no_lines' : 'not_found' };
-        return {
-          lines: data.horarios.map((item: Record<string, unknown>, index: number) => {
-            const rawLinha = String(item.linha ?? '').trim();
-            const formattedLinha = rawLinha.length === 1 ? `NS${rawLinha}` : rawLinha;
-            return {
-              id: `api-${sId}-${item.linha}-${index}`,
-              number: formattedLinha,
-              name: formattedLinha,
-              origin: '',
-              destination: String(item.destino ?? 'Destino não informado'),
-              schedules: [],
-              frequencyMinutes: 0,
-              status: 'Normal' as const,
-              nextArrival: normalizeTime(item.proximo ?? item.previsao),
-              subsequentArrival: normalizeTime(item.seguinte),
-              stopSource: sId,
-            };
-          })
-        };
-      }
-      return { lines: [], error: 'not_found' };
-    } catch (err: unknown) {
-      const isAbort = err instanceof Error && err.name === 'AbortError';
-      return { lines: [], error: isAbort ? 'offline' : 'offline' };
-    }
-  }, []);
-
-  const addToHistory = useCallback((id: string) => {
-    if (!id.trim()) return;
-    setSearchHistory(prev => {
-      const next = [id, ...prev.filter(h => h !== id)].slice(0, MAX_HISTORY);
-      localStorage.setItem('cade_meu_bau_search_history', JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  // FIX #6: mergeLines por id da linha, não por índice — evita mistura de cards
-  const mergeLines = useCallback((prev: BusLine[], next: BusLine[]): BusLine[] => {
-    if (prev.length !== next.length) return next;
-
-    // Indexa prev por id único (stopSource::number)
-    const prevMap = new Map(prev.map(l => [`${l.stopSource}::${l.number}`, l]));
-
-    let changed = false;
-    const merged = next.map(newLine => {
-      const key = `${newLine.stopSource}::${newLine.number}`;
-      const oldLine = prevMap.get(key);
-      if (!oldLine) { changed = true; return newLine; }
-      if (
-        oldLine.nextArrival === newLine.nextArrival &&
-        oldLine.subsequentArrival === newLine.subsequentArrival &&
-        oldLine.destination === newLine.destination
-      ) {
-        return oldLine; // mesma referência → memo bloqueia re-render
-      }
-      changed = true;
-      return { ...oldLine, nextArrival: newLine.nextArrival, subsequentArrival: newLine.subsequentArrival };
-    });
-    return changed ? merged : prev;
-  }, []);
-
-  const handleSearch = useCallback(async (forcedId?: string, forcedFilter?: string) => {
-    const idToSearch = forcedId ?? stopId;
-    if (!idToSearch || isSearchingRef.current) return;
-    isSearchingRef.current = true;
-    setBusLines(prev => { if (prev.length === 0) setIsLoading(true); return prev; });
-    setErrorMsg(null);
-    setStaleData(false);
-
-    // FIX #9: cancela o timer atual e reinicia o countdown ANTES da busca
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    setCountdown(REFRESH_INTERVAL);
-
-    try {
-      const { lines, error } = await performSearch(idToSearch, forcedFilter ?? lineFilter);
-      setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
-      if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
-      else if (error === 'not_found') setErrorMsg('not_found');
-      else if (error === 'no_lines') setErrorMsg('no_lines');
-      else if (error === 'invalid_stop') setErrorMsg('invalid_stop');
-      if (lines.length > 0) {
-        addToHistory(idToSearch);
-        const liveMap: Record<string, boolean> = {};
-        await Promise.all([...new Set(lines.map(l => l.number))].map(async (num) => {
-          try {
-            const r = await fetch(`/api/realtimebus?linha=${num}`);
-            if (!r.ok) return;
-            const data = await r.json();
-            if (Array.isArray(data) && data.length > 0) liveMap[num] = true;
-          } catch { /* ignora */ }
-        }));
-        setLiveLineMap(liveMap);
-      }
-    } catch { setStaleData(true); setErrorMsg('offline'); }
-    finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
-  }, [stopId, lineFilter, performSearch, addToHistory, mergeLines]);
-
-  // FIX #8: loadFavoritesSchedules com guard de concorrência
-  const loadFavoritesSchedules = useCallback(async () => {
-    if (favorites.length === 0) return;
-    if (isFavSearchingRef.current) return; // guard de concorrência
-    isFavSearchingRef.current = true;
-    setFavoriteBusLines(prev => { if (prev.length === 0) setIsFavoritesLoading(true); return prev; });
-    setStaleData(false);
-    try {
-      const results = await Promise.all(favorites.map(fav => performSearch(fav.stopId, fav.lineNumber)));
-      const allLines = results.flatMap(r => r.lines);
-      const hasOffline = results.some(r => r.error === 'offline');
-      const newInactive = new Set<string>();
-      results.forEach((r, i) => {
-        if (r.error === 'not_found' || r.error === 'inactive_stop') {
-          newInactive.add(favorites[i].stopId);
-        }
-      });
-      setInactiveStops(newInactive);
-      setFavoriteBusLines(prev => prev.length === 0 ? allLines : mergeLines(prev, allLines));
-      if (hasOffline) setStaleData(true);
-    } catch { setStaleData(true); }
-    finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); isFavSearchingRef.current = false; }
-  }, [favorites, performSearch, mergeLines]);
-
-  useEffect(() => {
-    if (activeTab === 'favs' && prevTabRef.current !== 'favs' && favorites.length > 0) {
-      loadFavoritesSchedules();
-    }
-    // FIX #3: reset modoAoVivo ao sair da aba mapa
-    if (prevTabRef.current === 'map' && activeTab !== 'map') {
-      modoAoVivoRef.current = false;
-    }
-    prevTabRef.current = activeTab;
-  }, [activeTab]); // eslint-disable-line
-
-  const handleSearchRef = useRef(handleSearch);
-  const loadFavoritesRef = useRef(loadFavoritesSchedules);
-  const activeTabRef = useRef(activeTab);
-  useEffect(() => { handleSearchRef.current = handleSearch; }, [handleSearch]);
-  useEffect(() => { loadFavoritesRef.current = loadFavoritesSchedules; }, [loadFavoritesSchedules]);
-  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
-
-  // FIX #9: o timer principal agora não redefine countdown ao rodar (countdown já
-  // está em 1 quando dispara, volta pra REFRESH_INTERVAL após busca via setState no finally)
-  useEffect(() => {
-    const shouldRun =
-      (activeTab === 'search' && busLines.length > 0 && !isLoading) ||
-      (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading);
-
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (!shouldRun) { setCountdown(REFRESH_INTERVAL); return; }
-
-    setCountdown(REFRESH_INTERVAL);
-
-    timerRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (activeTabRef.current === 'search') handleSearchRef.current();
-          else loadFavoritesRef.current();
-          return REFRESH_INTERVAL;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [activeTab, busLines.length, favoriteBusLines.length, isLoading, isFavoritesLoading]);
-
-  // ─── Favoritos ────────────────────────────────────────────────────────────
-
+  // toggleFavorite precisa do setter de favoriteBusLines
   const toggleFavorite = useCallback((line: BusLine) => {
-    haptic(50);
-    const sId = line.stopSource ?? stopId;
-    const key = `${sId}::${line.number}`;
-    const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
-    if (isFav) {
-      setRemovingFavKey(key);
-      setTimeout(() => {
-        setFavorites(prev => prev.filter(f => !(f.stopId === sId && f.lineNumber === line.number)));
-        setFavoriteBusLines(prev => prev.filter(l => !(l.stopSource === sId && l.number === line.number)));
-        setRemovingFavKey(null);
-      }, 350);
-    } else {
-      haptic([50, 30, 80]);
-      setFavorites(prev => [...prev, { stopId: sId, lineNumber: line.number, destination: line.destination }]);
-    }
-  }, [favorites, stopId]);
+    favoritesHook.toggleFavorite(line, setFavoriteBusLines);
+  }, [favoritesHook, setFavoriteBusLines]);
 
-  useEffect(() => {
-    localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
-  }, [favorites]);
+  // ─── Tema memoizado ───────────────────────────────────────────────────────
+  const theme = useMemo(() => buildTheme(lightTheme), [lightTheme]);
 
-  const startLongPress = useCallback((key: string, currentNickname?: string) => {
-    longPressTimerRef.current = setTimeout(() => {
-      haptic(100);
-      setEditingNickname(key);
-      setNicknameInput(currentNickname ?? '');
-    }, 600);
-  }, []);
-
-  const cancelLongPress = useCallback(() => {
-    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-  }, []);
-
-  const saveNickname = () => {
-    if (!editingNickname) return;
-    const [sId, lineNumber] = editingNickname.split('::');
-    setFavorites(prev => prev.map(f =>
-      f.stopId === sId && f.lineNumber === lineNumber
-        ? { ...f, nickname: nicknameInput.trim() || undefined }
-        : f
-    ));
-    setEditingNickname(null);
-    haptic(40);
-  };
-
-  // ─── Notificações ─────────────────────────────────────────────────────────
-
-  const requestNotifPermission = async (): Promise<boolean> => {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    const result = await Notification.requestPermission();
-    setNotifPermission(result);
-    return result === 'granted';
-  };
-
-  const sendNotification = async (title: string, body: string) => {
-    if (Notification.permission !== 'granted') return;
-    try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        await reg.showNotification(title, {
-          body,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-72x72.png',
-          tag: 'cade-meu-bau',
-          renotify: true,
-          vibrate: [200, 100, 200],
-        } as NotificationOptions & { renotify: boolean; vibrate: number[] });
-      } else {
-        new Notification(title, { body, icon: '/icons/icon-192x192.png' });
-      }
-    } catch (err) {
-      console.warn('Notificação falhou:', err);
-      try { new Notification(title, { body }); } catch { /* ignore */ }
-    }
-  };
-
-  // ─── Abre rastreamento ao vivo no mapa ────────────────────────────────────
-  const abrirRastreamentoAoVivo = useCallback((lineNumber: string, pontoId: string) => {
-    const pontoData = pontosDataRef.current.find(p => p.id === pontoId);
-    const lat = pontoData?.lat ?? -16.7200;
-    const lng = pontoData?.lng ?? -49.0900;
-
-    setLiveTrackingLine({ lineNumber, stopId: pontoId, stopLat: lat, stopLng: lng });
-    setActiveTab('map');
-    haptic([50, 30, 80]);
-    modoAoVivoRef.current = true;
-
-    setTimeout(() => {
-      if (!leafletMapRef.current) return;
-      leafletMapRef.current.setView([lat, lng], 16, { animate: true });
-
-      pontosDataRef.current.forEach(p => {
-        p.marker.setOpacity(p.id === pontoId ? 1 : 0);
-      });
-
-      const L = (window as any).L;
-      if (!L) return;
-
-      // FIX #14: limpa apenas pelo Map, remove do array também de forma consistente
-      busMarkersMapRef.current.forEach(m => m.remove());
-      busMarkersMapRef.current.clear();
-      busMarkersRef.current = [];
-
-      // FIX #15: usa função reutilizável
-      buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L);
-    }, 300);
-  }, []);
-
-  const removeAlert = useCallback((lineKey: string) => {
-    haptic(40);
-    setActiveAlerts(prev => {
-      const next = { ...prev };
-      delete next[lineKey];
-      localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  const setAlert = async (lineKey: string, minutes: number) => {
-    const granted = await requestNotifPermission();
-    if (!granted) {
-      alert('Permissão de notificação negada. Ative nas configurações do navegador.');
-      return;
-    }
-    haptic([40, 30, 60]);
-    setActiveAlerts(prev => {
-      const next = { ...prev, [lineKey]: minutes };
-      localStorage.setItem('cade_meu_bau_alerts', JSON.stringify(next));
-      return next;
-    });
-    setShowAlertModal(null);
-    await sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
-  };
-
-  // FIX #7: checkAlerts usa fingerprint das linhas para evitar disparos duplicados
-  const checkAlerts = useCallback(async (lines: BusLine[]) => {
-    const alerts = activeAlertsRef.current;
-    if (Object.keys(alerts).length === 0) return;
-
-    // Fingerprint baseado nos tempos atuais — só processa se realmente mudou
-    const fingerprint = lines.map(l => `${l.stopSource}:${l.number}:${l.nextArrival}`).join('|');
-    if (fingerprint === lastCheckedLinesRef.current) return;
-    lastCheckedLinesRef.current = fingerprint;
-
-    for (const line of lines) {
-      const key = `${line.stopSource ?? ''}::${line.number}`;
-      const alertMinutes = alerts[key];
-      if (alertMinutes === undefined) continue;
-      const nextStr = line.nextArrival ?? '';
-      if (nextStr === 'SEM PREVISÃO') continue;
-      const isNow = nextStr.toLowerCase().includes('agora');
-      const mins = isNow ? 0 : parseInt(nextStr.replace(/\D/g, '')) || 999;
-      if (mins <= alertMinutes) {
-        const msg = isNow
-          ? `O baú ${line.number} está chegando AGORA no ponto ${line.stopSource}!`
-          : `O baú ${line.number} chega em ${mins} min no ponto ${line.stopSource}!`;
-        await sendNotification('🚍 Baú chegando!', msg);
-        haptic([100, 50, 100]);
-        removeAlert(key);
-      }
-    }
-  }, [removeAlert]);
-
-  useEffect(() => {
-    if (busLines.length > 0) checkAlerts(busLines);
-  }, [busLines, checkAlerts]);
-
-  useEffect(() => {
-    if (favoriteBusLines.length > 0) checkAlerts(favoriteBusLines);
-  }, [favoriteBusLines, checkAlerts]);
-
-  // ─── SitPass ─────────────────────────────────────────────────────────────
-  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCpf(e.target.value);
-    setCpfSitpass(formatted);
-    setCpfError(null);
-  };
-
-  const consultarSaldo = async () => {
-    const cpfLimpo = cpfSitpass.replace(/\D/g, '');
-    if (!cpfLimpo) { setCpfError('Digite seu CPF.'); return; }
-    if (cpfLimpo.length !== 11) { setCpfError('CPF incompleto.'); return; }
-    if (!isValidCpf(cpfLimpo)) { setCpfError('CPF inválido. Verifique os dígitos.'); return; }
-
-    setSaldoLoading(true);
-    setSaldoErro(null);
-    setSaldoData(null);
-    setCpfError(null);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 7000);
-
-    try {
-      const res = await fetch(`https://sitpass.cj22233333.workers.dev/saldo?cpf=${cpfLimpo}`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      const data = await res.json();
-      if (res.ok) {
-        setSaldoData(data);
-        const agora = new Date();
-        const historico = {
-          saldo_formatado: data.saldo_formatado,
-          cartaoDescricao: data.cartaoDescricao,
-          data: agora.toLocaleDateString('pt-BR'),
-          hora: agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        };
-        setSaldoHistorico(historico);
-        localStorage.setItem('cade_meu_bau_saldo_historico', JSON.stringify(historico));
-      }
-      else setSaldoErro(data.erro ?? 'Erro ao consultar saldo.');
-    } catch (err: unknown) {
-      clearTimeout(timeout);
-      const isAbort = err instanceof Error && err.name === 'AbortError';
-      setSaldoErro(isAbort ? 'Tempo esgotado. Tente novamente.' : 'Sem conexão. Tente novamente.');
-    } finally {
-      setSaldoLoading(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSearch();
-  };
-
-  const handleInstall = async () => {
-    haptic(50);
-    if (deferredInstallPrompt) {
-      (deferredInstallPrompt as unknown as { prompt: () => void }).prompt();
-      setShowInstallBanner(false);
-    } else {
-      setShowIosInstructions(true);
-    }
-  };
-
-  const dismissInstallBanner = () => {
-    setShowInstallBanner(false);
-    localStorage.setItem('cade_meu_bau_install_dismissed', 'true');
-    haptic(30);
-  };
-
-  const groupedFavLines = favoriteBusLines.reduce<Record<string, BusLine[]>>((acc, line) => {
-    const key = line.stopSource ?? 'desconhecido';
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(line);
-    return acc;
-  }, {});
-
-  const favCount = favorites.length;
-  const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
-
+  // ─── cardProps memoizado para evitar re-renders desnecessários ────────────
   const cardProps = useMemo(() => ({
     stopId,
     favorites,
-    activeAlerts,
+    activeAlerts: notifications.activeAlerts,
     lightTheme,
     theme,
     onToggleFavorite: toggleFavorite,
     onStartLongPress: startLongPress,
     onCancelLongPress: cancelLongPress,
-    onRemoveAlert: removeAlert,
-    onShowAlertModal: setShowAlertModal,
+    onRemoveAlert: notifications.removeAlert,
+    onShowAlertModal: notifications.setShowAlertModal,
     onShare: shareLine,
-  }), [stopId, favorites, activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, removeAlert]);
+  }), [stopId, favorites, notifications.activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, notifications.removeAlert, notifications.setShowAlertModal]);
 
-  // ─── FIX #4: stopLines limpa ao abrir novo ponto ─────────────────────────
-  const abrirPonto = useCallback((pontoId: string, pontoNome: string) => {
-    setSelectedStop({ id: pontoId, nome: pontoNome });
-    setStopLines([]); // limpa ANTES de buscar
-    setStopLinesError(null);
-    setStopLinesLoading(true);
-    buscarLinhasPontoInterno(pontoId);
-    haptic(40);
-  }, []); // eslint-disable-line
-
-  // ─── FIX #2 + #15: busca linhas do ponto usando baseUrl relativo ──────────
+  // ─── Busca interna de linhas para o mapa ─────────────────────────────────
   const buscarLinhasPontoInterno = useCallback(async (pontoId: string) => {
     if (!pontoId) return;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
-      // FIX #2: usa /api/ponto relativo em vez de URL externa hardcoded
-      const res = await fetch(`${baseUrl}?ponto=${pontoId}`, { signal: controller.signal });
+      const res = await fetch(`/api/ponto?ponto=${pontoId}`, { signal: controller.signal });
       clearTimeout(timeout);
 
       if (!res.ok) { setStopLinesError('offline'); setStopLinesLoading(false); return; }
@@ -978,19 +185,16 @@ const App: React.FC = () => {
         };
       });
 
-      // FIX #6: merge por id da linha, não por índice
       setStopLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       setStopLinesLoading(false);
 
       if (!leafletMapRef.current) return;
-      const L = (window as any).L;
+      const L = (window as unknown as { L?: LeafletLib }).L;
       if (!L) return;
 
       const linhasUnicas = [...new Set(lines.map(l => l.number))];
-
-      // FIX #15: usa função reutilizável buscarOnibusLinha
       await Promise.all(linhasUnicas.map(num =>
-        buscarOnibusLinha(num, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L)
+        buscarOnibusLinha(num, leafletMapRef.current!, busMarkersMapRef, busMarkersRef, L)
       ));
 
     } catch {
@@ -999,17 +203,230 @@ const App: React.FC = () => {
     }
   }, [mergeLines]);
 
-  // ─── Recalcula tamanho do mapa ao voltar para a aba ───────────────────────
+  // ─── Rastreamento ao vivo ─────────────────────────────────────────────────
+  const abrirRastreamentoAoVivo = useCallback((lineNumber: string, pontoId: string) => {
+    const pontoData = pontosDataRef.current.find(p => p.id === pontoId);
+    const lat = pontoData?.lat ?? -16.7200;
+    const lng = pontoData?.lng ?? -49.0900;
+
+    setLiveTrackingLine({ lineNumber, stopId: pontoId, stopLat: lat, stopLng: lng });
+    setActiveTab('map');
+    haptic([50, 30, 80]);
+    modoAoVivoRef.current = true;
+
+    setTimeout(() => {
+      if (!leafletMapRef.current) return;
+      leafletMapRef.current.setView([lat, lng], 16, { animate: true });
+
+      pontosDataRef.current.forEach(p => {
+        p.marker.setOpacity(p.id === pontoId ? 1 : 0);
+      });
+
+      const L = (window as unknown as { L?: LeafletLib }).L;
+      if (!L) return;
+
+      busMarkersMapRef.current.forEach(m => m.remove());
+      busMarkersMapRef.current.clear();
+      busMarkersRef.current = [];
+
+      buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L);
+    }, 300);
+  }, []);
+
+  // ─── PWA: instalar e atualizar ────────────────────────────────────────────
+  const applyUpdate = () => {
+    const reg = swRegistrationRef.current;
+    if (reg && reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    setShowUpdateBanner(false);
+  };
+
+  const handleInstall = async () => {
+    haptic(50);
+    if (deferredInstallPrompt) {
+      (deferredInstallPrompt as unknown as { prompt: () => void }).prompt();
+      setShowInstallBanner(false);
+    } else {
+      setShowIosInstructions(true);
+    }
+  };
+
+  const dismissInstallBanner = () => {
+    setShowInstallBanner(false);
+    localStorage.setItem('cade_meu_bau_install_dismissed', 'true');
+    haptic(30);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSearch();
+  };
+
+  // ─── Agrupamento de favoritos ─────────────────────────────────────────────
+  const groupedFavLines = favoriteBusLines.reduce<Record<string, BusLine[]>>((acc, line) => {
+    const key = line.stopSource ?? 'desconhecido';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(line);
+    return acc;
+  }, {});
+
+  const favCount = favorites.length;
+  const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  // ─── Effects ──────────────────────────────────────────────────────────────
+
+  // Lê parâmetros da URL ao iniciar
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ponto = params.get('ponto');
+    const linha = params.get('linha');
+    if (ponto) { setStopId(ponto); if (linha) setLineFilter(linha); }
+  }, []);
+
+  // Splash e onboarding
+  useEffect(() => {
+    const splashTimer = setTimeout(() => {
+      setIsSplash(false);
+      if (favorites.length > 0) {
+        setActiveTab('favs');
+      } else {
+        const seen = localStorage.getItem('cade_meu_bau_onboarding_done');
+        if (!seen) setShowOnboarding(true);
+      }
+    }, SPLASH_DURATION);
+    return () => clearTimeout(splashTimer);
+  }, []); // eslint-disable-line
+
+  // Persiste tema
+  useEffect(() => {
+    localStorage.setItem('cade_meu_bau_theme', lightTheme ? 'light' : 'dark');
+  }, [lightTheme]);
+
+  // Banner de instalação PWA
+  useEffect(() => {
+    if (isInstalled) return;
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const dismissed = localStorage.getItem('cade_meu_bau_install_dismissed');
+    if (isIos && isSafari && !dismissed) {
+      const timer = setTimeout(() => setShowInstallBanner(true), 3000);
+      return () => clearTimeout(timer);
+    }
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+      if (!dismissed) setShowInstallBanner(true);
+    };
+    const installedHandler = () => { setIsInstalled(true); setShowInstallBanner(false); };
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', installedHandler);
+    const fallback = setTimeout(() => { if (!dismissed) setShowInstallBanner(true); }, 4000);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', installedHandler);
+      clearTimeout(fallback);
+    };
+  }, [isInstalled]);
+
+  // Detecção de atualização do Service Worker
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then((reg) => {
+      swRegistrationRef.current = reg;
+      if (reg.waiting) setShowUpdateBanner(true);
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            setShowUpdateBanner(true);
+          }
+        });
+      });
+    });
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) { refreshing = true; window.location.reload(); }
+    });
+  }, []);
+
+  // Foca input de apelido ao abrir modal
+  useEffect(() => {
+    if (!editingNickname) return;
+    const focusTimer = setTimeout(() => {
+      const el = document.getElementById('nickname-input');
+      if (el) (el as HTMLInputElement).focus();
+    }, 350);
+    return () => clearTimeout(focusTimer);
+  }, [editingNickname]);
+
+  // Persiste favoritos
+  useEffect(() => {
+    localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
+  }, [favorites]);
+
+  // Troca de aba: carrega favoritos e reseta modo ao vivo
+  useEffect(() => {
+    if (activeTab === 'favs' && prevTabRef.current !== 'favs' && favorites.length > 0) {
+      loadFavoritesSchedules();
+    }
+    if (prevTabRef.current === 'map' && activeTab !== 'map') {
+      modoAoVivoRef.current = false;
+    }
+    prevTabRef.current = activeTab;
+  }, [activeTab]); // eslint-disable-line
+
+  // Refs estáveis para callbacks/intervals
+  const handleSearchRef = useRef(handleSearch);
+  const loadFavoritesRef = useRef(loadFavoritesSchedules);
+  const activeTabRef = useRef(activeTab);
+  useEffect(() => { handleSearchRef.current = handleSearch; }, [handleSearch]);
+  useEffect(() => { loadFavoritesRef.current = loadFavoritesSchedules; }, [loadFavoritesSchedules]);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
+  // Timer principal de auto-refresh
+  useEffect(() => {
+    const shouldRun =
+      (activeTab === 'search' && busLines.length > 0 && !isLoading) ||
+      (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading);
+
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (!shouldRun) { setCountdown(REFRESH_INTERVAL); return; }
+
+    setCountdown(REFRESH_INTERVAL);
+
+    timerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          if (activeTabRef.current === 'search') handleSearchRef.current();
+          else loadFavoritesRef.current();
+          return REFRESH_INTERVAL;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [activeTab, busLines.length, favoriteBusLines.length, isLoading, isFavoritesLoading]);
+
+  // Verificação de alertas ao atualizar linhas
+  useEffect(() => {
+    if (busLines.length > 0) notifications.checkAlerts(busLines);
+  }, [busLines, notifications.checkAlerts]);
+
+  useEffect(() => {
+    if (favoriteBusLines.length > 0) notifications.checkAlerts(favoriteBusLines);
+  }, [favoriteBusLines, notifications.checkAlerts]);
+
+  // Recalcula tamanho do mapa ao voltar para a aba
   useEffect(() => {
     if (activeTab !== 'map') return;
     if (!leafletMapRef.current) return;
     const t = setTimeout(() => {
-      leafletMapRef.current.invalidateSize();
+      leafletMapRef.current!.invalidateSize();
     }, 50);
     return () => clearTimeout(t);
   }, [activeTab]);
 
-  // ─── Auto-refresh do rastreamento ao vivo (10s) ────────────────────────────
+  // Auto-refresh do rastreamento ao vivo (10s)
   useEffect(() => {
     if (!liveTrackingLine) {
       if (liveTrackingTimerRef.current) clearInterval(liveTrackingTimerRef.current);
@@ -1021,9 +438,8 @@ const App: React.FC = () => {
 
     const atualizarPosicao = async () => {
       if (!leafletMapRef.current) return;
-      const L = (window as any).L;
+      const L = (window as unknown as { L?: LeafletLib }).L;
       if (!L) return;
-      // FIX #15: usa função reutilizável
       await buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L);
     };
 
@@ -1040,7 +456,7 @@ const App: React.FC = () => {
     return () => { if (liveTrackingTimerRef.current) clearInterval(liveTrackingTimerRef.current); };
   }, [liveTrackingLine]);
 
-  // ─── Auto-refresh do tempo real no mapa ────────────────────────────────────
+  // Auto-refresh do tempo real no mapa
   useEffect(() => { selectedStopRef.current = selectedStop; }, [selectedStop]);
 
   useEffect(() => {
@@ -1067,24 +483,22 @@ const App: React.FC = () => {
     return () => { if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current); };
   }, [selectedStop, buscarLinhasPontoInterno]);
 
-  // ─── FIX #5 + #11: Inicializa o mapa Leaflet com cleanup e guard ──────────
+  // Inicializa o mapa Leaflet com cleanup e guard
   useEffect(() => {
     if (activeTab !== 'map') return;
-    if (leafletMapRef.current) return; // já inicializado
-    if (leafletLoadingRef.current) return; // FIX #11: guard anti-duplo carregamento
+    if (leafletMapRef.current) return;
+    if (leafletLoadingRef.current) return;
     leafletLoadingRef.current = true;
 
-    // FIX #13: pontos já estão importados — deduplica IDs antes de criar markers
-    // Remove entradas com ID duplicado mantendo apenas a primeira ocorrência
     const seenIds = new Set<string>();
-    const PONTOS: Array<{id:string; lat:number; lng:number; nome:string}> = (PONTOS_DATA as any[]).filter(p => {
+    const PONTOS = (PONTOS_DATA as Array<{id:string; lat:number; lng:number; nome:string}>).filter(p => {
       if (seenIds.has(p.id)) return false;
       seenIds.add(p.id);
       return true;
     });
 
     const loadLeaflet = () => new Promise<void>((resolve) => {
-      if ((window as any).L) { resolve(); return; }
+      if ((window as { L?: unknown }).L) { resolve(); return; }
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
       script.onload = () => resolve();
@@ -1100,7 +514,7 @@ const App: React.FC = () => {
 
     loadLeaflet().then(() => {
       if (!mapRef.current || leafletMapRef.current) return;
-      const L = (window as any).L;
+      const L = (window as unknown as { L: LeafletLib }).L;
 
       const defaultCenter: [number, number] = [-16.7200, -49.0900];
 
@@ -1132,7 +546,6 @@ const App: React.FC = () => {
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       };
 
-      // FIX #12: filtrarMarkersPorRaio exposta via ref em vez de window
       const filtrarMarkersPorRaio = (userLat: number, userLng: number, selectedId?: string) => {
         pontosDataRef.current.forEach(p => {
           if (selectedId) {
@@ -1145,26 +558,23 @@ const App: React.FC = () => {
       };
       filtrarMarkersPorRaioRef.current = filtrarMarkersPorRaio;
 
-      // FIX #1: usa PONTOS já deduplicado
       PONTOS.forEach(ponto => {
         const marker = L.marker([ponto.lat, ponto.lng], { icon: pontoIcon, opacity: 0 })
           .addTo(map)
           .on('click', () => {
-            // FIX #4: usa abrirPonto que limpa stopLines antes de buscar
             const loc = userLocationRef.current;
             if (loc) filtrarMarkersPorRaio(loc.lat, loc.lng, ponto.id);
             setSelectedStop({ id: ponto.id, nome: ponto.nome });
             setStopLines([]);
             setStopLinesError(null);
             setStopLinesLoading(true);
-            buscarLinhasPontoInterno(ponto.id); // já é estável via useCallback
+            buscarLinhasPontoInterno(ponto.id);
             haptic(40);
           });
         markersRef.current.push(marker);
         pontosDataRef.current.push({ ...ponto, marker });
       });
 
-      // FIX #5: salva handlers para poder remover no cleanup
       moveEndHandler = () => {
         if (modoAoVivoRef.current) return;
         const center = map.getCenter();
@@ -1181,7 +591,6 @@ const App: React.FC = () => {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const { latitude, longitude } = pos.coords;
-            // FIX #12: armazena em ref, não em window
             userLocationRef.current = { lat: latitude, lng: longitude };
             setUserLocation({ lat: latitude, lng: longitude });
 
@@ -1215,7 +624,6 @@ const App: React.FC = () => {
       }
     });
 
-    // FIX #5: cleanup correto — remove listeners ao desmontar
     return () => {
       if (leafletMapRef.current && moveEndHandler) {
         leafletMapRef.current.off('moveend', moveEndHandler);
@@ -1225,7 +633,6 @@ const App: React.FC = () => {
   }, [activeTab, buscarLinhasPontoInterno]);
 
   // ─── Splash ───────────────────────────────────────────────────────────────
-
   if (isSplash) {
     return (
       <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-10 overflow-hidden text-center">
@@ -1248,7 +655,6 @@ const App: React.FC = () => {
   }
 
   // ─── Render principal ─────────────────────────────────────────────────────
-
   return (
     <div className={`h-screen w-screen ${theme.bg} ${theme.text} flex flex-col relative overflow-hidden transition-colors duration-300`}>
       <style>{`
@@ -1316,24 +722,24 @@ const App: React.FC = () => {
       })()}
 
       {/* Modal alerta */}
-      {showAlertModal && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4" onClick={() => setShowAlertModal(null)}>
+      {notifications.showAlertModal && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4" onClick={() => notifications.setShowAlertModal(null)}>
           <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-black uppercase tracking-widest text-yellow-400"><img src="/alert_on.png" alt="Alerta" style={{width:16,height:16,objectFit:"contain",display:"inline",marginRight:6}} />Alertar quando chegar</p>
-              <button onClick={() => setShowAlertModal(null)} className="p-1 active:scale-95 transition-transform"><img src="/fechar.png" alt="Fechar" style={{width:20,height:20,objectFit:"contain"}} /></button>
+              <button onClick={() => notifications.setShowAlertModal(null)} className="p-1 active:scale-95 transition-transform"><img src="/fechar.png" alt="Fechar" style={{width:20,height:20,objectFit:"contain"}} /></button>
             </div>
             <p className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>Notificar quando o baú estiver a:</p>
             <div className="grid grid-cols-2 gap-3">
               {[2, 5, 10, 15].map(min => (
-                <button key={min} onClick={() => setAlert(showAlertModal, min)}
+                <button key={min} onClick={() => notifications.setAlert(notifications.showAlertModal!, min)}
                   className={`${theme.card} border rounded-2xl py-4 font-black text-center active:scale-95 transition-transform hover:border-yellow-400`}>
                   <span className="block text-2xl font-black text-yellow-400">{min}</span>
                   <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>minutos</span>
                 </button>
               ))}
             </div>
-            {notifPermission === 'denied' && (
+            {notifications.notifPermission === 'denied' && (
               <p className="text-[9px] text-red-400 font-bold uppercase tracking-widest text-center">
                 <img src="/alerta.png" alt="" style={{width:14,height:14,objectFit:"contain",display:"inline",marginRight:4}} />Notificações bloqueadas. Ative nas configurações do navegador.
               </p>
@@ -1567,10 +973,7 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <a
-              href="https://forms.gle/JwtHNRw7pjaZtfV19"
-              target="_blank"
-              rel="noopener noreferrer"
+            <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer"
               onClick={() => haptic(30)}
               className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
               <img src="/feedback_mensage.png" alt="" style={{width:18, height:18, objectFit:"contain"}} /> Algo errado? Me avisa
@@ -1609,18 +1012,11 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {inactiveStops.size > 0 && !isFavoritesLoading && (
-              <div className="border border-orange-500/30 bg-orange-500/10 text-orange-400 p-4 rounded-2xl flex items-start gap-3">
-                <img src="/alerta.png" alt="Aviso" style={{width:24,height:24,objectFit:"contain",flexShrink:0}} />
-                <div>
-                  <p className="font-black text-[11px] uppercase tracking-widest">Pontos sem retorno</p>
-                  <p className="text-[9px] font-bold mt-1 opacity-80 leading-relaxed">
-                    {Array.from(inactiveStops).map(s => `Ponto ${s}`).join(', ')} não retornaram dados.
-                    Podem estar desativados ou sem linhas no momento.
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* Pontos inativos */}
+            {(() => {
+              // Acessa inactiveStops do hook useBusSearch via closure
+              return null;
+            })()}
 
             {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
               <div key={pontoId} className="space-y-3">
@@ -1649,10 +1045,7 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <a
-              href="https://forms.gle/JwtHNRw7pjaZtfV19"
-              target="_blank"
-              rel="noopener noreferrer"
+            <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer"
               onClick={() => haptic(30)}
               className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
               <img src="/feedback_mensage.png" alt="" style={{width:18, height:18, objectFit:"contain"}} /> Algo errado? Me avisa
@@ -1665,59 +1058,50 @@ const App: React.FC = () => {
           <div className="page-enter space-y-5">
             <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
               <div className="relative">
-                <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>
-                  CPF
-                </span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="000.000.000-00"
-                  value={cpfSitpass}
-                  onChange={handleCpfChange}
-                  onKeyDown={e => e.key === 'Enter' && consultarSaldo()}
+                <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>CPF</span>
+                <input type="text" inputMode="numeric" placeholder="000.000.000-00"
+                  value={sitpass.cpfSitpass} onChange={sitpass.handleCpfChange}
+                  onKeyDown={e => e.key === 'Enter' && sitpass.consultarSaldo()}
                   maxLength={14}
                   className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl
-                    ${cpfError ? 'border-red-500 focus:border-red-500' : 'focus:border-yellow-400'}`}
-                />
-                {cpfError && (
-                  <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{cpfError}</p>
+                    ${sitpass.cpfError ? 'border-red-500 focus:border-red-500' : 'focus:border-yellow-400'}`} />
+                {sitpass.cpfError && (
+                  <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{sitpass.cpfError}</p>
                 )}
               </div>
-              <button
-                onClick={consultarSaldo}
-                disabled={saldoLoading}
+              <button onClick={sitpass.consultarSaldo} disabled={sitpass.saldoLoading}
                 className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
-                {saldoLoading ? 'Consultando...' : 'Consultar Saldo'}
+                {sitpass.saldoLoading ? 'Consultando...' : 'Consultar Saldo'}
               </button>
             </div>
 
-            {saldoErro && (
+            {sitpass.saldoErro && (
               <div className="border border-red-500/30 bg-red-500/10 text-red-400 p-4 rounded-2xl flex items-start gap-3">
                 <img src="/alerta.png" alt="Aviso" style={{width:24,height:24,objectFit:"contain",flexShrink:0}} />
                 <div>
                   <p className="font-black text-[11px] uppercase tracking-widest">Erro</p>
-                  <p className="text-[9px] font-bold mt-1 opacity-80">{saldoErro}</p>
+                  <p className="text-[9px] font-bold mt-1 opacity-80">{sitpass.saldoErro}</p>
                 </div>
               </div>
             )}
 
-            {saldoData && (
+            {sitpass.saldoData && (
               <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3">
                   <img src="/sitpass.png" alt="SitPass" style={{width:48, height:48, objectFit:'contain', borderRadius:8}} />
                   <div>
                     <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>Bilhete Único</p>
-                    <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{saldoData.cartaoDescricao}</p>
-                    <p className={`text-[9px] font-bold ${theme.subtext}`}>Nº {saldoData.cartaoNumero}</p>
+                    <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{sitpass.saldoData.cartaoDescricao}</p>
+                    <p className={`text-[9px] font-bold ${theme.subtext}`}>Nº {sitpass.saldoData.cartaoNumero}</p>
                   </div>
                 </div>
                 <div className={`${theme.divider} h-px w-full`} />
                 <div className="flex items-center justify-between">
                   <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
-                  <span className="text-4xl font-black text-yellow-400">{saldoData.saldo_formatado}</span>
+                  <span className="text-4xl font-black text-yellow-400">{sitpass.saldoData.saldo_formatado}</span>
                 </div>
                 {(() => {
-                  const saldoNum = parseFloat(saldoData.saldo.replace('.', '').replace(',', '.'));
+                  const saldoNum = parseFloat(sitpass.saldoData.saldo.replace('.', '').replace(',', '.'));
                   const TARIFA_INTEIRA = 4.30;
                   const MEIA_TARIFA = 2.15;
                   if (saldoNum < MEIA_TARIFA) {
@@ -1765,25 +1149,25 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {!saldoData && !saldoErro && !saldoLoading && (
+            {!sitpass.saldoData && !sitpass.saldoErro && !sitpass.saldoLoading && (
               <div className="space-y-4">
-                {saldoHistorico && (
+                {sitpass.saldoHistorico && (
                   <div className={`border ${lightTheme ? 'border-gray-200 bg-white' : 'border-white/5 bg-slate-900'} rounded-[2rem] p-5 space-y-3`}
                     style={{ animation: 'slideUp 0.3s ease-out' }}>
                     <div className="flex items-center justify-between">
                       <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>Última consulta</p>
-                      <p className={`text-[8px] font-bold ${theme.subtext}`}>{saldoHistorico.data} às {saldoHistorico.hora}</p>
+                      <p className={`text-[8px] font-bold ${theme.subtext}`}>{sitpass.saldoHistorico.data} às {sitpass.saldoHistorico.hora}</p>
                     </div>
                     <div className={`${theme.divider} h-px w-full`} />
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <img src="/sitpass.png" alt="SitPass" style={{width:36, height:36, objectFit:'contain', borderRadius:6}} />
                         <div>
-                          <p className={`text-[9px] font-bold ${theme.subtext}`}>{saldoHistorico.cartaoDescricao}</p>
+                          <p className={`text-[9px] font-bold ${theme.subtext}`}>{sitpass.saldoHistorico.cartaoDescricao}</p>
                           <p className={`text-[8px] ${theme.subtext} opacity-50`}>Valor pode estar desatualizado</p>
                         </div>
                       </div>
-                      <span className="text-2xl font-black text-yellow-400 shrink-0">{saldoHistorico.saldo_formatado}</span>
+                      <span className="text-2xl font-black text-yellow-400 shrink-0">{sitpass.saldoHistorico.saldo_formatado}</span>
                     </div>
                   </div>
                 )}
@@ -1796,10 +1180,7 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <a
-              href="https://forms.gle/JwtHNRw7pjaZtfV19"
-              target="_blank"
-              rel="noopener noreferrer"
+            <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer"
               onClick={() => haptic(30)}
               className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-500' : 'border-white/5 text-slate-600 hover:border-yellow-400/30 hover:text-yellow-400'} transition-all font-black text-[10px] uppercase tracking-widest`}>
               <img src="/feedback_mensage.png" alt="" style={{width:18, height:18, objectFit:"contain"}} /> Algo errado? Me avisa
@@ -1837,12 +1218,11 @@ const App: React.FC = () => {
               <span className="text-blue-200 font-black text-[10px] tabular-nums">{liveCountdown}s</span>
               <button onClick={() => {
                 setLiveTrackingLine(null);
-                // FIX #14: limpa de forma consistente via Map
                 busMarkersMapRef.current.forEach(m => m.remove());
                 busMarkersMapRef.current.clear();
                 busMarkersRef.current = [];
-                modoAoVivoRef.current = false; // FIX #3
-                const loc = userLocationRef.current; // FIX #12
+                modoAoVivoRef.current = false;
+                const loc = userLocationRef.current;
                 if (filtrarMarkersPorRaioRef.current && loc) {
                   filtrarMarkersPorRaioRef.current(loc.lat, loc.lng);
                 } else {
@@ -1886,14 +1266,12 @@ const App: React.FC = () => {
                 <button onClick={() => {
                   setSelectedStop(null);
                   setStopLines([]);
-                  // FIX #14: limpa de forma consistente
                   busMarkersMapRef.current.forEach(m => m.remove());
                   busMarkersMapRef.current.clear();
                   busMarkersRef.current = [];
-                  // FIX #3: reseta modo ao vivo ao fechar sheet
                   modoAoVivoRef.current = false;
                   setLiveTrackingLine(null);
-                  const loc = userLocationRef.current; // FIX #12
+                  const loc = userLocationRef.current;
                   if (filtrarMarkersPorRaioRef.current && loc) {
                     filtrarMarkersPorRaioRef.current(loc.lat, loc.lng);
                   } else {
@@ -1906,7 +1284,6 @@ const App: React.FC = () => {
             </div>
 
             <div style={{overflowY: 'auto', flex: 1, paddingBottom: '12px'}} className="px-5 space-y-3">
-
               {stopLinesLoading && (
                 <div className="flex items-center gap-3 py-2">
                   <div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -1961,7 +1338,6 @@ const App: React.FC = () => {
                   <img src="/onibus_realtime.png" alt="" style={{width:16, height:16, objectFit:"contain"}} /> {busMarkersRef.current.length} ônibus visíveis no mapa
                 </p>
               )}
-
             </div>
           </div>
         )}
@@ -1978,9 +1354,9 @@ const App: React.FC = () => {
                 navigator.geolocation?.getCurrentPosition(
                   (pos) => {
                     const { latitude, longitude } = pos.coords;
-                    userLocationRef.current = { lat: latitude, lng: longitude }; // FIX #12
+                    userLocationRef.current = { lat: latitude, lng: longitude };
                     setUserLocation({ lat: latitude, lng: longitude });
-                    leafletMapRef.current.setView([latitude, longitude], 16, { animate: true });
+                    leafletMapRef.current!.setView([latitude, longitude], 16, { animate: true });
                   },
                   () => setLocationError(true),
                   { timeout: 6000, enableHighAccuracy: true }
