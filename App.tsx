@@ -36,6 +36,7 @@ const App: React.FC = () => {
 
   // MiniMap ao vivo — um de cada vez, compartilhado entre abas
   const [activeMiniMap, setActiveMiniMap] = useState<MiniMapConfig | null>(null);
+  const [miniMapRefreshKey, setMiniMapRefreshKey] = useState(0);
   const toggleMiniMap = useCallback((config: MiniMapConfig) => {
     setActiveMiniMap(prev => prev?.key === config.key ? null : config);
   }, []);
@@ -281,6 +282,11 @@ const App: React.FC = () => {
   }, [activeTab, busLines.length, favoriteBusLines.length, isLoading, isFavoritesLoading]);
 
   useEffect(() => { if (busLines.length > 0) notifications.checkAlerts(busLines); }, [busLines, notifications.checkAlerts]);
+  useEffect(() => {
+    if (busLines.length > 0 && activeMiniMap) {
+      setMiniMapRefreshKey(k => k + 1);
+    }
+  }, [busLines]); // eslint-disable-line
   useEffect(() => { if (favoriteBusLines.length > 0) notifications.checkAlerts(favoriteBusLines); }, [favoriteBusLines, notifications.checkAlerts]);
 
   useEffect(() => {
@@ -621,7 +627,7 @@ const App: React.FC = () => {
                         </button>
                       )}
                       {isActive && activeMiniMap && (
-                        <MiniMap stopLat={activeMiniMap.stopLat} stopLng={activeMiniMap.stopLng} stopNome={activeMiniMap.stopNome} lineNumber={activeMiniMap.lineNumber} destination={activeMiniMap.destination} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
+                        <MiniMap stopLat={activeMiniMap.stopLat} stopLng={activeMiniMap.stopLng} stopNome={activeMiniMap.stopNome} lineNumber={activeMiniMap.lineNumber} destination={activeMiniMap.destination} refreshKey={miniMapRefreshKey onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
                       )}
                     </div>
                   );
@@ -830,7 +836,7 @@ const App: React.FC = () => {
                     </div>
                     {/* MiniMap no bottom sheet do mapa */}
                     {isMapMiniActive && activeMiniMap && stopCoordsMap && (
-                      <MiniMap stopLat={stopCoordsMap.lat} stopLng={stopCoordsMap.lng} stopNome={selectedStop.nome} lineNumber={line.number} destination={line.destination} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
+                      <MiniMap stopLat={stopCoordsMap.lat} stopLng={stopCoordsMap.lng} stopNome={selectedStop.nome} lineNumber={line.number} destination={line.destination} refreshKey={miniMapRefreshKey onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
                     )}
                   </div>
                 );
