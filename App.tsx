@@ -209,6 +209,45 @@ const BusLineCard = memo(({
   );
 });
 
+// ─── FIX #15: função reutilizável para buscar ônibus ao vivo por linha ────────
+const buscarOnibusLinha = async (
+  lineNumber: string,
+  map: any,
+  busMarkersMapRef: React.MutableRefObject<Map<string, any>>,
+  busMarkersRef: React.MutableRefObject<any[]>,
+  L: any
+) => {
+  try {
+    const r = await fetch(`/api/realtimebus?linha=${lineNumber}`);
+    if (!r.ok) return;
+    const onibus = await r.json();
+    if (!Array.isArray(onibus)) return;
+
+    onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
+      if (!bus.lat || !bus.lng) return;
+      const busKey = `${lineNumber}-${bus.numero}`;
+      const existingMarker = busMarkersMapRef.current.get(busKey);
+
+      if (existingMarker) {
+        // FIX: só move o marker existente, sem recriar — sem piscar
+        existingMarker.setLatLng([bus.lat, bus.lng]);
+      } else {
+        const busIcon = L.icon({
+          iconUrl: '/onibus_realtime.png',
+          iconSize: [40, 40],
+          iconAnchor: [20, 40],
+          popupAnchor: [0, -40],
+        });
+        const marker = L.marker([bus.lat, bus.lng], { icon: busIcon })
+          .addTo(map)
+          .bindPopup(`<b>Linha ${lineNumber}</b><br>${bus.destino || 'N/A'}`);
+        busMarkersMapRef.current.set(busKey, marker);
+        busMarkersRef.current.push(marker);
+      }
+    });
+  } catch { /* ignora por linha */ }
+};
+
 // ─── App principal ────────────────────────────────────────────────────────────
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'search' | 'favs' | 'sitpass' | 'map'>('search');
@@ -226,7 +265,6 @@ const App: React.FC = () => {
   const [editingNickname, setEditingNickname] = useState<string | null>(null);
   const [nicknameInput, setNicknameInput] = useState('');
 
-  // ─── FIX: bug de tema claro no SitPass ───────────────────────────────────
   const [lightTheme, setLightTheme] = useState(() => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
   });
@@ -253,7 +291,7 @@ const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  // ─── SitPass: CPF com máscara e validação ────────────────────────────────
+  // ─── SitPass ─────────────────────────────────────────────────────────────
   const [cpfSitpass, setCpfSitpass] = useState('');
   const [saldoHistorico, setSaldoHistorico] = useState<{
     saldo_formatado: string;
@@ -273,15 +311,15 @@ const App: React.FC = () => {
   const [saldoLoading, setSaldoLoading] = useState(false);
   const [saldoErro, setSaldoErro] = useState<string | null>(null);
 
-  // ─── Favoritos com pontos inativos ───────────────────────────────────────
   const [inactiveStops, setInactiveStops] = useState<Set<string>>(new Set());
-
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   // ─── Mapa ─────────────────────────────────────────────────────────────────
   const [mapReady, setMapReady] = useState(false);
+  // FIX #12: userLocation como ref em vez de window.__userLat/Lng
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+  const userLocationRef = useRef<{lat: number; lng: number} | null>(null);
   const [locationError, setLocationError] = useState(false);
   const [selectedStop, setSelectedStop] = useState<{id: string; nome: string} | null>(null);
   const [stopLines, setStopLines] = useState<BusLine[]>([]);
@@ -291,11 +329,15 @@ const App: React.FC = () => {
   const leafletMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const busMarkersRef = useRef<any[]>([]);
-  const busMarkersMapRef = useRef<Map<string, any>>(new Map()); // numero -> marker
+  // FIX #14: único registro de markers de ônibus — apenas o Map
+  const busMarkersMapRef = useRef<Map<string, any>>(new Map());
   const pontosDataRef = useRef<Array<{id:string; lat:number; lng:number; nome:string; marker:any}>>([]);
-  const modoAoVivoRef = useRef(false); // quando true, raio dinâmico fica desativado
+  const modoAoVivoRef = useRef(false);
+  // FIX #11: guard para evitar duplo carregamento do Leaflet
+  const leafletLoadingRef = useRef(false);
+  const filtrarMarkersPorRaioRef = useRef<((userLat: number, userLng: number, selectedId?: string) => void) | null>(null);
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
-  const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({}); // lineNumber -> tem ônibus ao vivo
+  const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({});
   const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const liveTrackingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -304,6 +346,8 @@ const App: React.FC = () => {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSearchingRef = useRef(false);
+  // FIX #8: guard de concorrência para favoritos também
+  const isFavSearchingRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevTabRef = useRef<string>('');
 
@@ -311,9 +355,13 @@ const App: React.FC = () => {
   const activeAlertsRef = useRef(activeAlerts);
   useEffect(() => { activeAlertsRef.current = activeAlerts; }, [activeAlerts]);
 
+  // FIX #7: ref para controlar se checkAlerts já foi disparado neste ciclo de busLines
+  const lastCheckedLinesRef = useRef<string>('');
+
   const baseUrl = '/api/ponto';
 
-  const theme = {
+  // FIX #10: theme memoizado para que cardProps nunca recrie desnecessariamente
+  const theme = useMemo(() => ({
     bg:          lightTheme ? 'bg-gray-100'            : 'bg-black',
     text:        lightTheme ? 'text-gray-900'           : 'text-white',
     card:        lightTheme ? 'bg-white border-gray-200'          : 'bg-slate-900 border-white/10',
@@ -329,9 +377,8 @@ const App: React.FC = () => {
     destText:    lightTheme ? 'text-gray-900'           : 'text-white',
     stopBadge:   lightTheme ? 'text-gray-400'           : 'text-slate-600',
     historyBtn:  lightTheme ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-slate-800 border-white/10 text-yellow-400',
-    // FIX: saldo text usa variável de tema em vez de text-white fixo
     saldoText:   lightTheme ? 'text-gray-900'           : 'text-white',
-  };
+  }), [lightTheme]);
 
   // ─── Effects ──────────────────────────────────────────────────────────────
 
@@ -389,13 +436,7 @@ const App: React.FC = () => {
     if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker.ready.then((reg) => {
       swRegistrationRef.current = reg;
-
-      // Verifica se já há um SW aguardando (update pendente ao abrir o app)
-      if (reg.waiting) {
-        setShowUpdateBanner(true);
-      }
-
-      // Escuta novas atualizações enquanto o app está aberto
+      if (reg.waiting) setShowUpdateBanner(true);
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
         if (!newWorker) return;
@@ -406,22 +447,15 @@ const App: React.FC = () => {
         });
       });
     });
-
-    // Quando o SW muda (após skipWaiting), recarrega a página
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
+      if (!refreshing) { refreshing = true; window.location.reload(); }
     });
   }, []);
 
   const applyUpdate = () => {
     const reg = swRegistrationRef.current;
-    if (reg && reg.waiting) {
-      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-    }
+    if (reg && reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
     setShowUpdateBanner(false);
   };
 
@@ -448,16 +482,15 @@ const App: React.FC = () => {
   const performSearch = useCallback(async (sId: string, lFilter: string): Promise<SearchResult> => {
     if (!sId) return { lines: [], error: 'invalid_stop' };
     try {
+      // FIX #2: usa sempre baseUrl relativo, igual à busca manual
       let url = `${baseUrl}?ponto=${sId.trim()}`;
       if (lFilter.trim()) url += `&linha=${lFilter.trim()}`;
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
-
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 
-      // FIX: distingue ponto inativo (404) de genérico not_found
       if (res.status === 404) return { lines: [], error: 'not_found' };
       if (!res.ok) return { lines: [], error: 'offline' };
 
@@ -501,14 +534,18 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // FIX: merge inteligente — só substitui objetos cujos horários mudaram
-  // Preserva a referência dos cards inalterados → memo() funciona → sem re-render visual
+  // FIX #6: mergeLines por id da linha, não por índice — evita mistura de cards
   const mergeLines = useCallback((prev: BusLine[], next: BusLine[]): BusLine[] => {
     if (prev.length !== next.length) return next;
+
+    // Indexa prev por id único (stopSource::number)
+    const prevMap = new Map(prev.map(l => [`${l.stopSource}::${l.number}`, l]));
+
     let changed = false;
-    const merged = prev.map((oldLine, i) => {
-      const newLine = next[i];
-      if (!newLine) return oldLine;
+    const merged = next.map(newLine => {
+      const key = `${newLine.stopSource}::${newLine.number}`;
+      const oldLine = prevMap.get(key);
+      if (!oldLine) { changed = true; return newLine; }
       if (
         oldLine.nextArrival === newLine.nextArrival &&
         oldLine.subsequentArrival === newLine.subsequentArrival &&
@@ -526,14 +563,16 @@ const App: React.FC = () => {
     const idToSearch = forcedId ?? stopId;
     if (!idToSearch || isSearchingRef.current) return;
     isSearchingRef.current = true;
-    // Só exibe skeleton na primeira busca (sem cards ainda)
     setBusLines(prev => { if (prev.length === 0) setIsLoading(true); return prev; });
     setErrorMsg(null);
     setStaleData(false);
+
+    // FIX #9: cancela o timer atual e reinicia o countdown ANTES da busca
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    setCountdown(REFRESH_INTERVAL);
+
     try {
       const { lines, error } = await performSearch(idToSearch, forcedFilter ?? lineFilter);
-      // FIX: merge inteligente — só muda objetos cujos horários realmente mudaram
-      // Cards sem alteração mantêm a mesma referência → memo() bloqueia re-render
       setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
       else if (error === 'not_found') setErrorMsg('not_found');
@@ -541,7 +580,6 @@ const App: React.FC = () => {
       else if (error === 'invalid_stop') setErrorMsg('invalid_stop');
       if (lines.length > 0) {
         addToHistory(idToSearch);
-        // Verifica quais linhas têm ônibus ao vivo (em paralelo, sem bloquear a UI)
         const liveMap: Record<string, boolean> = {};
         await Promise.all([...new Set(lines.map(l => l.number))].map(async (num) => {
           try {
@@ -557,18 +595,17 @@ const App: React.FC = () => {
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
   }, [stopId, lineFilter, performSearch, addToHistory, mergeLines]);
 
-  // FIX: loadFavoritesSchedules agora identifica pontos inativos e avisa o usuário
+  // FIX #8: loadFavoritesSchedules com guard de concorrência
   const loadFavoritesSchedules = useCallback(async () => {
     if (favorites.length === 0) return;
-    // Só exibe skeleton na primeira carga (sem cards ainda)
+    if (isFavSearchingRef.current) return; // guard de concorrência
+    isFavSearchingRef.current = true;
     setFavoriteBusLines(prev => { if (prev.length === 0) setIsFavoritesLoading(true); return prev; });
     setStaleData(false);
     try {
       const results = await Promise.all(favorites.map(fav => performSearch(fav.stopId, fav.lineNumber)));
       const allLines = results.flatMap(r => r.lines);
       const hasOffline = results.some(r => r.error === 'offline');
-
-      // Detecta pontos que retornaram not_found (possivelmente desativados)
       const newInactive = new Set<string>();
       results.forEach((r, i) => {
         if (r.error === 'not_found' || r.error === 'inactive_stop') {
@@ -576,22 +613,23 @@ const App: React.FC = () => {
         }
       });
       setInactiveStops(newInactive);
-
-      // FIX: merge inteligente nos favoritos também
       setFavoriteBusLines(prev => prev.length === 0 ? allLines : mergeLines(prev, allLines));
       if (hasOffline) setStaleData(true);
     } catch { setStaleData(true); }
-    finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); }
+    finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); isFavSearchingRef.current = false; }
   }, [favorites, performSearch, mergeLines]);
 
   useEffect(() => {
     if (activeTab === 'favs' && prevTabRef.current !== 'favs' && favorites.length > 0) {
       loadFavoritesSchedules();
     }
+    // FIX #3: reset modoAoVivo ao sair da aba mapa
+    if (prevTabRef.current === 'map' && activeTab !== 'map') {
+      modoAoVivoRef.current = false;
+    }
     prevTabRef.current = activeTab;
   }, [activeTab]); // eslint-disable-line
 
-  // FIX: refs estáveis para callbacks e aba atual — evita closure stale no interval
   const handleSearchRef = useRef(handleSearch);
   const loadFavoritesRef = useRef(loadFavoritesSchedules);
   const activeTabRef = useRef(activeTab);
@@ -599,6 +637,8 @@ const App: React.FC = () => {
   useEffect(() => { loadFavoritesRef.current = loadFavoritesSchedules; }, [loadFavoritesSchedules]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
+  // FIX #9: o timer principal agora não redefine countdown ao rodar (countdown já
+  // está em 1 quando dispara, volta pra REFRESH_INTERVAL após busca via setState no finally)
   useEffect(() => {
     const shouldRun =
       (activeTab === 'search' && busLines.length > 0 && !isLoading) ||
@@ -607,13 +647,11 @@ const App: React.FC = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (!shouldRun) { setCountdown(REFRESH_INTERVAL); return; }
 
-    // Reinicia o countdown ao trocar de aba ou ao receber novos dados
     setCountdown(REFRESH_INTERVAL);
 
     timerRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          // Lê a aba atual via ref — nunca stale
           if (activeTabRef.current === 'search') handleSearchRef.current();
           else loadFavoritesRef.current();
           return REFRESH_INTERVAL;
@@ -649,7 +687,6 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
   }, [favorites]);
 
-  // FIX: long press cancela também ao scroll
   const startLongPress = useCallback((key: string, currentNickname?: string) => {
     longPressTimerRef.current = setTimeout(() => {
       haptic(100);
@@ -708,7 +745,6 @@ const App: React.FC = () => {
 
   // ─── Abre rastreamento ao vivo no mapa ────────────────────────────────────
   const abrirRastreamentoAoVivo = useCallback((lineNumber: string, pontoId: string) => {
-    // Acha as coordenadas do ponto no JSON
     const pontoData = pontosDataRef.current.find(p => p.id === pontoId);
     const lat = pontoData?.lat ?? -16.7200;
     const lng = pontoData?.lng ?? -49.0900;
@@ -718,44 +754,27 @@ const App: React.FC = () => {
     haptic([50, 30, 80]);
     modoAoVivoRef.current = true;
 
-    // Aguarda o mapa estar pronto e centraliza no ponto
     setTimeout(() => {
       if (!leafletMapRef.current) return;
       leafletMapRef.current.setView([lat, lng], 16, { animate: true });
 
-      // Oculta TODOS os pontos exceto o selecionado (independente de raio)
       pontosDataRef.current.forEach(p => {
         p.marker.setOpacity(p.id === pontoId ? 1 : 0);
       });
 
-      // Busca ônibus ao vivo da linha específica
       const L = (window as any).L;
       if (!L) return;
 
-      busMarkersRef.current.forEach(m => m.remove());
-      busMarkersRef.current = [];
+      // FIX #14: limpa apenas pelo Map, remove do array também de forma consistente
+      busMarkersMapRef.current.forEach(m => m.remove());
       busMarkersMapRef.current.clear();
+      busMarkersRef.current = [];
 
-      fetch(`/api/realtimebus?linha=${lineNumber}`)
-        .then(r => r.json())
-        .then(onibus => {
-          if (!Array.isArray(onibus)) return;
-          onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
-            if (!bus.lat || !bus.lng) return;
-            const busKey = `${lineNumber}-${bus.numero}`;
-            const icon = L.icon({ iconUrl: '/onibus_realtime.png', iconSize: [40, 40], iconAnchor: [20, 40] });
-            const marker = L.marker([bus.lat, bus.lng], { icon })
-              .addTo(leafletMapRef.current)
-              .bindPopup(`<b>Linha ${lineNumber}</b><br>${bus.destino || 'N/A'}`);
-            busMarkersMapRef.current.set(busKey, marker);
-            busMarkersRef.current.push(marker);
-          });
-        })
-        .catch(() => {});
+      // FIX #15: usa função reutilizável
+      buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L);
     }, 300);
   }, []);
 
-  // FIX: removeAlert estável via ref para não causar stale closure no checkAlerts
   const removeAlert = useCallback((lineKey: string) => {
     haptic(40);
     setActiveAlerts(prev => {
@@ -782,10 +801,16 @@ const App: React.FC = () => {
     await sendNotification('🚍 Alerta configurado!', `Você será avisado quando o baú estiver a ${minutes} min.`);
   };
 
-  // FIX: checkAlerts usa activeAlertsRef (ref estável) em vez de closure stale
+  // FIX #7: checkAlerts usa fingerprint das linhas para evitar disparos duplicados
   const checkAlerts = useCallback(async (lines: BusLine[]) => {
     const alerts = activeAlertsRef.current;
     if (Object.keys(alerts).length === 0) return;
+
+    // Fingerprint baseado nos tempos atuais — só processa se realmente mudou
+    const fingerprint = lines.map(l => `${l.stopSource}:${l.number}:${l.nextArrival}`).join('|');
+    if (fingerprint === lastCheckedLinesRef.current) return;
+    lastCheckedLinesRef.current = fingerprint;
+
     for (const line of lines) {
       const key = `${line.stopSource ?? ''}::${line.number}`;
       const alertMinutes = alerts[key];
@@ -803,7 +828,7 @@ const App: React.FC = () => {
         removeAlert(key);
       }
     }
-  }, [removeAlert]); // removeAlert é estável (useCallback sem deps)
+  }, [removeAlert]);
 
   useEffect(() => {
     if (busLines.length > 0) checkAlerts(busLines);
@@ -813,7 +838,7 @@ const App: React.FC = () => {
     if (favoriteBusLines.length > 0) checkAlerts(favoriteBusLines);
   }, [favoriteBusLines, checkAlerts]);
 
-  // ─── SitPass com validação de CPF ─────────────────────────────────────────
+  // ─── SitPass ─────────────────────────────────────────────────────────────
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatCpf(e.target.value);
     setCpfSitpass(formatted);
@@ -831,7 +856,6 @@ const App: React.FC = () => {
     setSaldoData(null);
     setCpfError(null);
 
-    // FIX: timeout na chamada SitPass
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 7000);
 
@@ -843,7 +867,6 @@ const App: React.FC = () => {
       const data = await res.json();
       if (res.ok) {
         setSaldoData(data);
-        // Salva última consulta no histórico
         const agora = new Date();
         const historico = {
           saldo_formatado: data.saldo_formatado,
@@ -894,8 +917,6 @@ const App: React.FC = () => {
   const favCount = favorites.length;
   const isIosDevice = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-  // FIX: useMemo garante que o objeto só muda quando as dependências realmente mudam
-  // sem isso, o memo() no BusLineCard nunca funciona (objeto novo = referência nova)
   const cardProps = useMemo(() => ({
     stopId,
     favorites,
@@ -910,27 +931,24 @@ const App: React.FC = () => {
     onShare: shareLine,
   }), [stopId, favorites, activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, removeAlert]);
 
+  // ─── FIX #4: stopLines limpa ao abrir novo ponto ─────────────────────────
+  const abrirPonto = useCallback((pontoId: string, pontoNome: string) => {
+    setSelectedStop({ id: pontoId, nome: pontoNome });
+    setStopLines([]); // limpa ANTES de buscar
+    setStopLinesError(null);
+    setStopLinesLoading(true);
+    buscarLinhasPontoInterno(pontoId);
+    haptic(40);
+  }, []); // eslint-disable-line
 
-  // ─── Busca linhas do ponto e markers de ônibus em tempo real ──────────────
-  const buscarLinhasPonto = useCallback(async (pontoId: string) => {
+  // ─── FIX #2 + #15: busca linhas do ponto usando baseUrl relativo ──────────
+  const buscarLinhasPontoInterno = useCallback(async (pontoId: string) => {
     if (!pontoId) return;
-
-    const isFirstLoad = stopLines.length === 0;
-
-    // Só mostra loading e limpa na primeira carga
-    if (isFirstLoad) {
-      setStopLinesLoading(true);
-      setStopLinesError(null);
-    }
-
-    // Remove markers de ônibus anteriores
-    busMarkersRef.current.forEach(m => m.remove());
-    busMarkersRef.current = [];
-
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(`https://bot-onibus.vercel.app/api/ponto?ponto=${pontoId}`, { signal: controller.signal });
+      // FIX #2: usa /api/ponto relativo em vez de URL externa hardcoded
+      const res = await fetch(`${baseUrl}?ponto=${pontoId}`, { signal: controller.signal });
       clearTimeout(timeout);
 
       if (!res.ok) { setStopLinesError('offline'); setStopLinesLoading(false); return; }
@@ -960,64 +978,31 @@ const App: React.FC = () => {
         };
       });
 
-      // Merge inteligente — só atualiza cards cujos horários mudaram
+      // FIX #6: merge por id da linha, não por índice
       setStopLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       setStopLinesLoading(false);
 
-      // Busca posição dos ônibus em tempo real para cada linha
       if (!leafletMapRef.current) return;
       const L = (window as any).L;
       if (!L) return;
 
       const linhasUnicas = [...new Set(lines.map(l => l.number))];
 
-      await Promise.all(linhasUnicas.map(async (numLinha) => {
-        try {
-          const r = await fetch(`/api/realtimebus?linha=${numLinha}`);
-          if (!r.ok) return;
-          const onibus = await r.json();
-          if (!Array.isArray(onibus) || onibus.length === 0) return;
-
-          onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
-            if (!bus.lat || !bus.lng) return;
-
-            const busKey = `${numLinha}-${bus.numero}`;
-            const existingMarker = busMarkersMapRef.current.get(busKey);
-
-            if (existingMarker) {
-              // FIX: só move o marker existente, sem recriar — sem piscar
-              existingMarker.setLatLng([bus.lat, bus.lng]);
-            } else {
-              // Cria marker novo apenas se não existia
-              const busIcon = L.icon({
-                iconUrl: '/onibus_realtime.png',
-                iconSize: [40, 40],
-                iconAnchor: [20, 40],
-                popupAnchor: [0, -40],
-              });
-              const marker = L.marker([bus.lat, bus.lng], { icon: busIcon })
-                .addTo(leafletMapRef.current)
-                .bindPopup(`<b>Linha ${numLinha}</b><br>${bus.destino || 'N/A'}`);
-              busMarkersMapRef.current.set(busKey, marker);
-              busMarkersRef.current.push(marker);
-            }
-          });
-        } catch { /* ignora por linha */ }
-      }));
-
-      // Ônibus ficam visíveis no mapa independente da posição
+      // FIX #15: usa função reutilizável buscarOnibusLinha
+      await Promise.all(linhasUnicas.map(num =>
+        buscarOnibusLinha(num, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L)
+      ));
 
     } catch {
       setStopLinesError('offline');
       setStopLinesLoading(false);
     }
-  }, [stopLines, mergeLines]);
+  }, [mergeLines]);
 
   // ─── Recalcula tamanho do mapa ao voltar para a aba ───────────────────────
   useEffect(() => {
     if (activeTab !== 'map') return;
     if (!leafletMapRef.current) return;
-    // Pequeno delay para o display:block ter efeito antes do invalidateSize
     const t = setTimeout(() => {
       leafletMapRef.current.invalidateSize();
     }, 50);
@@ -1038,28 +1023,8 @@ const App: React.FC = () => {
       if (!leafletMapRef.current) return;
       const L = (window as any).L;
       if (!L) return;
-      try {
-        const r = await fetch(`/api/realtimebus?linha=${lineNumber}`);
-        if (!r.ok) return;
-        const onibus = await r.json();
-        if (!Array.isArray(onibus)) return;
-
-        onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
-          if (!bus.lat || !bus.lng) return;
-          const busKey = `${lineNumber}-${bus.numero}`;
-          const existing = busMarkersMapRef.current.get(busKey);
-          if (existing) {
-            existing.setLatLng([bus.lat, bus.lng]);
-          } else {
-            const icon = L.icon({ iconUrl: '/onibus_realtime.png', iconSize: [40, 40], iconAnchor: [20, 40] });
-            const marker = L.marker([bus.lat, bus.lng], { icon })
-              .addTo(leafletMapRef.current)
-              .bindPopup(`<b>Linha ${lineNumber}</b><br>${bus.destino || 'N/A'}`);
-            busMarkersMapRef.current.set(busKey, marker);
-            busMarkersRef.current.push(marker);
-          }
-        });
-      } catch { /* ignora */ }
+      // FIX #15: usa função reutilizável
+      await buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L);
     };
 
     setLiveCountdown(10);
@@ -1067,10 +1032,7 @@ const App: React.FC = () => {
 
     liveTrackingTimerRef.current = setInterval(() => {
       setLiveCountdown(prev => {
-        if (prev <= 1) {
-          atualizarPosicao();
-          return 10;
-        }
+        if (prev <= 1) { atualizarPosicao(); return 10; }
         return prev - 1;
       });
     }, 1000);
@@ -1083,7 +1045,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!selectedStop) {
-      // Limpa timer ao fechar o bottom sheet
       if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current);
       setMapRefreshCountdown(15);
       return;
@@ -1095,9 +1056,8 @@ const App: React.FC = () => {
     mapRefreshTimerRef.current = setInterval(() => {
       setMapRefreshCountdown(prev => {
         if (prev <= 1) {
-          // Só atualiza posição dos ônibus, não os horários
           const stop = selectedStopRef.current;
-          if (stop) buscarLinhasPonto(stop.id);
+          if (stop) buscarLinhasPontoInterno(stop.id);
           return 15;
         }
         return prev - 1;
@@ -1105,16 +1065,24 @@ const App: React.FC = () => {
     }, 1000);
 
     return () => { if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current); };
-  }, [selectedStop, buscarLinhasPonto]);
+  }, [selectedStop, buscarLinhasPontoInterno]);
 
-  // ─── Inicializa o mapa Leaflet ───────────────────────────────────────────
+  // ─── FIX #5 + #11: Inicializa o mapa Leaflet com cleanup e guard ──────────
   useEffect(() => {
     if (activeTab !== 'map') return;
     if (leafletMapRef.current) return; // já inicializado
+    if (leafletLoadingRef.current) return; // FIX #11: guard anti-duplo carregamento
+    leafletLoadingRef.current = true;
 
-    const PONTOS: Array<{id:string; lat:number; lng:number; nome:string}> = PONTOS_DATA;
+    // FIX #13: pontos já estão importados — deduplica IDs antes de criar markers
+    // Remove entradas com ID duplicado mantendo apenas a primeira ocorrência
+    const seenIds = new Set<string>();
+    const PONTOS: Array<{id:string; lat:number; lng:number; nome:string}> = (PONTOS_DATA as any[]).filter(p => {
+      if (seenIds.has(p.id)) return false;
+      seenIds.add(p.id);
+      return true;
+    });
 
-    // Carrega Leaflet via script tag
     const loadLeaflet = () => new Promise<void>((resolve) => {
       if ((window as any).L) { resolve(); return; }
       const script = document.createElement('script');
@@ -1127,11 +1095,13 @@ const App: React.FC = () => {
       document.head.appendChild(link);
     });
 
+    let moveEndHandler: (() => void) | null = null;
+    let zoomEndHandler: (() => void) | null = null;
+
     loadLeaflet().then(() => {
       if (!mapRef.current || leafletMapRef.current) return;
       const L = (window as any).L;
 
-      // Centro padrão: Senador Canedo
       const defaultCenter: [number, number] = [-16.7200, -49.0900];
 
       const map = L.map(mapRef.current, {
@@ -1145,10 +1115,8 @@ const App: React.FC = () => {
         maxZoom: 19,
       }).addTo(map);
 
-      // Zoom control no canto direito
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      // Ícone customizado amarelo
       const pontoIcon = L.icon({
         iconUrl: '/ponto.png',
         iconSize: [36, 36],
@@ -1156,7 +1124,6 @@ const App: React.FC = () => {
         popupAnchor: [0, -36],
       });
 
-      // Função para calcular distância em metros entre dois pontos
       const calcDist = (lat1: number, lng1: number, lat2: number, lng2: number) => {
         const R = 6371000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -1165,66 +1132,59 @@ const App: React.FC = () => {
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       };
 
-      // Cria todos os markers mas começa ocultos — serão filtrados após geolocalização
+      // FIX #12: filtrarMarkersPorRaio exposta via ref em vez de window
+      const filtrarMarkersPorRaio = (userLat: number, userLng: number, selectedId?: string) => {
+        pontosDataRef.current.forEach(p => {
+          if (selectedId) {
+            p.marker.setOpacity(p.id === selectedId ? 1 : 0);
+          } else {
+            const dist = calcDist(userLat, userLng, p.lat, p.lng);
+            p.marker.setOpacity(dist <= 500 ? 1 : 0);
+          }
+        });
+      };
+      filtrarMarkersPorRaioRef.current = filtrarMarkersPorRaio;
+
+      // FIX #1: usa PONTOS já deduplicado
       PONTOS.forEach(ponto => {
         const marker = L.marker([ponto.lat, ponto.lng], { icon: pontoIcon, opacity: 0 })
           .addTo(map)
           .on('click', () => {
+            // FIX #4: usa abrirPonto que limpa stopLines antes de buscar
+            const loc = userLocationRef.current;
+            if (loc) filtrarMarkersPorRaio(loc.lat, loc.lng, ponto.id);
             setSelectedStop({ id: ponto.id, nome: ponto.nome });
-            buscarLinhasPonto(ponto.id);
+            setStopLines([]);
+            setStopLinesError(null);
+            setStopLinesLoading(true);
+            buscarLinhasPontoInterno(ponto.id); // já é estável via useCallback
             haptic(40);
-            // Oculta todos exceto o selecionado
-            const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
-            const ul = (window as any).__userLat;
-            const ulng = (window as any).__userLng;
-            if (fn && ul) fn(ul, ulng, ponto.id);
           });
         markersRef.current.push(marker);
         pontosDataRef.current.push({ ...ponto, marker });
       });
 
-      // Função que filtra markers por raio de 500m do usuário
-      const filtrarMarkersPorRaio = (userLat: number, userLng: number, selectedId?: string) => {
-        pontosDataRef.current.forEach(p => {
-          if (selectedId) {
-            // Com ponto selecionado: mostra só ele
-            p.marker.setOpacity(p.id === selectedId ? 1 : 0);
-            p.marker.options?.interactive !== undefined && (p.marker.options.interactive = p.id === selectedId);
-          } else {
-            // Sem seleção: mostra só os dentro de 500m
-            const dist = calcDist(userLat, userLng, p.lat, p.lng);
-            const visivel = dist <= 500;
-            p.marker.setOpacity(visivel ? 1 : 0);
-          }
-        });
-      };
-
-      // Expõe a função para uso externo via ref
-      (leafletMapRef as any).filtrarMarkersPorRaio = filtrarMarkersPorRaio;
-
-      // Filtra por centro do mapa ao mover — raio dinâmico
-      // Desativado quando usuário veio do botão "Acompanhar ao vivo"
-      const atualizarRaio = () => {
+      // FIX #5: salva handlers para poder remover no cleanup
+      moveEndHandler = () => {
         if (modoAoVivoRef.current) return;
         const center = map.getCenter();
         filtrarMarkersPorRaio(center.lat, center.lng);
       };
-      map.on('moveend', atualizarRaio);
-      map.on('zoomend', atualizarRaio);
+      zoomEndHandler = moveEndHandler;
+      map.on('moveend', moveEndHandler);
+      map.on('zoomend', zoomEndHandler);
 
       leafletMapRef.current = map;
       setMapReady(true);
 
-      // Tenta pegar localização do usuário
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const { latitude, longitude } = pos.coords;
+            // FIX #12: armazena em ref, não em window
+            userLocationRef.current = { lat: latitude, lng: longitude };
             setUserLocation({ lat: latitude, lng: longitude });
-            (window as any).__userLat = latitude;
-            (window as any).__userLng = longitude;
 
-            // Marker do usuário
             const userIcon = L.divIcon({
               html: `<div style="
                 width:20px; height:20px;
@@ -1242,26 +1202,27 @@ const App: React.FC = () => {
               .addTo(map)
               .bindPopup('Você está aqui');
 
-            // Centraliza no usuário e aplica raio inicial pelo centro
             map.setView([latitude, longitude], 15);
           },
           () => {
             setLocationError(true);
-            // Sem localização: mostra todos os pontos
             pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
           },
           { timeout: 8000, enableHighAccuracy: true }
         );
       } else {
-        // Sem geolocation: mostra todos
         pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
       }
     });
 
+    // FIX #5: cleanup correto — remove listeners ao desmontar
     return () => {
-      // Não destroi o mapa ao trocar de aba — preserva estado
+      if (leafletMapRef.current && moveEndHandler) {
+        leafletMapRef.current.off('moveend', moveEndHandler);
+        leafletMapRef.current.off('zoomend', zoomEndHandler!);
+      }
     };
-  }, [activeTab]);
+  }, [activeTab, buscarLinhasPontoInterno]);
 
   // ─── Splash ───────────────────────────────────────────────────────────────
 
@@ -1457,7 +1418,6 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
-          {/* FIX: spinner aparece mesmo se já existe resultado (double-tap) */}
           {(isLoading || isFavoritesLoading) && (
             <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
           )}
@@ -1479,8 +1439,7 @@ const App: React.FC = () => {
                 <p className="font-black text-white text-[11px] uppercase tracking-wider leading-tight">Nova versão disponível!</p>
                 <p className="text-white/70 text-[9px] font-bold uppercase tracking-widest leading-tight mt-0.5">Toque para atualizar agora</p>
               </div>
-              <button
-                onClick={() => { applyUpdate(); haptic(50); }}
+              <button onClick={() => { applyUpdate(); haptic(50); }}
                 className="bg-white text-emerald-600 font-black text-[10px] uppercase tracking-widest px-3 py-2 rounded-xl active:scale-95 transition-transform shrink-0">
                 Atualizar
               </button>
@@ -1608,7 +1567,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1651,7 +1609,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* FIX: aviso de pontos inativos */}
             {inactiveStops.size > 0 && !isFavoritesLoading && (
               <div className="border border-orange-500/30 bg-orange-500/10 text-orange-400 p-4 rounded-2xl flex items-start gap-3">
                 <img src="/alerta.png" alt="Aviso" style={{width:24,height:24,objectFit:"contain",flexShrink:0}} />
@@ -1692,7 +1649,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1723,7 +1679,6 @@ const App: React.FC = () => {
                   className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl
                     ${cpfError ? 'border-red-500 focus:border-red-500' : 'focus:border-yellow-400'}`}
                 />
-                {/* FIX: feedback de validação inline */}
                 {cpfError && (
                   <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{cpfError}</p>
                 )}
@@ -1746,7 +1701,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* FIX: saldoText usa variável de tema para funcionar no modo claro */}
             {saldoData && (
               <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3">
@@ -1762,14 +1716,11 @@ const App: React.FC = () => {
                   <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
                   <span className="text-4xl font-black text-yellow-400">{saldoData.saldo_formatado}</span>
                 </div>
-                {/* Aviso saldo baixo */}
                 {(() => {
                   const saldoNum = parseFloat(saldoData.saldo.replace('.', '').replace(',', '.'));
                   const TARIFA_INTEIRA = 4.30;
                   const MEIA_TARIFA = 2.15;
-
                   if (saldoNum < MEIA_TARIFA) {
-                    // Abaixo até da meia tarifa
                     return (
                       <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
                         <img src="/alerta.png" alt="Aviso" style={{width:20,height:20,objectFit:"contain",flexShrink:0,marginTop:2}} />
@@ -1782,9 +1733,7 @@ const App: React.FC = () => {
                       </div>
                     );
                   }
-
                   if (saldoNum < TARIFA_INTEIRA) {
-                    // Tem meia tarifa mas não tem tarifa inteira
                     return (
                       <div className="space-y-2">
                         <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
@@ -1805,10 +1754,8 @@ const App: React.FC = () => {
                       </div>
                     );
                   }
-
                   return null;
                 })()}
-                {/* Aviso de saldo não real-time — conforme informação oficial do SitPass */}
                 <div className={`border ${lightTheme ? 'border-gray-200 bg-gray-50' : 'border-white/5 bg-black/20'} rounded-2xl px-4 py-3 flex items-start gap-2`}>
                   <img src="/informacao.png" alt="Info" style={{width:20,height:20,objectFit:"contain",flexShrink:0,marginTop:2}} />
                   <p className={`text-[9px] font-bold leading-relaxed ${theme.subtext}`}>
@@ -1820,7 +1767,6 @@ const App: React.FC = () => {
 
             {!saldoData && !saldoErro && !saldoLoading && (
               <div className="space-y-4">
-                {/* Histórico da última consulta */}
                 {saldoHistorico && (
                   <div className={`border ${lightTheme ? 'border-gray-200 bg-white' : 'border-white/5 bg-slate-900'} rounded-[2rem] p-5 space-y-3`}
                     style={{ animation: 'slideUp 0.3s ease-out' }}>
@@ -1850,7 +1796,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Botão de feedback */}
             <a
               href="https://forms.gle/JwtHNRw7pjaZtfV19"
               target="_blank"
@@ -1864,10 +1809,6 @@ const App: React.FC = () => {
 
       </div>
 
-
-        {/* ─── ABA MAPA ─────────────────────────────────────────────────────── */}
-
-
       {/* ─── ABA MAPA — sempre no DOM, visível/oculto via display ─── */}
       <div
         style={{
@@ -1880,91 +1821,92 @@ const App: React.FC = () => {
           display: activeTab === 'map' ? 'block' : 'none',
         }}
       >
-          {/* Container do mapa — ocupa 100% do espaço disponível */}
-          <div
-            ref={mapRef}
-            style={{width: '100%', height: '100%'}}
-          />
+        <div ref={mapRef} style={{width: '100%', height: '100%'}} />
 
-          {/* Banner de rastreamento ao vivo */}
-          {liveTrackingLine && (
-            <div className="absolute top-3 left-3 right-3 z-[1001] rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
-              style={{background:'rgba(29,78,216,0.95)', backdropFilter:'blur(8px)', border:'1px solid rgba(96,165,250,0.3)'}}>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
-                <p className="text-white font-black text-[10px] uppercase tracking-widest truncate">
-                  Rastreando linha {liveTrackingLine.lineNumber} ao vivo
-                </p>
+        {/* Banner de rastreamento ao vivo */}
+        {liveTrackingLine && (
+          <div className="absolute top-3 left-3 right-3 z-[1001] rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+            style={{background:'rgba(29,78,216,0.95)', backdropFilter:'blur(8px)', border:'1px solid rgba(96,165,250,0.3)'}}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
+              <p className="text-white font-black text-[10px] uppercase tracking-widest truncate">
+                Rastreando linha {liveTrackingLine.lineNumber} ao vivo
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-blue-200 font-black text-[10px] tabular-nums">{liveCountdown}s</span>
+              <button onClick={() => {
+                setLiveTrackingLine(null);
+                // FIX #14: limpa de forma consistente via Map
+                busMarkersMapRef.current.forEach(m => m.remove());
+                busMarkersMapRef.current.clear();
+                busMarkersRef.current = [];
+                modoAoVivoRef.current = false; // FIX #3
+                const loc = userLocationRef.current; // FIX #12
+                if (filtrarMarkersPorRaioRef.current && loc) {
+                  filtrarMarkersPorRaioRef.current(loc.lat, loc.lng);
+                } else {
+                  pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
+                }
+                haptic(30);
+              }}>
+                <img src="/fechar.png" alt="Parar" style={{width:20,height:20,objectFit:'contain',opacity:0.8}} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Erro de localização */}
+        {locationError && !liveTrackingLine && (
+          <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
+            style={{backdropFilter: 'blur(8px)'}}>
+            <img src="/localizacao.png" alt="" style={{width:16, height:16, objectFit:"contain"}} /> Localização negada — mostrando Senador Canedo
+          </div>
+        )}
+
+        {/* Bottom sheet do ponto selecionado */}
+        {selectedStop && (
+          <div
+            className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem]`}
+            style={{bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '60%', display: 'flex', flexDirection: 'column'}}>
+
+            <div className="flex items-start justify-between px-5 pt-5 pb-3 shrink-0">
+              <div>
+                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}><img src="/localizacao.png" alt="" style={{width:14, height:14, objectFit:"contain"}} /> Ponto selecionado</p>
+                <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
+                <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-blue-200 font-black text-[10px] tabular-nums">{liveCountdown}s</span>
+              <div className="flex items-center gap-3 shrink-0">
+                {!stopLinesLoading && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className={`text-[9px] font-black tabular-nums ${theme.subtext}`}>{mapRefreshCountdown}s</span>
+                  </div>
+                )}
                 <button onClick={() => {
-                  setLiveTrackingLine(null);
-                  busMarkersRef.current.forEach(m => m.remove());
-                  busMarkersRef.current = [];
+                  setSelectedStop(null);
+                  setStopLines([]);
+                  // FIX #14: limpa de forma consistente
+                  busMarkersMapRef.current.forEach(m => m.remove());
                   busMarkersMapRef.current.clear();
-                  const fn = (leafletMapRef as any).filtrarMarkersPorRaio;
-                  const ul = (window as any).__userLat;
-                  const ulng = (window as any).__userLng;
-                  if (fn && ul) fn(ul, ulng);
-                  else pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
-                  haptic(30);
-                }}>
-                  <img src="/fechar.png" alt="Parar" style={{width:20,height:20,objectFit:'contain',opacity:0.8}} />
+                  busMarkersRef.current = [];
+                  // FIX #3: reseta modo ao vivo ao fechar sheet
+                  modoAoVivoRef.current = false;
+                  setLiveTrackingLine(null);
+                  const loc = userLocationRef.current; // FIX #12
+                  if (filtrarMarkersPorRaioRef.current && loc) {
+                    filtrarMarkersPorRaioRef.current(loc.lat, loc.lng);
+                  } else {
+                    pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
+                  }
+                }} className="p-1 active:scale-95 transition-transform">
+                  <img src="/fechar.png" alt="Fechar" style={{width:20,height:20,objectFit:"contain"}} />
                 </button>
               </div>
             </div>
-          )}
 
-          {/* Erro de localização */}
-          {locationError && !liveTrackingLine && (
-            <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`}
-              style={{backdropFilter: 'blur(8px)'}}>
-              <img src="/localizacao.png" alt="" style={{width:16, height:16, objectFit:"contain"}} /> Localização negada — mostrando Senador Canedo
-            </div>
-          )}
+            <div style={{overflowY: 'auto', flex: 1, paddingBottom: '12px'}} className="px-5 space-y-3">
 
-          {/* Bottom sheet do ponto selecionado */}
-          {selectedStop && (
-            <div
-              className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem]`}
-              style={{bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '60%', display: 'flex', flexDirection: 'column'}}>
-
-              {/* Cabeçalho fixo */}
-              <div className="flex items-start justify-between px-5 pt-5 pb-3 shrink-0">
-                <div>
-                  <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}><img src="/localizacao.png" alt="" style={{width:14, height:14, objectFit:"contain"}} /> Ponto selecionado</p>
-                  <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
-                  <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  {!stopLinesLoading && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className={`text-[9px] font-black tabular-nums ${theme.subtext}`}>{mapRefreshCountdown}s</span>
-                    </div>
-                  )}
-                  <button onClick={() => {
-                    setSelectedStop(null);
-                    setStopLines([]);
-                    busMarkersRef.current.forEach(m => m.remove());
-                    busMarkersRef.current = [];
-                  busMarkersMapRef.current.clear();
-                  // Desativa modo ao vivo e restaura raio normal
-                  modoAoVivoRef.current = false;
-                  setLiveTrackingLine(null);
-                  const fn2 = (leafletMapRef as any).filtrarMarkersPorRaio;
-                  const mapCenter = leafletMapRef.current?.getCenter();
-                  if (fn2 && mapCenter) fn2(mapCenter.lat, mapCenter.lng);
-                  else pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
-                  }} className="p-1 active:scale-95 transition-transform"><img src="/fechar.png" alt="Fechar" style={{width:20,height:20,objectFit:"contain"}} /></button>
-                </div>
-              </div>
-
-              {/* Área scrollável */}
-              <div style={{overflowY: 'auto', flex: 1, paddingBottom: '12px'}} className="px-5 space-y-3">
-
-              {/* Loading */}
               {stopLinesLoading && (
                 <div className="flex items-center gap-3 py-2">
                   <div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -1972,7 +1914,6 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Erro */}
               {stopLinesError && !stopLinesLoading && (
                 <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3">
                   <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">
@@ -1981,7 +1922,6 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Lista de linhas */}
               {!stopLinesLoading && stopLines.length > 0 && (
                 <div className="space-y-2">
                   {stopLines.map((line) => {
@@ -2016,70 +1956,67 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Info markers */}
               {!stopLinesLoading && busMarkersRef.current.length > 0 && (
                 <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} text-center pb-1`}>
                   <img src="/onibus_realtime.png" alt="" style={{width:16, height:16, objectFit:"contain"}} /> {busMarkersRef.current.length} ônibus visíveis no mapa
                 </p>
               )}
 
-              </div>{/* fim área scrollável */}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Botão de reposicionar no usuário */}
-          {mapReady && (
-            <button
-              onClick={() => {
-                if (!leafletMapRef.current) return;
-                haptic(40);
-                if (userLocation) {
-                  leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
-                } else {
-                  // Tenta pegar localização novamente
-                  navigator.geolocation?.getCurrentPosition(
-                    (pos) => {
-                      const { latitude, longitude } = pos.coords;
-                      setUserLocation({ lat: latitude, lng: longitude });
-            (window as any).__userLat = latitude;
-            (window as any).__userLng = longitude;
-                      leafletMapRef.current.setView([latitude, longitude], 16, { animate: true });
-                    },
-                    () => setLocationError(true),
-                    { timeout: 6000, enableHighAccuracy: true }
-                  );
-                }
-              }}
-              style={{
-                position: 'absolute',
-                bottom: selectedStop ? '220px' : '72px',
-                right: '16px',
-                zIndex: 1000,
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: '#fbbf24',
-                border: '2px solid #000',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'bottom 0.3s ease',
-              }}
-              title="Minha localização"
-            >
-              <img src="/localizacao.png" alt="Localização" style={{width:24,height:24,objectFit:'contain'}} />
-            </button>
-          )}
+        {/* Botão de reposicionar no usuário */}
+        {mapReady && (
+          <button
+            onClick={() => {
+              if (!leafletMapRef.current) return;
+              haptic(40);
+              if (userLocation) {
+                leafletMapRef.current.setView([userLocation.lat, userLocation.lng], 16, { animate: true });
+              } else {
+                navigator.geolocation?.getCurrentPosition(
+                  (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    userLocationRef.current = { lat: latitude, lng: longitude }; // FIX #12
+                    setUserLocation({ lat: latitude, lng: longitude });
+                    leafletMapRef.current.setView([latitude, longitude], 16, { animate: true });
+                  },
+                  () => setLocationError(true),
+                  { timeout: 6000, enableHighAccuracy: true }
+                );
+              }
+            }}
+            style={{
+              position: 'absolute',
+              bottom: selectedStop ? '220px' : '72px',
+              right: '16px',
+              zIndex: 1000,
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              background: '#fbbf24',
+              border: '2px solid #000',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'bottom 0.3s ease',
+            }}
+            title="Minha localização"
+          >
+            <img src="/localizacao.png" alt="Localização" style={{width:24,height:24,objectFit:'contain'}} />
+          </button>
+        )}
 
-          {/* Loader inicial */}
-          {!mapReady && (
-            <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
-              <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-              <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
-            </div>
-          )}
+        {/* Loader inicial */}
+        {!mapReady && (
+          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
+            <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+            <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
+          </div>
+        )}
       </div>
 
       {/* Nav */}
