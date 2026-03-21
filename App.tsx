@@ -22,9 +22,6 @@ const normDestino = (s: string): string =>
   s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '').trim();
 
 // ─── Função reutilizável para buscar ônibus ao vivo por linha ─────────────────
-// Quando stopLat/stopLng/destination são fornecidos, mostra APENAS o ônibus
-// mais próximo do ponto com destino compatível (= o que vai chegar primeiro).
-// Quando não fornecidos, mostra todos (comportamento padrão para o mapa geral).
 const buscarOnibusLinha = async (
   lineNumber: string,
   map: LeafletMap,
@@ -39,20 +36,15 @@ const buscarOnibusLinha = async (
     const onibus = await r.json();
     if (!Array.isArray(onibus) || onibus.length === 0) return;
 
-    // Determinar quais ônibus mostrar
     let busesToShow: { lat: number; lng: number; destino: string; numero: string }[] = onibus.filter(
       (bus: { lat: number; lng: number }) => bus.lat && bus.lng
     );
 
     if (filtro && filtro.destination) {
       const destNorm = normDestino(filtro.destination);
-
-      // 1) Filtrar por destino compatível
       const mesmoDestino = busesToShow.filter(bus =>
         normDestino(bus.destino || '').includes(destNorm) || destNorm.includes(normDestino(bus.destino || ''))
       );
-
-      // 2) Se encontrou ônibus com mesmo destino, pegar o mais próximo do ponto
       const candidatos = mesmoDestino.length > 0 ? mesmoDestino : busesToShow;
       const maisProximo = candidatos.reduce<typeof candidatos[0] | null>((closest, bus) => {
         if (!closest) return bus;
@@ -60,11 +52,10 @@ const buscarOnibusLinha = async (
         const distClosest = geoDistance(filtro.stopLat, filtro.stopLng, closest.lat, closest.lng);
         return distBus < distClosest ? bus : closest;
       }, null);
-
       busesToShow = maisProximo ? [maisProximo] : [];
     }
 
-    // Remover markers antigos que não estão mais na lista filtrada
+    // FIX: remover markers antigos — também limpa busMarkersRef para evitar memory leak
     const busKeysAtivos = new Set(busesToShow.map(bus => `${lineNumber}-${bus.numero}`));
     busMarkersMapRef.current.forEach((marker, key) => {
       if (key.startsWith(`${lineNumber}-`) && !busKeysAtivos.has(key)) {
@@ -72,6 +63,8 @@ const buscarOnibusLinha = async (
         busMarkersMapRef.current.delete(key);
       }
     });
+    // Sincroniza busMarkersRef com o estado atual do Map (evita crescimento infinito)
+    busMarkersRef.current = Array.from(busMarkersMapRef.current.values());
 
     busesToShow.forEach((bus) => {
       const busKey = `${lineNumber}-${bus.numero}`;
@@ -90,12 +83,11 @@ const buscarOnibusLinha = async (
           .addTo(map)
           .bindPopup(`<b>Linha ${lineNumber}</b><br>${bus.destino || 'N/A'}`);
         busMarkersMapRef.current.set(busKey, marker);
-        busMarkersRef.current.push(marker);
+        // FIX: sincroniza o array de ref após adicionar
+        busMarkersRef.current = Array.from(busMarkersMapRef.current.values());
       }
     });
 
-    // Se estiver no modo rastreamento ao vivo (filtro com coordenadas do ponto),
-    // centraliza o mapa mostrando sempre o ponto e o ônibus juntos
     if (filtro && busesToShow.length > 0) {
       const bus = busesToShow[0];
       const minLat = Math.min(filtro.stopLat, bus.lat);
@@ -160,6 +152,7 @@ const App: React.FC = () => {
   const notifications = useNotifications();
   const sitpass = useSitpass();
 
+  // FIX CRÍTICO: useBusSearch não recebe mais [] — loadFavoritesSchedules recebe favs como parâmetro
   const {
     busLines, setBusLines,
     favoriteBusLines, setFavoriteBusLines,
@@ -176,7 +169,7 @@ const App: React.FC = () => {
     mergeLines,
     handleSearch,
     loadFavoritesSchedules,
-  } = useBusSearch([]);
+  } = useBusSearch();
 
   const favoritesHook = useFavorites(stopId);
   const {
@@ -188,10 +181,14 @@ const App: React.FC = () => {
     saveNickname,
   } = favoritesHook;
 
-  // toggleFavorite precisa do setter de favoriteBusLines
   const toggleFavorite = useCallback((line: BusLine) => {
     favoritesHook.toggleFavorite(line, setFavoriteBusLines);
   }, [favoritesHook, setFavoriteBusLines]);
+
+  // FIX: wrapper estável que sempre passa os favorites atuais
+  const loadFavoritesWithCurrentFavs = useCallback(() => {
+    loadFavoritesSchedules(favorites);
+  }, [loadFavoritesSchedules, favorites]);
 
   // ─── Tema memoizado ───────────────────────────────────────────────────────
   const theme = useMemo(() => buildTheme(lightTheme), [lightTheme]);
@@ -278,7 +275,7 @@ const App: React.FC = () => {
 
     setTimeout(() => {
       if (!leafletMapRef.current) return;
-      leafletMapRef.current.setView([lat, lng], 15, { animate: true }); // zoom inicial no ponto; fitBounds ajusta após carregar o ônibus
+      leafletMapRef.current.setView([lat, lng], 15, { animate: true });
 
       pontosDataRef.current.forEach(p => {
         p.marker.setOpacity(p.id === pontoId ? 1 : 0);
@@ -425,23 +422,24 @@ const App: React.FC = () => {
     localStorage.setItem('cade_meu_bau_app_favs', JSON.stringify(favorites));
   }, [favorites]);
 
-  // Troca de aba: carrega favoritos e reseta modo ao vivo
+  // FIX: Troca de aba — sem closure stalé, favorites e loadFavoritesSchedules nas deps
   useEffect(() => {
     if (activeTab === 'favs' && prevTabRef.current !== 'favs' && favorites.length > 0) {
-      loadFavoritesSchedules();
+      loadFavoritesSchedules(favorites);
     }
     if (prevTabRef.current === 'map' && activeTab !== 'map') {
       modoAoVivoRef.current = false;
     }
     prevTabRef.current = activeTab;
-  }, [activeTab]); // eslint-disable-line
+  }, [activeTab, favorites, loadFavoritesSchedules]);
 
   // Refs estáveis para callbacks/intervals
   const handleSearchRef = useRef(handleSearch);
-  const loadFavoritesRef = useRef(loadFavoritesSchedules);
+  // FIX: loadFavoritesRef agora aponta para o wrapper que inclui favorites
+  const loadFavoritesRef = useRef(loadFavoritesWithCurrentFavs);
   const activeTabRef = useRef(activeTab);
   useEffect(() => { handleSearchRef.current = handleSearch; }, [handleSearch]);
-  useEffect(() => { loadFavoritesRef.current = loadFavoritesSchedules; }, [loadFavoritesSchedules]);
+  useEffect(() => { loadFavoritesRef.current = loadFavoritesWithCurrentFavs; }, [loadFavoritesWithCurrentFavs]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   // Timer principal de auto-refresh
@@ -525,7 +523,6 @@ const App: React.FC = () => {
     return () => { if (liveTrackingTimerRef.current) clearInterval(liveTrackingTimerRef.current); };
   }, [liveTrackingLine]);
 
-  // Auto-refresh do tempo real no mapa
   useEffect(() => { selectedStopRef.current = selectedStop; }, [selectedStop]);
 
   useEffect(() => {
@@ -566,11 +563,13 @@ const App: React.FC = () => {
       return true;
     });
 
-    const loadLeaflet = () => new Promise<void>((resolve) => {
+    const loadLeaflet = () => new Promise<void>((resolve, reject) => {
       if ((window as { L?: unknown }).L) { resolve(); return; }
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
       script.onload = () => resolve();
+      // FIX: rejeita a promise se o script falhar ao carregar
+      script.onerror = () => reject(new Error('Falha ao carregar Leaflet'));
       document.head.appendChild(script);
       const link = document.createElement('link');
       link.rel = 'stylesheet';
@@ -582,7 +581,11 @@ const App: React.FC = () => {
     let zoomEndHandler: (() => void) | null = null;
 
     loadLeaflet().then(() => {
-      if (!mapRef.current || leafletMapRef.current) return;
+      if (!mapRef.current || leafletMapRef.current) {
+        // FIX: resetar o guard se não conseguiu montar o mapa
+        leafletLoadingRef.current = false;
+        return;
+      }
       const L = (window as unknown as { L: LeafletLib }).L;
 
       const defaultCenter: [number, number] = [-16.7200, -49.0900];
@@ -691,6 +694,9 @@ const App: React.FC = () => {
       } else {
         pontosDataRef.current.forEach(p => p.marker.setOpacity(1));
       }
+    }).catch(() => {
+      // FIX CRÍTICO: reseta o guard para permitir nova tentativa
+      leafletLoadingRef.current = false;
     });
 
     return () => {
@@ -1058,7 +1064,7 @@ const App: React.FC = () => {
                 <img src="/favorito.png" alt="" style={{width:18,height:18,objectFit:"contain"}} /> Minha Garagem
               </h2>
               {favorites.length > 0 && !isFavoritesLoading && (
-                <button onClick={() => { loadFavoritesSchedules(); haptic(30); }}
+                <button onClick={() => { loadFavoritesSchedules(favorites); haptic(30); }}
                   className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} border ${lightTheme ? 'border-gray-300' : 'border-white/10'} px-3 py-2 rounded-xl active:scale-95 transition-transform`}>
                   Atualizar
                 </button>
@@ -1105,6 +1111,23 @@ const App: React.FC = () => {
                 <p className="text-[10px] leading-relaxed uppercase tracking-widest font-bold">
                   Toque na estrela de uma linha para que ela apareça aqui.
                 </p>
+              </div>
+            )}
+
+            {/* FIX: mostrar aviso de favoritos carregados mas sem horários (inativo) */}
+            {!isFavoritesLoading && favorites.length > 0 && favoriteBusLines.length === 0 && (
+              <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-4 flex items-start gap-3">
+                <img src="/alerta.png" alt="Aviso" style={{width:24,height:24,objectFit:"contain",flexShrink:0,marginTop:2}} />
+                <div>
+                  <p className="font-black text-[11px] text-yellow-400 uppercase tracking-widest">Sem horários disponíveis</p>
+                  <p className={`text-[9px] font-bold mt-1 ${theme.subtext} leading-relaxed`}>
+                    Os pontos salvos podem estar sem operação agora ou fora de alcance. Tente atualizar.
+                  </p>
+                  <button onClick={() => { loadFavoritesSchedules(favorites); haptic(30); }}
+                    className="mt-2 text-[9px] font-black uppercase tracking-widest text-yellow-400 underline">
+                    Tentar novamente →
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1267,7 +1290,7 @@ const App: React.FC = () => {
       >
         <div ref={mapRef} style={{width: '100%', height: '100%'}} />
 
-        {/* Banner de rastreamento ao vivo — exibe destino */}
+        {/* Banner de rastreamento ao vivo */}
         {liveTrackingLine && (
           <div className="absolute top-3 left-3 right-3 z-[1001] rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
             style={{background:'rgba(29,78,216,0.95)', backdropFilter:'blur(8px)', border:'1px solid rgba(96,165,250,0.3)'}}>
@@ -1337,7 +1360,6 @@ const App: React.FC = () => {
                 const dy = lastY - startY;
                 el.style.transform = '';
                 if (dy > 80) {
-                  // puxou pra baixo o suficiente — fecha
                   setSelectedStop(null);
                   setStopLines([]);
                   busMarkersMapRef.current.forEach(m => m.remove());
@@ -1455,8 +1477,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
-
 
         {/* Loader inicial */}
         {!mapReady && (

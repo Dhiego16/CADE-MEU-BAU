@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { BusLine, FavoriteItem, SearchResult } from '../types';
 import { normalizeTime, REFRESH_INTERVAL, MAX_HISTORY, BASE_URL } from '../utils';
 
-export function useBusSearch(favorites: FavoriteItem[]) {
+export function useBusSearch() {
   const [busLines, setBusLines] = useState<BusLine[]>([]);
   const [favoriteBusLines, setFavoriteBusLines] = useState<BusLine[]>([]);
   const [stopId, setStopId] = useState('');
@@ -109,6 +109,9 @@ export function useBusSearch(favorites: FavoriteItem[]) {
     setErrorMsg(null);
     setStaleData(false);
 
+    // FIX: limpar liveLineMap antes de nova busca para evitar botões fantasma
+    setLiveLineMap({});
+
     if (timerRef?.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setCountdown(REFRESH_INTERVAL);
 
@@ -136,20 +139,21 @@ export function useBusSearch(favorites: FavoriteItem[]) {
     finally { setIsLoading(false); setCountdown(REFRESH_INTERVAL); isSearchingRef.current = false; }
   }, [stopId, lineFilter, performSearch, addToHistory, mergeLines]);
 
-  const loadFavoritesSchedules = useCallback(async () => {
-    if (favorites.length === 0) return;
+  // FIX CRÍTICO: agora aceita favs como parâmetro — não depende mais do closure vazio
+  const loadFavoritesSchedules = useCallback(async (favs: FavoriteItem[]) => {
+    if (favs.length === 0) return;
     if (isFavSearchingRef.current) return;
     isFavSearchingRef.current = true;
     setFavoriteBusLines(prev => { if (prev.length === 0) setIsFavoritesLoading(true); return prev; });
     setStaleData(false);
     try {
-      const results = await Promise.all(favorites.map(fav => performSearch(fav.stopId, fav.lineNumber)));
+      const results = await Promise.all(favs.map(fav => performSearch(fav.stopId, fav.lineNumber)));
       const allLines = results.flatMap(r => r.lines);
       const hasOffline = results.some(r => r.error === 'offline');
       const newInactive = new Set<string>();
       results.forEach((r, i) => {
         if (r.error === 'not_found' || r.error === 'inactive_stop') {
-          newInactive.add(favorites[i].stopId);
+          newInactive.add(favs[i].stopId);
         }
       });
       setInactiveStops(newInactive);
@@ -157,7 +161,7 @@ export function useBusSearch(favorites: FavoriteItem[]) {
       if (hasOffline) setStaleData(true);
     } catch { setStaleData(true); }
     finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); isFavSearchingRef.current = false; }
-  }, [favorites, performSearch, mergeLines]);
+  }, [performSearch, mergeLines]);
 
   return {
     busLines,
