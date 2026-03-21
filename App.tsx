@@ -296,8 +296,6 @@ const App: React.FC = () => {
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
   const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({}); // lineNumber -> tem ônibus ao vivo
   const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
-  const [liveLineMap, setLiveLineMap] = useState<Record<string, boolean>>({}); // lineNumber -> tem ônibus ao vivo
-  const [liveTrackingLine, setLiveTrackingLine] = useState<{lineNumber: string; stopId: string; stopLat: number; stopLng: number} | null>(null);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectedStopRef = useRef<{id: string; nome: string} | null>(null);
 
