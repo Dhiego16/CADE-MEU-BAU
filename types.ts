@@ -1,4 +1,3 @@
-
 export interface BusSchedule {
   time: string;
   type: 'Dia Útil' | 'Sábado' | 'Domingo/Feriado';
@@ -93,6 +92,7 @@ export interface LiveTrackingLine {
   stopId: string;
   stopLat: number;
   stopLng: number;
+  destination: string;
 }
 
 export interface LeafletLib {

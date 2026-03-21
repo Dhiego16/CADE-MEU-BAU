@@ -10,22 +10,70 @@ import { useSitpass } from './hooks/useSitpass';
 import BusLineCard from './components/BusLineCard';
 import SkeletonCard from './components/SkeletonCard';
 
+// ─── Distância simples entre dois pontos (Haversine simplificado) ────────────
+const geoDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const dLat = lat2 - lat1;
+  const dLng = lng2 - lng1;
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+};
+
+// ─── Normaliza string para comparação de destino ────────────────────────────
+const normDestino = (s: string): string =>
+  s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '').trim();
+
 // ─── Função reutilizável para buscar ônibus ao vivo por linha ─────────────────
+// Quando stopLat/stopLng/destination são fornecidos, mostra APENAS o ônibus
+// mais próximo do ponto com destino compatível (= o que vai chegar primeiro).
+// Quando não fornecidos, mostra todos (comportamento padrão para o mapa geral).
 const buscarOnibusLinha = async (
   lineNumber: string,
   map: LeafletMap,
   busMarkersMapRef: React.MutableRefObject<Map<string, LeafletMarker>>,
   busMarkersRef: React.MutableRefObject<LeafletMarker[]>,
-  L: { icon: (opts: object) => object; marker: (latlng: [number, number], opts: object) => LeafletMarker }
+  L: { icon: (opts: object) => object; marker: (latlng: [number, number], opts: object) => LeafletMarker },
+  filtro?: { stopLat: number; stopLng: number; destination: string }
 ) => {
   try {
     const r = await fetch(`/api/realtimebus?linha=${lineNumber}`);
     if (!r.ok) return;
     const onibus = await r.json();
-    if (!Array.isArray(onibus)) return;
+    if (!Array.isArray(onibus) || onibus.length === 0) return;
 
-    onibus.forEach((bus: { lat: number; lng: number; destino: string; numero: string }) => {
-      if (!bus.lat || !bus.lng) return;
+    // Determinar quais ônibus mostrar
+    let busesToShow: { lat: number; lng: number; destino: string; numero: string }[] = onibus.filter(
+      (bus: { lat: number; lng: number }) => bus.lat && bus.lng
+    );
+
+    if (filtro && filtro.destination) {
+      const destNorm = normDestino(filtro.destination);
+
+      // 1) Filtrar por destino compatível
+      const mesmoDestino = busesToShow.filter(bus =>
+        normDestino(bus.destino || '').includes(destNorm) || destNorm.includes(normDestino(bus.destino || ''))
+      );
+
+      // 2) Se encontrou ônibus com mesmo destino, pegar o mais próximo do ponto
+      const candidatos = mesmoDestino.length > 0 ? mesmoDestino : busesToShow;
+      const maisProximo = candidatos.reduce<typeof candidatos[0] | null>((closest, bus) => {
+        if (!closest) return bus;
+        const distBus = geoDistance(filtro.stopLat, filtro.stopLng, bus.lat, bus.lng);
+        const distClosest = geoDistance(filtro.stopLat, filtro.stopLng, closest.lat, closest.lng);
+        return distBus < distClosest ? bus : closest;
+      }, null);
+
+      busesToShow = maisProximo ? [maisProximo] : [];
+    }
+
+    // Remover markers antigos que não estão mais na lista filtrada
+    const busKeysAtivos = new Set(busesToShow.map(bus => `${lineNumber}-${bus.numero}`));
+    busMarkersMapRef.current.forEach((marker, key) => {
+      if (key.startsWith(`${lineNumber}-`) && !busKeysAtivos.has(key)) {
+        marker.remove();
+        busMarkersMapRef.current.delete(key);
+      }
+    });
+
+    busesToShow.forEach((bus) => {
       const busKey = `${lineNumber}-${bus.numero}`;
       const existingMarker = busMarkersMapRef.current.get(busKey);
 
@@ -204,12 +252,12 @@ const App: React.FC = () => {
   }, [mergeLines]);
 
   // ─── Rastreamento ao vivo ─────────────────────────────────────────────────
-  const abrirRastreamentoAoVivo = useCallback((lineNumber: string, pontoId: string) => {
+  const abrirRastreamentoAoVivo = useCallback((lineNumber: string, pontoId: string, destination: string) => {
     const pontoData = pontosDataRef.current.find(p => p.id === pontoId);
     const lat = pontoData?.lat ?? -16.7200;
     const lng = pontoData?.lng ?? -49.0900;
 
-    setLiveTrackingLine({ lineNumber, stopId: pontoId, stopLat: lat, stopLng: lng });
+    setLiveTrackingLine({ lineNumber, stopId: pontoId, stopLat: lat, stopLng: lng, destination });
     setActiveTab('map');
     haptic([50, 30, 80]);
     modoAoVivoRef.current = true;
@@ -229,7 +277,7 @@ const App: React.FC = () => {
       busMarkersMapRef.current.clear();
       busMarkersRef.current = [];
 
-      buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L);
+      buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L, { stopLat: lat, stopLng: lng, destination });
     }, 300);
   }, []);
 
@@ -434,13 +482,20 @@ const App: React.FC = () => {
       return;
     }
 
-    const { lineNumber } = liveTrackingLine;
+    const { lineNumber, stopLat, stopLng, destination } = liveTrackingLine;
 
     const atualizarPosicao = async () => {
       if (!leafletMapRef.current) return;
       const L = (window as unknown as { L?: LeafletLib }).L;
       if (!L) return;
-      await buscarOnibusLinha(lineNumber, leafletMapRef.current, busMarkersMapRef, busMarkersRef, L);
+      await buscarOnibusLinha(
+        lineNumber,
+        leafletMapRef.current,
+        busMarkersMapRef,
+        busMarkersRef,
+        L,
+        { stopLat, stopLng, destination }
+      );
     };
 
     setLiveCountdown(10);
@@ -952,7 +1007,7 @@ const App: React.FC = () => {
                     <BusLineCard line={line} staggerIndex={i} {...cardProps} />
                     {liveLineMap[line.number] && (
                       <button
-                        onClick={() => abrirRastreamentoAoVivo(line.number, line.stopSource ?? stopId)}
+                        onClick={() => abrirRastreamentoAoVivo(line.number, line.stopSource ?? stopId, line.destination)}
                         className="w-full mt-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
                         style={{background: 'linear-gradient(90deg, #1d4ed8, #2563eb)', color: '#fff', boxShadow: '0 4px 15px rgba(37,99,235,0.4)'}}>
                         <img src="/onibus_realtime.png" alt="" style={{width:18,height:18,objectFit:'contain'}} />
@@ -1011,12 +1066,6 @@ const App: React.FC = () => {
                 ))}
               </div>
             )}
-
-            {/* Pontos inativos */}
-            {(() => {
-              // Acessa inactiveStops do hook useBusSearch via closure
-              return null;
-            })()}
 
             {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
               <div key={pontoId} className="space-y-3">
@@ -1204,15 +1253,20 @@ const App: React.FC = () => {
       >
         <div ref={mapRef} style={{width: '100%', height: '100%'}} />
 
-        {/* Banner de rastreamento ao vivo */}
+        {/* Banner de rastreamento ao vivo — exibe destino */}
         {liveTrackingLine && (
           <div className="absolute top-3 left-3 right-3 z-[1001] rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
             style={{background:'rgba(29,78,216,0.95)', backdropFilter:'blur(8px)', border:'1px solid rgba(96,165,250,0.3)'}}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
-              <p className="text-white font-black text-[10px] uppercase tracking-widest truncate">
-                Rastreando linha {liveTrackingLine.lineNumber} ao vivo
-              </p>
+              <div className="min-w-0">
+                <p className="text-white font-black text-[10px] uppercase tracking-widest truncate">
+                  Linha {liveTrackingLine.lineNumber}
+                </p>
+                <p className="text-blue-200 text-[9px] font-bold truncate">
+                  → {liveTrackingLine.destination}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-blue-200 font-black text-[10px] tabular-nums">{liveCountdown}s</span>
