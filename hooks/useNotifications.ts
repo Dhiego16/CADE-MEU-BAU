@@ -3,13 +3,16 @@ import { BusLine } from '../types';
 import { haptic } from '../utils';
 
 // ─── Helper: converte chave VAPID base64 para Uint8Array ─────────────────────
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+  const buffer = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    buffer[i] = rawData.charCodeAt(i);
+  }
+  return buffer.buffer;
 }
-
 export function useNotifications() {
   const [activeAlerts, setActiveAlerts] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_alerts') || '{}'); } catch { return {}; }
@@ -76,7 +79,7 @@ export function useNotifications() {
         return false;
       }
 
-      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      const vapidKey = (import.meta as unknown as { env: Record<string, string> }).env.VITE_VAPID_PUBLIC_KEY;
       if (!vapidKey) {
         console.warn('VAPID_PUBLIC_KEY não configurada');
         return false;
