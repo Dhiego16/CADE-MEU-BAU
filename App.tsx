@@ -167,9 +167,17 @@ const App: React.FC = () => {
 
   // Encontra coordenadas de um ponto pelo ID
   const getStopCoords = useCallback((stopSource: string) => {
-    return pontosDataRef.current.find(p => p.id === stopSource)
-      ?? { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
-  }, []);
+  // Busca primeiro no ref (mapa já inicializado), depois no JSON bruto
+  const fromRef = pontosDataRef.current.find(p => p.id === stopSource);
+  if (fromRef) return fromRef;
+
+  const fromJson = (PONTOS_DATA as Array<{id:string;lat:number;lng:number;nome:string}>)
+    .find(p => p.id === stopSource);
+  if (fromJson) return { ...fromJson, marker: null as unknown as LeafletMarker };
+
+  // Fallback só se o ponto realmente não existir no JSON
+  return { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
+}, []);
 
   // PWA
   const applyUpdate = () => {
