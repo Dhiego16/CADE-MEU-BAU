@@ -38,8 +38,8 @@ const App: React.FC = () => {
   const [activeMiniMap, setActiveMiniMap] = useState<MiniMapConfig | null>(null);
   const [miniMapRefreshKey, setMiniMapRefreshKey] = useState(0);
   const toggleMiniMap = useCallback((config: MiniMapConfig) => {
-    setActiveMiniMap(prev => prev?.key === config.key ? null : config);
-  }, []);
+  setActiveMiniMap({ ...config });
+}, []);
 
   // Mapa
   const [mapReady, setMapReady] = useState(false);
