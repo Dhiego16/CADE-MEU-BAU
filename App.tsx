@@ -354,6 +354,7 @@ const App: React.FC = () => {
           const loc = userLocationRef.current;
           if (loc) filtrarMarkersPorRaio(loc.lat, loc.lng);
           setSelectedStop({ id: ponto.id, nome: ponto.nome });
+	  setActiveMiniMap(null);
           setStopLines([]); setStopLiveLinesMap({}); setStopLinesError(null); setStopLinesLoading(true);
           setActiveMiniMap(null);
           buscarLinhasPontoInterno(ponto.id);
@@ -627,7 +628,7 @@ const App: React.FC = () => {
                         </button>
                       )}
                       {isActive && activeMiniMap && (
-                        <MiniMap stopLat={activeMiniMap.stopLat} stopLng={activeMiniMap.stopLng} stopNome={activeMiniMap.stopNome} lineNumber={activeMiniMap.lineNumber} destination={activeMiniMap.destination} refreshKey={miniMapRefreshKey} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
+                        <MiniMap key={activeMiniMap?.key} stopLat={activeMiniMap.stopLat} stopLng={activeMiniMap.stopLng} stopNome={activeMiniMap.stopNome} lineNumber={activeMiniMap.lineNumber} destination={activeMiniMap.destination} refreshKey={miniMapRefreshKey onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
                       )}
                     </div>
                   );
@@ -836,7 +837,7 @@ const App: React.FC = () => {
                     </div>
                     {/* MiniMap no bottom sheet do mapa */}
                     {isMapMiniActive && activeMiniMap && stopCoordsMap && (
-                      <MiniMap stopLat={stopCoordsMap.lat} stopLng={stopCoordsMap.lng} stopNome={selectedStop.nome} lineNumber={line.number} destination={line.destination} refreshKey={miniMapRefreshKey} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
+                      <MiniMap key={activeMiniMap?.key} stopLat={stopCoordsMap.lat} stopLng={stopCoordsMap.lng} stopNome={selectedStop.nome} lineNumber={line.number} destination={line.destination} refreshKey={miniMapRefreshKey onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme}/>
                     )}
                   </div>
                 );
