@@ -2,5 +2,11 @@
   "rewrites": [
     { "source": "/sobre", "destination": "/landing.html" },
     { "source": "/:path*", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/check-alerts",
+      "schedule": "* * * * *"
+    }
   ]
 }

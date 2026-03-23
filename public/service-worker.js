@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cade-meu-bau-v5';
+const CACHE_NAME = 'cade-meu-bau-v6';
 
 const STATIC_ASSETS = [
   '/',
@@ -17,7 +17,6 @@ self.addEventListener('install', (event) => {
       );
     })
   );
-  // Ativa imediatamente sem esperar fechar as abas antigas
   self.skipWaiting();
 });
 
@@ -31,7 +30,6 @@ self.addEventListener('activate', (event) => {
           .map((name) => caches.delete(name))
       )
     ).then(() => {
-      // Toma controle de todas as abas abertas imediatamente
       return self.clients.claim();
     })
   );
@@ -71,8 +69,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Assets do próprio app: Network First (tenta rede, cai pro cache se offline)
-  // Isso garante que atualizações chegam imediatamente quando online
+  // Assets do próprio app: Network First
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -83,10 +80,8 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Offline: serve do cache
         return caches.match(event.request).then((cached) => {
           if (cached) return cached;
-          // Navegação sem cache: serve o index.html
           if (event.request.mode === 'navigate') {
             return caches.match('/index.html');
           }
@@ -102,7 +97,33 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// ─── Notificações ─────────────────────────────────────────────────────────────
+// ─── Push em segundo plano ────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let data;
+  try {
+    data = event.data.json();
+  } catch {
+    data = {
+      title: '🚍 Cadê meu Baú?',
+      body: event.data.text(),
+    };
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || '/icons/icon-192x192.png',
+      badge: data.badge || '/icons/icon-72x72.png',
+      vibrate: [200, 100, 200],
+      tag: 'cade-meu-bau-alert',
+      renotify: true,
+    })
+  );
+});
+
+// ─── Clique na notificação ────────────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
