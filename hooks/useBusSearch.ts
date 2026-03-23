@@ -54,7 +54,7 @@ export function useBusSearch() {
               status: 'Normal' as const,
               nextArrival: normalizeTime(item.proximo ?? item.previsao),
               subsequentArrival: normalizeTime(item.seguinte),
-              stopSource: sId,
+              stopSource: sId.padStart(5, '0'),
             };
           })
         };
