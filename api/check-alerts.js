@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { Receiver } from '@upstash/qstash';
 import webpush from 'web-push';
 
 const redis = new Redis({
@@ -13,10 +14,35 @@ webpush.setVapidDetails(
 );
 
 export default async function handler(req, res) {
-  // Segurança: só aceita chamada autorizada
+  // Aceita chamada do QStash (assinatura) OU do cron da Vercel (Bearer token)
   const authHeader = req.headers['authorization'];
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ erro: 'Não autorizado' });
+  const isVercelCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+  if (!isVercelCron) {
+    // Tenta validar assinatura do QStash
+    try {
+      const receiver = new Receiver({
+        currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
+        nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
+      });
+
+      const body = await new Promise((resolve) => {
+        let data = '';
+        req.on('data', chunk => { data += chunk; });
+        req.on('end', () => resolve(data));
+      });
+
+      const isValid = await receiver.verify({
+        signature: req.headers['upstash-signature'],
+        body: body || '',
+      });
+
+      if (!isValid) {
+        return res.status(401).json({ erro: 'Não autorizado' });
+      }
+    } catch {
+      return res.status(401).json({ erro: 'Não autorizado' });
+    }
   }
 
   let alertIds;
@@ -40,7 +66,6 @@ export default async function handler(req, res) {
     try {
       const raw = await redis.get(alertId);
 
-      // Alerta expirado ou já removido
       if (!raw) {
         await redis.srem('alerts:all', alertId);
         results.removed++;
@@ -49,7 +74,6 @@ export default async function handler(req, res) {
 
       const alert = typeof raw === 'string' ? JSON.parse(raw) : raw;
 
-      // Busca horários na própria API do app
       const url = `${baseUrl}/api/ponto?ponto=${alert.stopId}&linha=${alert.lineNumber}`;
       let apiRes;
       try {
