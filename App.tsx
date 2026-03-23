@@ -610,7 +610,7 @@ const App: React.FC = () => {
             {!isLoading && (
               <div className="space-y-3">
                 {busLines.map((line, i) => {
-                  const sId = line.stopSource ?? stopId;
+                  const sId = selectedStop?.id ?? line.stopSource ?? stopId;
                   const miniKey = `${line.number}-${sId}`;
                   const stopCoords = getStopCoords(sId);
                   const isActive = activeMiniMap?.key === miniKey;
@@ -619,7 +619,7 @@ const App: React.FC = () => {
                       <BusLineCard line={line} staggerIndex={i} {...cardProps}/>
                       {liveLineMap[line.number] && (
                         <button
-                          onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoords.lat, stopLng: stopCoords.lng, stopNome: stopCoords.nome ?? `Ponto ${sId}`, destination: line.destination }); }}
+                          onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoords.lat, stopLng: stopCoords.lng, stopNome: selectedStop?.nome ?? stopCoords.nome ?? `Ponto ${sId}`, destination: line.destination }); }}
                           className={`w-full mt-1 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all ${isActive ? 'bg-blue-700 text-white' : 'bg-blue-600/15 text-blue-400 border border-blue-500/30'}`}>
                           <img src="/onibus_realtime.png" alt="" style={{width:16,height:16,objectFit:'contain'}}/>
                           {isActive ? 'Fechar mapa ao vivo' : `Ver linha ${line.number} ao vivo`}
