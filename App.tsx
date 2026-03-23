@@ -167,15 +167,15 @@ const App: React.FC = () => {
 
   // Encontra coordenadas de um ponto pelo ID
   const getStopCoords = useCallback((stopSource: string) => {
-  // Busca primeiro no ref (mapa já inicializado), depois no JSON bruto
-  const fromRef = pontosDataRef.current.find(p => p.id === stopSource);
+  const normalizedId = stopSource.padStart(5, '0');
+
+  const fromRef = pontosDataRef.current.find(p => p.id === normalizedId);
   if (fromRef) return fromRef;
 
   const fromJson = (PONTOS_DATA as Array<{id:string;lat:number;lng:number;nome:string}>)
-    .find(p => p.id === stopSource);
+    .find(p => p.id === normalizedId);
   if (fromJson) return { ...fromJson, marker: null as unknown as LeafletMarker };
 
-  // Fallback só se o ponto realmente não existir no JSON
   return { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
 }, []);
 
@@ -619,8 +619,8 @@ const App: React.FC = () => {
             {!isLoading && (
               <div className="space-y-3">
                 {busLines.map((line, i) => {
-                  const sId = selectedStop?.id ?? line.stopSource ?? stopId;
-                  const miniKey = `${line.number}-${sId}`;
+                  const sId = (selectedStop?.id ?? line.stopSource ?? stopId).padStart(5, '0');
+				  const miniKey = `${line.number}-${sId}`;
                   const stopCoords = getStopCoords(sId);
                   const isActive = activeMiniMap?.key === miniKey;
                   return (
