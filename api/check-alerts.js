@@ -1,5 +1,4 @@
 import { Redis } from '@upstash/redis';
-import { Receiver } from '@upstash/qstash';
 import webpush from 'web-push';
 
 const redis = new Redis({
@@ -14,33 +13,39 @@ webpush.setVapidDetails(
 );
 
 export default async function handler(req, res) {
-  // Aceita chamada do QStash (assinatura) OU do cron da Vercel (Bearer token)
+  // Aceita apenas chamada do cron da Vercel (Bearer token)
   const authHeader = req.headers['authorization'];
   const isVercelCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
+  // Também aceita chamada direta do QStash (assinatura) se configurado
   if (!isVercelCron) {
-    // Tenta validar assinatura do QStash
-    try {
-      const receiver = new Receiver({
-        currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
-        nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
-      });
+    // Tenta validar assinatura do QStash se as envs existirem
+    if (process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY) {
+      try {
+        const { Receiver } = await import('@upstash/qstash');
+        const receiver = new Receiver({
+          currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY,
+          nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY,
+        });
 
-      const body = await new Promise((resolve) => {
-        let data = '';
-        req.on('data', chunk => { data += chunk; });
-        req.on('end', () => resolve(data));
-      });
+        const body = await new Promise((resolve) => {
+          let data = '';
+          req.on('data', chunk => { data += chunk; });
+          req.on('end', () => resolve(data));
+        });
 
-      const isValid = await receiver.verify({
-        signature: req.headers['upstash-signature'],
-        body: body || '',
-      });
+        const isValid = await receiver.verify({
+          signature: req.headers['upstash-signature'],
+          body: body || '',
+        });
 
-      if (!isValid) {
+        if (!isValid) {
+          return res.status(401).json({ erro: 'Não autorizado' });
+        }
+      } catch {
         return res.status(401).json({ erro: 'Não autorizado' });
       }
-    } catch {
+    } else {
       return res.status(401).json({ erro: 'Não autorizado' });
     }
   }
@@ -66,6 +71,7 @@ export default async function handler(req, res) {
     try {
       const raw = await redis.get(alertId);
 
+      // Alerta expirou (TTL do Redis zerou) — limpa o índice
       if (!raw) {
         await redis.srem('alerts:all', alertId);
         results.removed++;
@@ -74,6 +80,7 @@ export default async function handler(req, res) {
 
       const alert = typeof raw === 'string' ? JSON.parse(raw) : raw;
 
+      // Busca horário atual do ponto/linha na RMTC
       const url = `${baseUrl}/api/ponto?ponto=${alert.stopId}&linha=${alert.lineNumber}`;
       let apiRes;
       try {
@@ -109,13 +116,17 @@ export default async function handler(req, res) {
             : `Linha ${alert.lineNumber} chega em ${mins} min no ponto ${alert.stopId}!`,
           icon: '/icons/icon-192x192.png',
           badge: '/icons/icon-72x72.png',
+          data: {
+            url: `/?ponto=${alert.stopId}&linha=${alert.lineNumber}`,
+          },
         });
 
         try {
           await webpush.sendNotification(alert.subscription, payload);
           results.notified++;
         } catch (pushErr) {
-          console.error(`Erro ao enviar push:`, pushErr.message);
+          console.error(`Erro ao enviar push para alerta ${alertId}:`, pushErr.message);
+          // Subscription inválida/expirada — remove o alerta
           if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
             await redis.del(alertId);
             await redis.srem('alerts:all', alertId);
@@ -125,12 +136,13 @@ export default async function handler(req, res) {
           continue;
         }
 
+        // Notificação enviada com sucesso — remove o alerta (one-shot)
         await redis.del(alertId);
         await redis.srem('alerts:all', alertId);
         results.removed++;
       }
     } catch (err) {
-      console.error(`Erro no alerta ${alertId}:`, err.message);
+      console.error(`Erro ao processar alerta ${alertId}:`, err.message);
       results.errors++;
     }
   }

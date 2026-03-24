@@ -8,7 +8,6 @@ const STATIC_ASSETS = [
   '/icons/icon-512x512.png',
 ];
 
-// ─── Instalação ───────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -20,7 +19,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// ─── Ativação ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) =>
@@ -29,31 +27,25 @@ self.addEventListener('activate', (event) => {
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       )
-    ).then(() => {
-      return self.clients.claim();
-    })
+    ).then(() => self.clients.claim())
   );
 });
 
-// ─── Fetch ────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // API de ônibus: sempre busca da rede, nunca do cache
   if (url.hostname.includes('bot-onibus.vercel.app')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // API do Sitpass: sempre da rede
   if (url.hostname.includes('sitpass')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // Assets externos (fontes, CDN): cache com fallback
   if (url.hostname !== self.location.hostname) {
     event.respondWith(
       fetch(event.request)
@@ -69,7 +61,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Assets do próprio app: Network First
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -90,7 +81,6 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// ─── Mensagens do app ─────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -111,30 +101,42 @@ self.addEventListener('push', (event) => {
     };
   }
 
+  const options = {
+    body: data.body,
+    icon: data.icon || '/icons/icon-192x192.png',
+    badge: data.badge || '/icons/icon-72x72.png',
+    vibrate: [200, 100, 200],
+    tag: 'cade-meu-bau-alert',
+    renotify: true,
+    // Guarda a URL para abrir ao clicar
+    data: data.data || { url: '/' },
+  };
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon || '/icons/icon-192x192.png',
-      badge: data.badge || '/icons/icon-72x72.png',
-      vibrate: [200, 100, 200],
-      tag: 'cade-meu-bau-alert',
-      renotify: true,
-    })
+    self.registration.showNotification(data.title, options)
   );
 });
 
 // ─── Clique na notificação ────────────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+
+  const targetUrl = (event.notification.data && event.notification.data.url)
+    ? self.location.origin + event.notification.data.url
+    : self.location.origin + '/';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Se já tiver uma janela do app aberta, foca e navega
       for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          client.navigate(targetUrl);
           return client.focus();
         }
       }
+      // Senão abre uma nova janela diretamente no ponto/linha
       if (clients.openWindow) {
-        return clients.openWindow('/');
+        return clients.openWindow(targetUrl);
       }
     })
   );
