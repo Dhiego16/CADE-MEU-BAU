@@ -5,6 +5,7 @@ const redis = new Redis({
   url: 'https://capable-worm-81663.upstash.io',
   token: 'gQAAAAAAAT7_AAIncDFjYTc2ZmY2MDk1MGU0NmM2YTAwNTRlMmM2MzNlZWIyNXAxODE2NjM',
 });
+console.log('check-alerts iniciado, alertas encontrados:', alertIds?.length);
 
 webpush.setVapidDetails(
   'mailto:' + (process.env.VAPID_EMAIL || 'contato@cademeubau.vercel.app'),
@@ -149,3 +150,6 @@ export default async function handler(req, res) {
 
   return res.status(200).json({ ok: true, ...results });
 }
+const finalResult = { ok: true, ...results };
+console.log('check-alerts resultado:', JSON.stringify(finalResult));
+return res.status(200).json(finalResult);
