@@ -5,7 +5,6 @@ const redis = new Redis({
   url: 'https://capable-worm-81663.upstash.io',
   token: 'gQAAAAAAAT7_AAIncDFjYTc2ZmY2MDk1MGU0NmM2YTAwNTRlMmM2MzNlZWIyNXAxODE2NjM',
 });
-console.log('check-alerts iniciado, alertas encontrados:', alertIds?.length);
 
 webpush.setVapidDetails(
   'mailto:' + (process.env.VAPID_EMAIL || 'contato@cademeubau.vercel.app'),
@@ -14,13 +13,12 @@ webpush.setVapidDetails(
 );
 
 export default async function handler(req, res) {
-  // Aceita apenas chamada do cron da Vercel (Bearer token)
+  console.log('check-alerts iniciado');
+
   const authHeader = req.headers['authorization'];
   const isVercelCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
-  // Também aceita chamada direta do QStash (assinatura) se configurado
   if (!isVercelCron) {
-    // Tenta validar assinatura do QStash se as envs existirem
     if (process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY) {
       try {
         const { Receiver } = await import('@upstash/qstash');
@@ -41,12 +39,15 @@ export default async function handler(req, res) {
         });
 
         if (!isValid) {
+          console.log('QStash: assinatura inválida');
           return res.status(401).json({ erro: 'Não autorizado' });
         }
-      } catch {
+      } catch (e) {
+        console.log('QStash: erro na verificação:', e.message);
         return res.status(401).json({ erro: 'Não autorizado' });
       }
     } else {
+      console.log('Não autorizado: sem CRON_SECRET nem QStash keys');
       return res.status(401).json({ erro: 'Não autorizado' });
     }
   }
@@ -54,11 +55,14 @@ export default async function handler(req, res) {
   let alertIds;
   try {
     alertIds = await redis.smembers('alerts:all');
+    console.log('Alertas encontrados:', alertIds?.length);
   } catch (err) {
+    console.log('Erro ao buscar alertas:', err.message);
     return res.status(500).json({ erro: 'Erro ao buscar alertas', detalhe: err.message });
   }
 
   if (!alertIds || alertIds.length === 0) {
+    console.log('Nenhum alerta ativo');
     return res.status(200).json({ ok: true, checked: 0, message: 'Nenhum alerta ativo' });
   }
 
@@ -72,7 +76,6 @@ export default async function handler(req, res) {
     try {
       const raw = await redis.get(alertId);
 
-      // Alerta expirou (TTL do Redis zerou) — limpa o índice
       if (!raw) {
         await redis.srem('alerts:all', alertId);
         results.removed++;
@@ -80,13 +83,14 @@ export default async function handler(req, res) {
       }
 
       const alert = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      console.log(`Processando alerta: ponto=${alert.stopId} linha=${alert.lineNumber} threshold=${alert.minutes}min`);
 
-      // Busca horário atual do ponto/linha na RMTC
       const url = `${baseUrl}/api/ponto?ponto=${alert.stopId}&linha=${alert.lineNumber}`;
       let apiRes;
       try {
         apiRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      } catch {
+      } catch (e) {
+        console.log('Erro ao buscar RMTC:', e.message);
         results.errors++;
         continue;
       }
@@ -94,10 +98,14 @@ export default async function handler(req, res) {
       if (!apiRes.ok) { results.errors++; continue; }
 
       const data = await apiRes.json();
-      if (!data?.horarios?.length) continue;
+      if (!data?.horarios?.length) {
+        console.log('Sem horários para este ponto/linha');
+        continue;
+      }
 
       const proximo = data.horarios[0]?.proximo ?? data.horarios[0]?.previsao ?? '';
       const proxStr = String(proximo).trim();
+      console.log(`Próximo ônibus: "${proxStr}"`);
 
       if (!proxStr || proxStr === 'SEM PREVISÃO' || /^[-.\s]+$/.test(proxStr)) continue;
 
@@ -108,6 +116,8 @@ export default async function handler(req, res) {
         const parsed = parseInt(proxStr.replace(/\D/g, ''));
         if (!isNaN(parsed)) mins = parsed;
       }
+
+      console.log(`Minutos: ${mins}, threshold: ${alert.minutes}`);
 
       if (mins <= alert.minutes) {
         const payload = JSON.stringify({
@@ -124,10 +134,10 @@ export default async function handler(req, res) {
 
         try {
           await webpush.sendNotification(alert.subscription, payload);
+          console.log('Push enviado com sucesso!');
           results.notified++;
         } catch (pushErr) {
-          console.error(`Erro ao enviar push para alerta ${alertId}:`, pushErr.message);
-          // Subscription inválida/expirada — remove o alerta
+          console.log('Erro ao enviar push:', pushErr.message, 'status:', pushErr.statusCode);
           if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
             await redis.del(alertId);
             await redis.srem('alerts:all', alertId);
@@ -137,19 +147,16 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // Notificação enviada com sucesso — remove o alerta (one-shot)
         await redis.del(alertId);
         await redis.srem('alerts:all', alertId);
         results.removed++;
       }
     } catch (err) {
-      console.error(`Erro ao processar alerta ${alertId}:`, err.message);
+      console.log(`Erro ao processar alerta ${alertId}:`, err.message);
       results.errors++;
     }
   }
 
+  console.log('Resultado final:', JSON.stringify(results));
   return res.status(200).json({ ok: true, ...results });
 }
-const finalResult = { ok: true, ...results };
-console.log('check-alerts resultado:', JSON.stringify(finalResult));
-return res.status(200).json(finalResult);
