@@ -2,8 +2,8 @@ import { Redis } from '@upstash/redis';
 import webpush from 'web-push';
 
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL, // Mudamos de KV_ para UPSTASH_
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+  url: 'https://capable-worm-81663.upstash.io',
+  token: 'gQAAAAAAAT7_AAIncDFjYTc2ZmY2MDk1MGU0NmM2YTAwNTRlMmM2MzNlZWIyNXAxODE2NjM',
 });
 
 webpush.setVapidDetails(
