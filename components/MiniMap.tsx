@@ -31,31 +31,47 @@ const MiniMap: React.FC<MiniMapProps> = ({
   const leafletMapRef = useRef<LeafletMap | null>(null);
   const busMarkerRef = useRef<LeafletMarker | null>(null);
   const stopMarkerRef = useRef<LeafletMarker | null>(null);
-  // AbortController cancelar fetch ao desmontar ou ao iniciar novo antes do anterior terminar
+  // AbortController para cancelar fetch ao desmontar ou iniciar novo fetch antes do anterior terminar
   const abortRef = useRef<AbortController | null>(null);
+  // Flag para evitar setState em componente já desmontado
+  const isMountedRef = useRef(true);
+
   const [mapReady, setMapReady] = useState(false);
   const [busFound, setBusFound] = useState<boolean | null>(null);
   const [fetching, setFetching] = useState(false);
 
   const fetchBus = useCallback(async (map: LeafletMap, L: LeafletLib) => {
-    // Aborta fetch anterior antes de começar novo — evita múltiplas requisições paralelas
+    // Aborta fetch anterior antes de começar novo
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
     const { signal } = abortRef.current;
 
+    // Só atualiza estado se o componente ainda estiver montado
+    if (!isMountedRef.current) return;
     setFetching(true);
+
     try {
       const r = await fetch(`/api/realtimebus?linha=${lineNumber}`, { signal });
-      if (!r.ok) { setBusFound(false); return; }
+      if (!r.ok) {
+        if (isMountedRef.current && !signal.aborted) setBusFound(false);
+        return;
+      }
       const onibus = await r.json();
 
-      if (signal.aborted) return; // componente desmontou durante o fetch
+      // Checa abort/unmount após cada await
+      if (signal.aborted || !isMountedRef.current) return;
 
-      if (!Array.isArray(onibus) || onibus.length === 0) { setBusFound(false); return; }
+      if (!Array.isArray(onibus) || onibus.length === 0) {
+        if (isMountedRef.current) setBusFound(false);
+        return;
+      }
 
       type BusData = { lat: number; lng: number; destino?: string };
       const withCoords: BusData[] = onibus.filter((bus: BusData) => bus.lat && bus.lng);
-      if (withCoords.length === 0) { setBusFound(false); return; }
+      if (withCoords.length === 0) {
+        if (isMountedRef.current) setBusFound(false);
+        return;
+      }
 
       const destNorm = normDestino(destination);
       const mesmoDestino = withCoords.filter(bus =>
@@ -69,7 +85,12 @@ const MiniMap: React.FC<MiniMapProps> = ({
           ? bus : closest;
       }, null);
 
-      if (!maisProximo) { setBusFound(false); return; }
+      if (!maisProximo) {
+        if (isMountedRef.current) setBusFound(false);
+        return;
+      }
+
+      if (!isMountedRef.current || signal.aborted) return;
       setBusFound(true);
 
       if (busMarkerRef.current) {
@@ -101,15 +122,18 @@ const MiniMap: React.FC<MiniMapProps> = ({
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      setBusFound(false);
+      if (isMountedRef.current) setBusFound(false);
     } finally {
-      if (!signal.aborted) setFetching(false);
+      // Só atualiza o spinner se não foi abortado e componente ainda está montado
+      if (isMountedRef.current && !signal.aborted) {
+        setFetching(false);
+      }
     }
   }, [lineNumber, destination, stopLat, stopLng]);
 
   // Inicializa o mapa uma única vez ao montar
   useEffect(() => {
-    let mounted = true;
+    isMountedRef.current = true;
 
     const loadLeaflet = () => new Promise<void>((resolve, reject) => {
       if ((window as { L?: unknown }).L) { resolve(); return; }
@@ -127,7 +151,7 @@ const MiniMap: React.FC<MiniMapProps> = ({
     });
 
     loadLeaflet().then(() => {
-      if (!mounted || !mapDivRef.current || leafletMapRef.current) return;
+      if (!isMountedRef.current || !mapDivRef.current || leafletMapRef.current) return;
       const L = (window as unknown as { L: LeafletLib }).L;
 
       const map = L.map(mapDivRef.current, {
@@ -150,12 +174,12 @@ const MiniMap: React.FC<MiniMapProps> = ({
         .bindPopup(stopNome);
 
       leafletMapRef.current = map;
-      if (mounted) setMapReady(true);
+      if (isMountedRef.current) setMapReady(true);
     }).catch(() => {});
 
-    // Cleanup: aborta fetch pendente, remove markers e destrói mapa
+    // Cleanup: marca como desmontado, aborta fetch pendente, remove markers e destrói mapa
     return () => {
-      mounted = false;
+      isMountedRef.current = false;
       if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
       if (busMarkerRef.current) { busMarkerRef.current.remove(); busMarkerRef.current = null; }
       if (stopMarkerRef.current) { stopMarkerRef.current.remove(); stopMarkerRef.current = null; }
@@ -164,8 +188,6 @@ const MiniMap: React.FC<MiniMapProps> = ({
   }, []); // eslint-disable-line
 
   // Dispara busca toda vez que o mapa estiver pronto OU quando refreshKey mudar
-  // refreshKey é controlado pelo pai — muda junto com o auto-refresh da linha principal
-  // Isso elimina o timer interno e sincroniza tudo em uma única batida
   useEffect(() => {
     if (!mapReady || !leafletMapRef.current) return;
     const L = (window as unknown as { L?: LeafletLib }).L;
@@ -201,7 +223,7 @@ const MiniMap: React.FC<MiniMapProps> = ({
             </span>
           )}
         </div>
-        <button onClick={onClose} className="p-1 active:scale-95 transition-transform shrink-0">
+        <button onClick={onClose} className="p-1 active:scale-95 transition-transform shrink-0" aria-label="Fechar mapa ao vivo">
           <img src="/fechar.png" alt="Fechar" style={{ width: 18, height: 18, objectFit: 'contain', opacity: 0.6 }} />
         </button>
       </div>
