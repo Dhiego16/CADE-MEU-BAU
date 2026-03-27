@@ -79,7 +79,7 @@ export function useNotifications() {
         return false;
       }
 
-      const vapidKey = (import.meta as unknown as { env: Record<string, string> }).env.VITE_VAPID_PUBLIC_KEY;
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
       if (!vapidKey) {
         console.warn('VAPID_PUBLIC_KEY não configurada');
         return false;
