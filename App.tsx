@@ -22,6 +22,54 @@ interface MiniMapConfig {
   destination: string;
 }
 
+// ─── Pull-to-refresh hook ─────────────────────────────────────────────────────
+function usePullToRefresh(onRefresh: () => void, enabled: boolean) {
+  const startYRef = useRef<number | null>(null);
+  const [pulling, setPulling] = useState(false);
+  const [pullDist, setPullDist] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const THRESHOLD = 72;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const el = document.querySelector('.app-container');
+      if (!el || el.scrollTop > 0) return;
+      startYRef.current = e.touches[0].clientY;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (startYRef.current === null) return;
+      const dy = e.touches[0].clientY - startYRef.current;
+      if (dy > 0) {
+        setPulling(true);
+        setPullDist(Math.min(dy, THRESHOLD + 20));
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (pullDist >= THRESHOLD) {
+        haptic(40);
+        onRefresh();
+      }
+      startYRef.current = null;
+      setPulling(false);
+      setPullDist(0);
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [enabled, pullDist, onRefresh]);
+
+  return { pulling, pullDist };
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
   const [isSplash, setIsSplash] = useState(true);
@@ -31,11 +79,16 @@ const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
+  // ── Ordenação ─────────────────────────────────────────────────────────────
+  const [sortByTime, setSortByTime] = useState(false);
+
+  // ── Filtro por destino ────────────────────────────────────────────────────
+  const [destFilter, setDestFilter] = useState('');
+
   // ── MiniMap ao vivo ──────────────────────────────────────────────────────
   const [activeMiniMap, setActiveMiniMap] = useState<MiniMapConfig | null>(null);
   const [miniMapRefreshKey, setMiniMapRefreshKey] = useState(0);
 
-  // ── FIX: toggleMiniMap fecha ao clicar no mesmo botão (verifica key ativa) ──
   const toggleMiniMap = useCallback((config: MiniMapConfig) => {
     setActiveMiniMap(prev =>
       prev?.key === config.key ? null : { ...config }
@@ -45,6 +98,9 @@ const App: React.FC = () => {
   // ── Mapa ──────────────────────────────────────────────────────────────────
   const [mapReady, setMapReady] = useState(false);
   const [locationError, setLocationError] = useState(false);
+  const [showMapOnboarding, setShowMapOnboarding] = useState(() => {
+    try { return !localStorage.getItem('cade_meu_bau_map_onboarding_done'); } catch { return true; }
+  });
   const [selectedStop, setSelectedStop] = useState<{ id: string; nome: string } | null>(null);
   const [stopLines, setStopLines] = useState<BusLine[]>([]);
   const [stopLinesLoading, setStopLinesLoading] = useState(false);
@@ -63,6 +119,9 @@ const App: React.FC = () => {
   const selectedStopRef = useRef<{ id: string; nome: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevTabRef = useRef<string>('');
+
+  // ─── Cache local de horários por ponto (15s) ──────────────────────────────
+  const pontoCacheRef = useRef<Map<string, { data: BusLine[]; ts: number }>>(new Map());
 
   // ── Hooks ─────────────────────────────────────────────────────────────────
   const pwa = usePWA();
@@ -105,6 +164,28 @@ const App: React.FC = () => {
 
   const theme = useMemo(() => buildTheme(lightTheme), [lightTheme]);
 
+  // ── Ordenação e filtro de linhas ──────────────────────────────────────────
+  const parseTime = (t?: string): number => {
+    if (!t || t === 'SEM PREVISÃO') return 9999;
+    if (t.toLowerCase().includes('agora')) return 0;
+    return parseInt(t.replace(/\D/g, '')) || 9999;
+  };
+
+  const processLines = useCallback((lines: BusLine[]) => {
+    let result = lines;
+    if (destFilter.trim()) {
+      const q = destFilter.trim().toUpperCase();
+      result = result.filter(l => l.destination.toUpperCase().includes(q) || l.number.toUpperCase().includes(q));
+    }
+    if (sortByTime) {
+      result = [...result].sort((a, b) => parseTime(a.nextArrival) - parseTime(b.nextArrival));
+    }
+    return result;
+  }, [destFilter, sortByTime]);
+
+  const displayedBusLines = useMemo(() => processLines(busLines), [busLines, processLines]);
+  const displayedFavLines = useMemo(() => processLines(favoriteBusLines), [favoriteBusLines, processLines]);
+
   const cardProps = useMemo(() => ({
     stopId, favorites,
     activeAlerts: notifications.activeAlerts,
@@ -117,9 +198,29 @@ const App: React.FC = () => {
     onShare: shareLine,
   }), [stopId, favorites, notifications.activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, notifications.removeAlert, notifications.setShowAlertModal]);
 
-  // ── Busca horários do ponto no mapa ───────────────────────────────────────
+  // ── Navegar do mapa → busca com ponto preenchido ──────────────────────────
+  const goToSearchWithStop = useCallback((pontoId: string) => {
+    setStopId(pontoId);
+    setLineFilter('');
+    setDestFilter('');
+    setActiveTab('search');
+    haptic(40);
+    // pequeno delay para a aba renderizar antes de disparar a busca
+    setTimeout(() => handleSearch(pontoId, ''), 120);
+  }, [setStopId, setLineFilter, handleSearch]);
+
+  // ── Busca horários do ponto no mapa com cache ─────────────────────────────
   const buscarLinhasPontoInterno = useCallback(async (pontoId: string) => {
     if (!pontoId) return;
+
+    // verifica cache de 15s
+    const cached = pontoCacheRef.current.get(pontoId);
+    if (cached && Date.now() - cached.ts < 15000) {
+      setStopLines(prev => prev.length === 0 ? cached.data : mergeLines(prev, cached.data));
+      setStopLinesLoading(false);
+      return;
+    }
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
@@ -149,8 +250,21 @@ const App: React.FC = () => {
         };
       });
 
+      pontoCacheRef.current.set(pontoId, { data: lines, ts: Date.now() });
       setStopLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       setStopLinesLoading(false);
+
+      // notificação automática se ônibus está chegando (< 3 min) e não há alerta configurado
+      lines.forEach(line => {
+        const key = `${pontoId}::${line.number}`;
+        const mins = parseTime(line.nextArrival);
+        if (mins <= 2 && !notifications.activeAlerts[key]) {
+          notifications.sendNotification(
+            '🚍 Baú chegando!',
+            `Linha ${line.number} chega em ${mins === 0 ? 'AGORA' : `${mins} min`} no ponto ${pontoId}!`
+          );
+        }
+      });
 
       const linhasUnicas = [...new Set(lines.map(l => l.number))];
       const liveMap: Record<string, boolean> = {};
@@ -164,7 +278,7 @@ const App: React.FC = () => {
       }));
       setStopLiveLinesMap(liveMap);
     } catch { setStopLinesError('offline'); setStopLinesLoading(false); }
-  }, [mergeLines]);
+  }, [mergeLines, notifications]);
 
   const getStopCoords = useCallback((stopSource: string) => {
     const normalizedId = stopSource.padStart(5, '0');
@@ -178,7 +292,7 @@ const App: React.FC = () => {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch(); };
 
-  const groupedFavLines = favoriteBusLines.reduce<Record<string, BusLine[]>>((acc, line) => {
+  const groupedFavLines = displayedFavLines.reduce<Record<string, BusLine[]>>((acc, line) => {
     const key = line.stopSource ?? 'desconhecido';
     if (!acc[key]) acc[key] = [];
     acc[key].push(line);
@@ -186,6 +300,14 @@ const App: React.FC = () => {
   }, {});
 
   const favCount = favorites.length;
+
+  // ── Pull-to-refresh ───────────────────────────────────────────────────────
+  const pullEnabled = (activeTab === 'search' && busLines.length > 0) || (activeTab === 'favs' && favoriteBusLines.length > 0);
+  const onPullRefresh = useCallback(() => {
+    if (activeTab === 'search') handleSearch();
+    else loadFavoritesWithCurrentFavs();
+  }, [activeTab, handleSearch, loadFavoritesWithCurrentFavs]);
+  const { pulling, pullDist } = usePullToRefresh(onPullRefresh, pullEnabled);
 
   // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -339,6 +461,16 @@ const App: React.FC = () => {
           const userIcon = L.divIcon({ html: `<div style="width:20px;height:20px;background:#3b82f6;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px rgba(59,130,246,0.4);"></div>`, className: '', iconSize: [20, 20], iconAnchor: [10, 10] });
           L.marker([latitude, longitude], { icon: userIcon }).addTo(map).bindPopup('Você está aqui');
           map.setView([latitude, longitude], 15);
+          // estima distância ao ponto mais próximo
+          let minDist = Infinity;
+          let nearest: { id: string; nome: string; lat: number; lng: number } | null = null;
+          PONTOS.forEach(p => {
+            const d = calcDist(latitude, longitude, p.lat, p.lng);
+            if (d < minDist) { minDist = d; nearest = p; }
+          });
+          if (nearest && minDist < 1000) {
+            (nearest as { _nearestDist?: number })._nearestDist = minDist;
+          }
         }, () => { setLocationError(true); pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }, { timeout: 8000, enableHighAccuracy: true });
       } else { pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }
     }).catch(() => { leafletLoadingRef.current = false; });
@@ -350,6 +482,37 @@ const App: React.FC = () => {
       }
     };
   }, [activeTab, buscarLinhasPontoInterno]);
+
+  // ── Estimativa de caminhada ───────────────────────────────────────────────
+  const walkingMinutes = useMemo(() => {
+    if (!selectedStop || !userLocationRef.current) return null;
+    const p = pontosDataRef.current.find(pt => pt.id === selectedStop.id);
+    if (!p) return null;
+    const dLat = p.lat - userLocationRef.current.lat;
+    const dLng = p.lng - userLocationRef.current.lng;
+    const distDeg = Math.sqrt(dLat * dLat + dLng * dLng);
+    const distM = distDeg * 111000;
+    const mins = Math.round(distM / 80); // ~80m/min caminhando
+    return mins > 0 ? mins : null;
+  }, [selectedStop]);
+
+  // ── Compartilhamento do ponto inteiro ─────────────────────────────────────
+  const shareStop = useCallback(async (pontoId: string, nomePonto: string) => {
+    const url = `${window.location.origin}?ponto=${pontoId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Cadê meu Baú?',
+          text: `🚍 Ponto ${pontoId} — ${nomePonto}`,
+          url,
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+        alert('Link copiado!');
+      }
+    } catch { /* cancelado */ }
+    haptic(30);
+  }, []);
 
   // ── Splash ────────────────────────────────────────────────────────────────
   if (isSplash) {
@@ -375,9 +538,11 @@ const App: React.FC = () => {
       <style>{`
         @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
         @keyframes staggerIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes urgencyPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.3); } }
         .stagger-card { animation: staggerIn 0.3s ease-out both; }
         .page-enter { animation: staggerIn 0.3s ease-out both; }
         .btn-active:active { transform: scale(0.95); opacity: 0.8; }
+        .urgent-card { animation: urgencyPulse 1.5s ease-in-out infinite; border-color: rgba(239,68,68,0.5) !important; }
         ::-webkit-scrollbar { display: none; }
         .app-container { -webkit-overflow-scrolling: touch; }
       `}</style>
@@ -484,6 +649,18 @@ const App: React.FC = () => {
         <div className="font-black italic text-yellow-400 text-xl tracking-tighter skew-x-[-10deg]">CADÊ MEU BAÚ?</div>
         <div className="flex items-center gap-3">
           {staleData && <div className="text-[8px] font-black uppercase tracking-widest text-red-400 animate-pulse border border-red-500/30 px-2 py-1 rounded-xl">Sem internet</div>}
+
+          {/* Botão de ordenação — aparece nas abas search e favs quando há linhas */}
+          {((activeTab === 'search' && busLines.length > 0) || (activeTab === 'favs' && favoriteBusLines.length > 0)) && (
+            <button
+              onClick={() => { setSortByTime(p => !p); haptic(30); }}
+              className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border transition-all ${sortByTime ? 'bg-yellow-400 text-black border-yellow-400' : `border-white/10 ${theme.subtext}`}`}
+              title="Ordenar por menor tempo"
+            >
+              {sortByTime ? '⏱ Tempo' : '⏱ API'}
+            </button>
+          )}
+
           {((activeTab === 'search' && busLines.length > 0 && !isLoading) || (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading)) && (
             <div className="text-right flex flex-col items-end">
               <span className={`text-[7px] font-black ${theme.subtext} uppercase leading-none mb-0.5`}>Auto-Refresh</span>
@@ -494,6 +671,19 @@ const App: React.FC = () => {
           <button onClick={() => { setLightTheme(p => !p); haptic(30); }} className={`text-xl p-1.5 transition-all active:scale-110 ${theme.subtext}`} aria-label="Alternar tema">{lightTheme ? '🌙' : '☀️'}</button>
         </div>
       </header>
+
+      {/* Pull-to-refresh indicator */}
+      {pulling && (
+        <div
+          className="flex items-center justify-center gap-2 overflow-hidden transition-all"
+          style={{ height: Math.min(pullDist, 56), opacity: Math.min(pullDist / 72, 1) }}
+        >
+          <div className={`w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full ${pullDist >= 72 ? 'animate-spin' : ''}`} />
+          <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>
+            {pullDist >= 72 ? 'Solte para atualizar' : 'Puxe para atualizar'}
+          </span>
+        </div>
+      )}
 
       <div className="flex-grow overflow-y-auto app-container px-4 pt-4 pb-32 space-y-5">
 
@@ -537,6 +727,24 @@ const App: React.FC = () => {
                     className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl text-center`} />
                 </div>
               </div>
+
+              {/* Filtro por destino */}
+              {busLines.length > 0 && (
+                <div className="relative">
+                  <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>Filtrar destino</span>
+                  <input
+                    type="text"
+                    placeholder="Ex: Terminal, Centro..."
+                    value={destFilter}
+                    onChange={e => setDestFilter(e.target.value)}
+                    className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-sm`}
+                  />
+                  {destFilter && (
+                    <button onClick={() => setDestFilter('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>
+                  )}
+                </div>
+              )}
+
               <button onClick={() => handleSearch()} disabled={isLoading} className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
                 {isLoading ? 'Rastreando...' : 'Localizar Baú'}
               </button>
@@ -576,14 +784,17 @@ const App: React.FC = () => {
 
             {!isLoading && (
               <div className="space-y-3">
-                {busLines.map((line, i) => {
+                {displayedBusLines.map((line, i) => {
                   const sId = (selectedStop?.id ?? line.stopSource ?? stopId).padStart(5, '0');
                   const miniKey = `${line.number}-${sId}`;
                   const stopCoords = getStopCoords(sId);
                   const isActive = activeMiniMap?.key === miniKey;
+                  const isUrgent = parseTime(line.nextArrival) <= 2;
                   return (
                     <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <BusLineCard line={line} staggerIndex={i} {...cardProps} />
+                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}>
+                        <BusLineCard line={line} staggerIndex={i} {...cardProps} />
+                      </div>
                       {liveLineMap[line.number] && (
                         <button
                           onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoords.lat, stopLng: stopCoords.lng, stopNome: selectedStop?.nome ?? stopCoords.nome ?? `Ponto ${sId}`, destination: line.destination }); }}
@@ -599,6 +810,13 @@ const App: React.FC = () => {
                     </div>
                   );
                 })}
+                {/* Sem resultado após filtro */}
+                {busLines.length > 0 && displayedBusLines.length === 0 && destFilter && (
+                  <div className={`border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-4 text-center`}>
+                    <p className="font-black text-[11px] text-yellow-400 uppercase tracking-widest">Nenhuma linha para "{destFilter}"</p>
+                    <button onClick={() => setDestFilter('')} className="mt-2 text-[9px] font-black uppercase tracking-widest text-yellow-400 underline">Limpar filtro</button>
+                  </div>
+                )}
                 {busLines.length === 0 && !errorMsg && (
                   <div className="py-20 text-center opacity-10 flex flex-col items-center">
                     <img src="/onibus_realtime.png" alt="" className="mb-6" style={{ width: 90, height: 90, objectFit: "contain", opacity: 0.15 }} />
@@ -624,6 +842,23 @@ const App: React.FC = () => {
                 <button onClick={() => { loadFavoritesSchedules(favorites); haptic(30); }} className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} border ${lightTheme ? 'border-gray-300' : 'border-white/10'} px-3 py-2 rounded-xl active:scale-95 transition-transform`}>Atualizar</button>
               )}
             </div>
+
+            {/* Filtro por destino nos favoritos */}
+            {favoriteBusLines.length > 0 && (
+              <div className="relative px-1">
+                <input
+                  type="text"
+                  placeholder="🔍 Filtrar por destino ou linha..."
+                  value={destFilter}
+                  onChange={e => setDestFilter(e.target.value)}
+                  className={`w-full ${theme.input} border rounded-2xl px-4 py-3 font-black outline-none focus:border-yellow-400 transition-all text-sm`}
+                />
+                {destFilter && (
+                  <button onClick={() => setDestFilter('')} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>
+                )}
+              </div>
+            )}
+
             {favorites.length > 0 && !isFavoritesLoading && <p className={`text-[8px] font-black ${theme.subtext} uppercase tracking-widest px-2 opacity-50`}><img src="/editar.png" alt="" style={{ width: 14, height: 14, objectFit: "contain" }} /> Segure o dedo em um card para dar apelido</p>}
             {isFavoritesLoading && favorites.slice(0, 3).map((_, i) => <div key={i} className="stagger-card" style={{ animationDelay: `${i * 80}ms` }}><SkeletonCard light={lightTheme} /></div>)}
             {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
@@ -631,12 +866,23 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-2 px-1 pt-2">
                   📍<span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
                   <div className={`flex-1 h-px ${theme.divider}`} />
+                  {/* Compartilhar ponto inteiro */}
+                  <button
+                    onClick={() => shareStop(pontoId, `Ponto ${pontoId}`)}
+                    className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 active:opacity-100 transition-opacity`}
+                    aria-label="Compartilhar ponto"
+                  >
+                    🔗
+                  </button>
                 </div>
                 {lines.map((line, i) => {
                   const key = `${line.stopSource ?? stopId}::${line.number}`;
+                  const isUrgent = parseTime(line.nextArrival) <= 2;
                   return (
                     <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} />
+                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}>
+                        <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} />
+                      </div>
                     </div>
                   );
                 })}
@@ -718,6 +964,35 @@ const App: React.FC = () => {
       <div style={{ position: 'fixed', top: '64px', left: 0, right: 0, bottom: '90px', zIndex: 40, display: activeTab === 'map' ? 'block' : 'none' }}>
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
+        {/* Onboarding do mapa */}
+        {showMapOnboarding && mapReady && (
+          <div
+            className="absolute inset-0 bg-black/70 z-[1001] flex items-end justify-center p-4"
+            onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); }}
+          >
+            <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
+              <div className="text-center space-y-3">
+                <span className="text-4xl">🗺️</span>
+                <p className="font-black text-base uppercase tracking-tight text-white leading-tight">Mapa de Pontos</p>
+                <p className={`text-sm ${theme.subtext} leading-relaxed`}>
+                  Toque em qualquer marcador no mapa para ver as linhas que passam naquele ponto.
+                </p>
+                <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-2xl px-4 py-3">
+                  <p className="text-[11px] font-bold text-yellow-400 leading-relaxed">
+                    💡 Use o ícone de lupa no painel para abrir o ponto diretamente na busca!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); haptic(40); }}
+                className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform"
+              >
+                Entendi!
+              </button>
+            </div>
+          </div>
+        )}
+
         {locationError && (
           <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`} style={{ backdropFilter: 'blur(8px)' }}>
             📍 Localização negada — mostrando Senador Canedo
@@ -737,12 +1012,36 @@ const App: React.FC = () => {
           >
             <div className="flex justify-center pt-3 pb-1 shrink-0 cursor-grab"><div className="w-10 h-1 rounded-full bg-white/20" /></div>
             <div className="flex items-start justify-between px-5 pt-2 pb-3 shrink-0">
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
-                <p className="font-black text-base text-yellow-400 mt-1">{selectedStop.nome}</p>
-                <p className={`text-[10px] font-bold ${theme.subtext} mt-0.5`}>Nº {selectedStop.id}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="font-black text-base text-yellow-400 truncate">{selectedStop.nome}</p>
+                  {/* Ícone de lupa → vai para aba busca */}
+                  <button
+                    onClick={() => goToSearchWithStop(selectedStop.id)}
+                    className="shrink-0 p-1.5 rounded-xl bg-yellow-400/15 border border-yellow-400/30 active:scale-95 transition-all"
+                    aria-label="Buscar este ponto"
+                    title="Abrir na busca"
+                  >
+                    🔍
+                  </button>
+                  {/* Compartilhar ponto */}
+                  <button
+                    onClick={() => shareStop(selectedStop.id, selectedStop.nome)}
+                    className="shrink-0 p-1.5 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition-all"
+                    aria-label="Compartilhar ponto"
+                  >
+                    🔗
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <p className={`text-[10px] font-bold ${theme.subtext}`}>Nº {selectedStop.id}</p>
+                  {walkingMinutes !== null && (
+                    <p className={`text-[9px] font-black text-emerald-400`}>🚶 ~{walkingMinutes} min a pé</p>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-3 shrink-0 ml-2">
                 {!stopLinesLoading && <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /><span className={`text-[9px] font-black tabular-nums ${theme.subtext}`}>{mapRefreshCountdown}s</span></div>}
                 <button onClick={() => { setSelectedStop(null); setStopLines([]); setActiveMiniMap(null); }} className="p-1 active:scale-95" aria-label="Fechar painel"><img src="/fechar.png" alt="" style={{ width: 20, height: 20, objectFit: "contain" }} /></button>
               </div>
@@ -761,9 +1060,10 @@ const App: React.FC = () => {
                 const miniKey = `map-${line.number}-${selectedStop.id}`;
                 const isMapMiniActive = activeMiniMap?.key === miniKey;
                 const stopCoordsMap = pontosDataRef.current.find(p => p.id === selectedStop.id);
+                const isUrgent = parseTime(line.nextArrival) <= 2;
                 return (
                   <div key={line.id}>
-                    <div className={`${theme.card} border rounded-2xl px-4 py-3 flex items-center gap-3`}>
+                    <div className={`${theme.card} border rounded-2xl px-4 py-3 flex items-center gap-3 ${isUrgent ? 'urgent-card' : ''}`}>
                       <span className="text-yellow-400 font-black text-xl w-14 text-center shrink-0">{line.number}</span>
                       <div className="flex-1 min-w-0">
                         <p className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Indo para</p>
@@ -811,7 +1111,7 @@ const App: React.FC = () => {
           { tab: 'map', icon: '/mapa.png', label: 'Mapa' },
           { tab: 'sitpass', icon: '/sitpass.png', label: 'SitPass' },
         ].map(({ tab, icon, label, badge }) => (
-          <button key={tab} onClick={() => { setActiveTab(tab as ActiveTab); haptic(30); }} className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === tab ? 'scale-125 opacity-100' : 'opacity-40'}`} aria-label={label}>
+          <button key={tab} onClick={() => { setActiveTab(tab as ActiveTab); haptic(30); setDestFilter(''); }} className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === tab ? 'scale-125 opacity-100' : 'opacity-40'}`} aria-label={label}>
             <div className="relative" style={{ width: 28, height: 28 }}>
               <img src={icon} alt={label} style={{ width: 28, height: 28, objectFit: 'contain' }} />
               {badge != null && badge > 0 && <span className="absolute -top-2 -right-2 bg-yellow-400 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">{badge > 9 ? '9+' : badge}</span>}
