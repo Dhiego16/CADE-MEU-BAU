@@ -639,11 +639,6 @@ const App: React.FC = () => {
         <div className="font-black italic text-yellow-400 text-xl tracking-tighter skew-x-[-10deg]">CADÊ MEU BAÚ?</div>
         <div className="flex items-center gap-3">
           {staleData && <div className="text-[8px] font-black uppercase tracking-widest text-red-400 animate-pulse border border-red-500/30 px-2 py-1 rounded-xl">Sem internet</div>}
-          {((activeTab === 'search' && busLines.length > 0) || (activeTab === 'favs' && favoriteBusLines.length > 0)) && (
-            <button onClick={() => { setSortByTime(p => !p); haptic(30); }} className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border transition-all ${sortByTime ? 'bg-yellow-400 text-black border-yellow-400' : `border-white/10 ${theme.subtext}`}`} title="Ordenar por menor tempo">
-              {sortByTime ? '⏱ Tempo' : '⏱ API'}
-            </button>
-          )}
           {((activeTab === 'search' && busLines.length > 0 && !isLoading) || (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading)) && (
             <div className="text-right flex flex-col items-end">
               <span className={`text-[7px] font-black ${theme.subtext} uppercase leading-none mb-0.5`}>Auto-Refresh</span>
