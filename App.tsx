@@ -685,7 +685,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <div className="flex-grow overflow-y-auto app-container px-4 pt-4 pb-32 space-y-5">
+      <div className="flex-grow overflow-y-auto app-container px-4 pt-0 pb-32 space-y-5">
 
         {/* Banners PWA */}
         {pwa.showUpdateBanner && (
