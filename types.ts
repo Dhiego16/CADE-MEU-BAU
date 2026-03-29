@@ -1,4 +1,3 @@
-
 export interface BusSchedule {
   time: string;
   type: 'Dia Útil' | 'Sábado' | 'Domingo/Feriado';
@@ -37,10 +36,20 @@ export interface FavoriteItem {
 }
 
 export interface SaldoData {
+  cpf: string;
+  tipoParceria: string;
   cartaoNumero: string;
   cartaoDescricao: string;
-  saldo: string;
+  tipo_saldo: 'monetario' | 'viagens';
+
+  // tipo_saldo === 'monetario'
+  saldo?: string;
   saldo_formatado: string;
+
+  // tipo_saldo === 'viagens'
+  viagens_usadas?: number;
+  viagens_total?: number;
+  viagens_restantes?: number;
 }
 
 export interface SaldoHistorico {
@@ -94,7 +103,7 @@ export interface LiveTrackingLine {
   stopId: string;
   stopLat: number;
   stopLng: number;
-  destination: string; // adicionado para filtro por destino
+  destination: string;
 }
 
 export interface LeafletLib {
