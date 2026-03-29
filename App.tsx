@@ -1101,7 +1101,7 @@ const App: React.FC = () => {
       <nav className={`fixed bottom-0 left-0 right-0 ${theme.nav} border-t px-6 pb-12 pt-5 flex justify-between items-center z-50`}>
         {[
           { tab: 'search', icon: '/buscar.png', label: 'Busca' },
-          { tab: 'favs', icon: '/salvos.png', label: 'Salvos', badge: favCount },
+          { tab: 'favs', icon: '/salvos.png', label: 'Favoritos', badge: favCount },
           { tab: 'map', icon: '/mapa.png', label: 'Mapa' },
           { tab: 'sitpass', icon: '/sitpass.png', label: 'SitPass' },
         ].map(({ tab, icon, label, badge }) => (
