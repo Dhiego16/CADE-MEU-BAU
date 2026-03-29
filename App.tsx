@@ -439,7 +439,9 @@ const App: React.FC = () => {
         const c = map.getCenter();
         filtrarMarkersPorRaio(c.lat, c.lng);
       };
-      map.on('moveend', moveEndHandler); map.on('zoomend', moveEndHandler);
+      map.on('moveend', moveEndHandler); 
+      map.on('zoomend', moveEndHandler);
+      map.on('dragend', moveEndHandler);
       leafletMapRef.current = map;
       setMapReady(true);
 
