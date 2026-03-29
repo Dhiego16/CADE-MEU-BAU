@@ -79,13 +79,9 @@ const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  // ── Ordenação ─────────────────────────────────────────────────────────────
   const [sortByTime, setSortByTime] = useState(false);
-
-  // ── Filtro por destino ────────────────────────────────────────────────────
   const [destFilter, setDestFilter] = useState('');
 
-  // ── MiniMap ao vivo ──────────────────────────────────────────────────────
   const [activeMiniMap, setActiveMiniMap] = useState<MiniMapConfig | null>(null);
   const [miniMapRefreshKey, setMiniMapRefreshKey] = useState(0);
 
@@ -95,7 +91,6 @@ const App: React.FC = () => {
     );
   }, []);
 
-  // ── Mapa ──────────────────────────────────────────────────────────────────
   const [mapReady, setMapReady] = useState(false);
   const [locationError, setLocationError] = useState(false);
   const [showMapOnboarding, setShowMapOnboarding] = useState(() => {
@@ -120,10 +115,8 @@ const App: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevTabRef = useRef<string>('');
 
-  // ─── Cache local de horários por ponto (15s) ──────────────────────────────
   const pontoCacheRef = useRef<Map<string, { data: BusLine[]; ts: number }>>(new Map());
 
-  // ── Hooks ─────────────────────────────────────────────────────────────────
   const pwa = usePWA();
   const notifications = useNotifications();
   const sitpass = useSitpass();
@@ -164,7 +157,6 @@ const App: React.FC = () => {
 
   const theme = useMemo(() => buildTheme(lightTheme), [lightTheme]);
 
-  // ── Ordenação e filtro de linhas ──────────────────────────────────────────
   const parseTime = (t?: string): number => {
     if (!t || t === 'SEM PREVISÃO') return 9999;
     if (t.toLowerCase().includes('agora')) return 0;
@@ -198,22 +190,18 @@ const App: React.FC = () => {
     onShare: shareLine,
   }), [stopId, favorites, notifications.activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, notifications.removeAlert, notifications.setShowAlertModal]);
 
-  // ── Navegar do mapa → busca com ponto preenchido ──────────────────────────
   const goToSearchWithStop = useCallback((pontoId: string) => {
     setStopId(pontoId);
     setLineFilter('');
     setDestFilter('');
     setActiveTab('search');
     haptic(40);
-    // pequeno delay para a aba renderizar antes de disparar a busca
     setTimeout(() => handleSearch(pontoId, ''), 120);
   }, [setStopId, setLineFilter, handleSearch]);
 
-  // ── Busca horários do ponto no mapa com cache ─────────────────────────────
   const buscarLinhasPontoInterno = useCallback(async (pontoId: string) => {
     if (!pontoId) return;
 
-    // verifica cache de 15s
     const cached = pontoCacheRef.current.get(pontoId);
     if (cached && Date.now() - cached.ts < 15000) {
       setStopLines(prev => prev.length === 0 ? cached.data : mergeLines(prev, cached.data));
@@ -254,7 +242,6 @@ const App: React.FC = () => {
       setStopLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       setStopLinesLoading(false);
 
-      // notificação automática se ônibus está chegando (< 3 min) e não há alerta configurado
       lines.forEach(line => {
         const key = `${pontoId}::${line.number}`;
         const mins = parseTime(line.nextArrival);
@@ -301,7 +288,6 @@ const App: React.FC = () => {
 
   const favCount = favorites.length;
 
-  // ── Pull-to-refresh ───────────────────────────────────────────────────────
   const pullEnabled = (activeTab === 'search' && busLines.length > 0) || (activeTab === 'favs' && favoriteBusLines.length > 0);
   const onPullRefresh = useCallback(() => {
     if (activeTab === 'search') handleSearch();
@@ -309,7 +295,6 @@ const App: React.FC = () => {
   }, [activeTab, handleSearch, loadFavoritesWithCurrentFavs]);
   const { pulling, pullDist } = usePullToRefresh(onPullRefresh, pullEnabled);
 
-  // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ponto = params.get('ponto');
@@ -393,7 +378,6 @@ const App: React.FC = () => {
     return () => { if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current); };
   }, [selectedStop, buscarLinhasPontoInterno]);
 
-  // ── Leaflet init ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'map' || leafletMapRef.current || leafletLoadingRef.current) return;
     leafletLoadingRef.current = true;
@@ -461,7 +445,6 @@ const App: React.FC = () => {
           const userIcon = L.divIcon({ html: `<div style="width:20px;height:20px;background:#3b82f6;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px rgba(59,130,246,0.4);"></div>`, className: '', iconSize: [20, 20], iconAnchor: [10, 10] });
           L.marker([latitude, longitude], { icon: userIcon }).addTo(map).bindPopup('Você está aqui');
           map.setView([latitude, longitude], 15);
-          // estima distância ao ponto mais próximo
           let minDist = Infinity;
           let nearest: { id: string; nome: string; lat: number; lng: number } | null = null;
           PONTOS.forEach(p => {
@@ -483,7 +466,6 @@ const App: React.FC = () => {
     };
   }, [activeTab, buscarLinhasPontoInterno]);
 
-  // ── Estimativa de caminhada ───────────────────────────────────────────────
   const walkingMinutes = useMemo(() => {
     if (!selectedStop || !userLocationRef.current) return null;
     const p = pontosDataRef.current.find(pt => pt.id === selectedStop.id);
@@ -492,20 +474,15 @@ const App: React.FC = () => {
     const dLng = p.lng - userLocationRef.current.lng;
     const distDeg = Math.sqrt(dLat * dLat + dLng * dLng);
     const distM = distDeg * 111000;
-    const mins = Math.round(distM / 80); // ~80m/min caminhando
+    const mins = Math.round(distM / 80);
     return mins > 0 ? mins : null;
   }, [selectedStop]);
 
-  // ── Compartilhamento do ponto inteiro ─────────────────────────────────────
   const shareStop = useCallback(async (pontoId: string, nomePonto: string) => {
     const url = `${window.location.origin}?ponto=${pontoId}`;
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: 'Cadê meu Baú?',
-          text: `🚍 Ponto ${pontoId} — ${nomePonto}`,
-          url,
-        });
+        await navigator.share({ title: 'Cadê meu Baú?', text: `🚍 Ponto ${pontoId} — ${nomePonto}`, url });
       } else {
         await navigator.clipboard.writeText(url);
         alert('Link copiado!');
@@ -514,7 +491,6 @@ const App: React.FC = () => {
     haptic(30);
   }, []);
 
-  // ── Splash ────────────────────────────────────────────────────────────────
   if (isSplash) {
     return (
       <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-10 overflow-hidden text-center">
@@ -649,18 +625,11 @@ const App: React.FC = () => {
         <div className="font-black italic text-yellow-400 text-xl tracking-tighter skew-x-[-10deg]">CADÊ MEU BAÚ?</div>
         <div className="flex items-center gap-3">
           {staleData && <div className="text-[8px] font-black uppercase tracking-widest text-red-400 animate-pulse border border-red-500/30 px-2 py-1 rounded-xl">Sem internet</div>}
-
-          {/* Botão de ordenação — aparece nas abas search e favs quando há linhas */}
           {((activeTab === 'search' && busLines.length > 0) || (activeTab === 'favs' && favoriteBusLines.length > 0)) && (
-            <button
-              onClick={() => { setSortByTime(p => !p); haptic(30); }}
-              className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border transition-all ${sortByTime ? 'bg-yellow-400 text-black border-yellow-400' : `border-white/10 ${theme.subtext}`}`}
-              title="Ordenar por menor tempo"
-            >
+            <button onClick={() => { setSortByTime(p => !p); haptic(30); }} className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-xl border transition-all ${sortByTime ? 'bg-yellow-400 text-black border-yellow-400' : `border-white/10 ${theme.subtext}`}`} title="Ordenar por menor tempo">
               {sortByTime ? '⏱ Tempo' : '⏱ API'}
             </button>
           )}
-
           {((activeTab === 'search' && busLines.length > 0 && !isLoading) || (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading)) && (
             <div className="text-right flex flex-col items-end">
               <span className={`text-[7px] font-black ${theme.subtext} uppercase leading-none mb-0.5`}>Auto-Refresh</span>
@@ -674,17 +643,13 @@ const App: React.FC = () => {
 
       {/* Pull-to-refresh indicator */}
       {pulling && (
-        <div
-          className="flex items-center justify-center gap-2 overflow-hidden transition-all"
-          style={{ height: Math.min(pullDist, 56), opacity: Math.min(pullDist / 72, 1) }}
-        >
+        <div className="flex items-center justify-center gap-2 overflow-hidden transition-all" style={{ height: Math.min(pullDist, 56), opacity: Math.min(pullDist / 72, 1) }}>
           <div className={`w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full ${pullDist >= 72 ? 'animate-spin' : ''}`} />
-          <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>
-            {pullDist >= 72 ? 'Solte para atualizar' : 'Puxe para atualizar'}
-          </span>
+          <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>{pullDist >= 72 ? 'Solte para atualizar' : 'Puxe para atualizar'}</span>
         </div>
       )}
 
+      {/* ── CONTAINER PRINCIPAL (abas search / favs / sitpass) ── */}
       <div className="flex-grow overflow-y-auto app-container px-4 pt-2 pb-32">
 
         {/* Banners PWA */}
@@ -697,7 +662,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
         {pwa.showInstallBanner && !pwa.isInstalled && (
           <div style={{ animation: 'slideUp 0.4s ease-out' }}>
             <div className="bg-yellow-400 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(251,191,36,0.4)]">
@@ -727,24 +691,14 @@ const App: React.FC = () => {
                     className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl text-center`} />
                 </div>
               </div>
-
-              {/* Filtro por destino */}
               {busLines.length > 0 && (
                 <div className="relative">
                   <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>Filtrar destino</span>
-                  <input
-                    type="text"
-                    placeholder="Ex: Terminal, Centro..."
-                    value={destFilter}
-                    onChange={e => setDestFilter(e.target.value)}
-                    className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-sm`}
-                  />
-                  {destFilter && (
-                    <button onClick={() => setDestFilter('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>
-                  )}
+                  <input type="text" placeholder="Ex: Terminal, Centro..." value={destFilter} onChange={e => setDestFilter(e.target.value)}
+                    className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-sm`} />
+                  {destFilter && <button onClick={() => setDestFilter('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>}
                 </div>
               )}
-
               <button onClick={() => handleSearch()} disabled={isLoading} className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
                 {isLoading ? 'Rastreando...' : 'Localizar Baú'}
               </button>
@@ -759,7 +713,6 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-
             {errorMsg && (() => {
               const errors: Record<string, { icon: string; title: string; desc: string; color: string }> = {
                 offline: { icon: '/informacao.png', title: 'Sem conexão', desc: 'Verifique sua internet e tente novamente.', color: 'border-slate-500/30 text-slate-400 bg-slate-500/10' },
@@ -779,9 +732,7 @@ const App: React.FC = () => {
                 </div>
               );
             })()}
-
             {isLoading && [0, 1, 2].map(i => <div key={i} className="stagger-card" style={{ animationDelay: `${i * 80}ms` }}><SkeletonCard light={lightTheme} /></div>)}
-
             {!isLoading && (
               <div className="space-y-3">
                 {displayedBusLines.map((line, i) => {
@@ -792,12 +743,9 @@ const App: React.FC = () => {
                   const isUrgent = parseTime(line.nextArrival) <= 2;
                   return (
                     <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}>
-                        <BusLineCard line={line} staggerIndex={i} {...cardProps} />
-                      </div>
+                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}><BusLineCard line={line} staggerIndex={i} {...cardProps} /></div>
                       {liveLineMap[line.number] && (
-                        <button
-                          onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoords.lat, stopLng: stopCoords.lng, stopNome: selectedStop?.nome ?? stopCoords.nome ?? `Ponto ${sId}`, destination: line.destination }); }}
+                        <button onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoords.lat, stopLng: stopCoords.lng, stopNome: selectedStop?.nome ?? stopCoords.nome ?? `Ponto ${sId}`, destination: line.destination }); }}
                           className={`w-full mt-1 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all ${isActive ? 'bg-blue-700 text-white' : 'bg-blue-600/15 text-blue-400 border border-blue-500/30'}`}>
                           <img src="/onibus_realtime.png" alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
                           {isActive ? 'Fechar mapa ao vivo' : `Ver linha ${line.number} ao vivo`}
@@ -810,9 +758,8 @@ const App: React.FC = () => {
                     </div>
                   );
                 })}
-                {/* Sem resultado após filtro */}
                 {busLines.length > 0 && displayedBusLines.length === 0 && destFilter && (
-                  <div className={`border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-4 text-center`}>
+                  <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-4 text-center">
                     <p className="font-black text-[11px] text-yellow-400 uppercase tracking-widest">Nenhuma linha para "{destFilter}"</p>
                     <button onClick={() => setDestFilter('')} className="mt-2 text-[9px] font-black uppercase tracking-widest text-yellow-400 underline">Limpar filtro</button>
                   </div>
@@ -842,23 +789,13 @@ const App: React.FC = () => {
                 <button onClick={() => { loadFavoritesSchedules(favorites); haptic(30); }} className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} border ${lightTheme ? 'border-gray-300' : 'border-white/10'} px-3 py-2 rounded-xl active:scale-95 transition-transform`}>Atualizar</button>
               )}
             </div>
-
-            {/* Filtro por destino nos favoritos */}
             {favoriteBusLines.length > 0 && (
               <div className="relative px-1">
-                <input
-                  type="text"
-                  placeholder="🔍 Filtrar por destino ou linha..."
-                  value={destFilter}
-                  onChange={e => setDestFilter(e.target.value)}
-                  className={`w-full ${theme.input} border rounded-2xl px-4 py-3 font-black outline-none focus:border-yellow-400 transition-all text-sm`}
-                />
-                {destFilter && (
-                  <button onClick={() => setDestFilter('')} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>
-                )}
+                <input type="text" placeholder="🔍 Filtrar por destino ou linha..." value={destFilter} onChange={e => setDestFilter(e.target.value)}
+                  className={`w-full ${theme.input} border rounded-2xl px-4 py-3 font-black outline-none focus:border-yellow-400 transition-all text-sm`} />
+                {destFilter && <button onClick={() => setDestFilter('')} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>}
               </div>
             )}
-
             {favorites.length > 0 && !isFavoritesLoading && <p className={`text-[8px] font-black ${theme.subtext} uppercase tracking-widest px-2 opacity-50`}><img src="/editar.png" alt="" style={{ width: 14, height: 14, objectFit: "contain" }} /> Segure o dedo em um card para dar apelido</p>}
             {isFavoritesLoading && favorites.slice(0, 3).map((_, i) => <div key={i} className="stagger-card" style={{ animationDelay: `${i * 80}ms` }}><SkeletonCard light={lightTheme} /></div>)}
             {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
@@ -866,23 +803,14 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-2 px-1 pt-2">
                   📍<span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
                   <div className={`flex-1 h-px ${theme.divider}`} />
-                  {/* Compartilhar ponto inteiro */}
-                  <button
-                    onClick={() => shareStop(pontoId, `Ponto ${pontoId}`)}
-                    className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 active:opacity-100 transition-opacity`}
-                    aria-label="Compartilhar ponto"
-                  >
-                    🔗
-                  </button>
+                  <button onClick={() => shareStop(pontoId, `Ponto ${pontoId}`)} className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 active:opacity-100 transition-opacity`} aria-label="Compartilhar ponto">🔗</button>
                 </div>
                 {lines.map((line, i) => {
                   const key = `${line.stopSource ?? stopId}::${line.number}`;
                   const isUrgent = parseTime(line.nextArrival) <= 2;
                   return (
                     <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}>
-                        <BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} />
-                      </div>
+                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}><BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} /></div>
                     </div>
                   );
                 })}
@@ -904,70 +832,49 @@ const App: React.FC = () => {
             </a>
           </div>
         )}
-        
+
         {/* ── ABA SITPASS ───────────────────────────────────────────────────── */}
         {activeTab === 'sitpass' && (
           <div className="page-enter space-y-5">
-
-            {/* Input CPF + botão */}
             <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
               <div className="relative">
                 <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>CPF</span>
-                <input
-                  type="text" inputMode="numeric" placeholder="000.000.000-00"
-                  value={sitpass.cpfSitpass} onChange={sitpass.handleCpfChange}
-                  onKeyDown={e => e.key === 'Enter' && sitpass.consultarSaldo()}
-                  maxLength={14}
-                  className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl ${sitpass.cpfError ? 'border-red-500' : 'focus:border-yellow-400'}`}
-                />
+                <input type="text" inputMode="numeric" placeholder="000.000.000-00" value={sitpass.cpfSitpass} onChange={sitpass.handleCpfChange}
+                  onKeyDown={e => e.key === 'Enter' && sitpass.consultarSaldo()} maxLength={14}
+                  className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl ${sitpass.cpfError ? 'border-red-500' : 'focus:border-yellow-400'}`} />
                 {sitpass.cpfError && <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{sitpass.cpfError}</p>}
               </div>
-              <button
-                onClick={sitpass.consultarSaldo}
-                disabled={sitpass.cartoesLoading || sitpass.saldoLoading}
-                className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all"
-              >
+              <button onClick={sitpass.consultarSaldo} disabled={sitpass.cartoesLoading || sitpass.saldoLoading}
+                className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
                 {sitpass.cartoesLoading ? 'Buscando cartões...' : sitpass.saldoLoading ? 'Consultando...' : 'Consultar Saldo'}
               </button>
             </div>
 
-            {/* Erro na busca de cartões */}
             {sitpass.cartoesErro && (
               <div className="border border-red-500/30 bg-red-500/10 text-red-400 p-4 rounded-2xl flex items-start gap-3">
                 <img src="/alerta.png" alt="" style={{ width: 24, height: 24, objectFit: 'contain', flexShrink: 0 }} />
-                <div>
-                  <p className="font-black text-[11px] uppercase tracking-widest">Erro</p>
-                  <p className="text-[9px] font-bold mt-1 opacity-80">{sitpass.cartoesErro}</p>
-                </div>
+                <div><p className="font-black text-[11px] uppercase tracking-widest">Erro</p><p className="text-[9px] font-bold mt-1 opacity-80">{sitpass.cartoesErro}</p></div>
               </div>
             )}
 
-            {/* ── Etapa 1: seleção de cartão (quando há mais de 1) ── */}
             {sitpass.cartoes.length > 1 && (
               <div className="space-y-3" style={{ animation: 'slideUp 0.3s ease-out' }}>
-                <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext} px-1`}>
-                  Selecione o cartão
-                </p>
+                <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext} px-1`}>Selecione o cartão</p>
                 {sitpass.cartoes.map(cartao => (
-                  <button
-                    key={cartao.index}
-                    onClick={() => sitpass.selecionarCartao(cartao.index)}
-                    disabled={sitpass.saldoLoading}
-                    className={`w-full ${theme.card} border rounded-[2rem] p-5 flex items-center gap-4 active:scale-95 transition-all hover:border-yellow-400/50 disabled:opacity-50`}
-                  >
+                  <button key={cartao.index} onClick={() => sitpass.selecionarCartao(cartao.index)} disabled={sitpass.saldoLoading}
+                    className={`w-full ${theme.card} border rounded-[2rem] p-5 flex items-center gap-4 active:scale-95 transition-all hover:border-yellow-400/50 disabled:opacity-50`}>
                     <img src="/sitpass.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
                     <div className="flex-1 text-left min-w-0">
                       <p className="font-black text-sm uppercase text-yellow-400 truncate">{cartao.cartaoDescricao}</p>
                       <p className={`text-[9px] font-bold ${theme.subtext} mt-0.5`}>Nº {cartao.cartaoNumero}</p>
                       <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 mt-0.5`}>{cartao.tipoParceria}</p>
                     </div>
-                    <span className={`text-yellow-400 font-black text-lg shrink-0`}>›</span>
+                    <span className="text-yellow-400 font-black text-lg shrink-0">›</span>
                   </button>
                 ))}
               </div>
             )}
 
-            {/* Loading saldo (após escolher cartão) */}
             {sitpass.saldoLoading && (
               <div className="flex items-center justify-center gap-3 py-8">
                 <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
@@ -975,22 +882,15 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Erro no saldo */}
             {sitpass.saldoErro && (
               <div className="border border-red-500/30 bg-red-500/10 text-red-400 p-4 rounded-2xl flex items-start gap-3">
                 <img src="/alerta.png" alt="" style={{ width: 24, height: 24, objectFit: 'contain', flexShrink: 0 }} />
-                <div>
-                  <p className="font-black text-[11px] uppercase tracking-widest">Erro</p>
-                  <p className="text-[9px] font-bold mt-1 opacity-80">{sitpass.saldoErro}</p>
-                </div>
+                <div><p className="font-black text-[11px] uppercase tracking-widest">Erro</p><p className="text-[9px] font-bold mt-1 opacity-80">{sitpass.saldoErro}</p></div>
               </div>
             )}
 
-            {/* ── Etapa 2: resultado do saldo ── */}
             {sitpass.saldoData && !sitpass.saldoLoading && (
               <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
-
-                {/* Cabeçalho do cartão */}
                 <div className="flex items-center gap-3">
                   <img src="/sitpass.png" alt="" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }} />
                   <div>
@@ -999,10 +899,7 @@ const App: React.FC = () => {
                     <p className={`text-[9px] font-bold ${theme.subtext}`}>Nº {sitpass.saldoData.cartaoNumero}</p>
                   </div>
                 </div>
-
                 <div className={`${theme.divider} h-px w-full`} />
-
-                {/* Saldo — monetário ou viagens */}
                 {sitpass.saldoData.tipo_saldo === 'viagens' ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -1012,20 +909,13 @@ const App: React.FC = () => {
                         <span className={`text-lg font-black ${theme.subtext} opacity-50`}>/{sitpass.saldoData.viagens_total}</span>
                       </span>
                     </div>
-                    {/* Barra de progresso */}
                     <div className={`w-full h-2 rounded-full ${lightTheme ? 'bg-gray-200' : 'bg-white/10'}`}>
-                      <div
-                        className="h-2 rounded-full bg-yellow-400 transition-all duration-500"
-                        style={{ width: `${((sitpass.saldoData.viagens_restantes ?? 0) / (sitpass.saldoData.viagens_total ?? 1)) * 100}%` }}
-                      />
+                      <div className="h-2 rounded-full bg-yellow-400 transition-all duration-500" style={{ width: `${((sitpass.saldoData.viagens_restantes ?? 0) / (sitpass.saldoData.viagens_total ?? 1)) * 100}%` }} />
                     </div>
-                    {/* Alerta de viagens baixas */}
                     {(sitpass.saldoData.viagens_restantes ?? 0) <= 5 && (
                       <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
                         <img src="/alerta.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginTop: 2 }} />
-                        <p className="text-[9px] font-bold leading-relaxed text-red-400">
-                          Poucas viagens restantes. Recarregue seu cartão.
-                        </p>
+                        <p className="text-[9px] font-bold leading-relaxed text-red-400">Poucas viagens restantes. Recarregue seu cartão.</p>
                       </div>
                     )}
                   </div>
@@ -1035,7 +925,6 @@ const App: React.FC = () => {
                       <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
                       <span className="text-4xl font-black text-yellow-400">{sitpass.saldoData.saldo_formatado}</span>
                     </div>
-                    {/* Alertas de saldo baixo */}
                     {(() => {
                       const n = parseFloat((sitpass.saldoData.saldo ?? '0').replace('.', '').replace(',', '.'));
                       if (n < 2.15) return (
@@ -1054,24 +943,16 @@ const App: React.FC = () => {
                     })()}
                   </div>
                 )}
-
-                {/* Nota padrão */}
                 <div className={`border ${lightTheme ? 'border-gray-200 bg-gray-50' : 'border-white/5 bg-black/20'} rounded-2xl px-4 py-3 flex items-start gap-2`}>
                   <img src="/informacao.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginTop: 2 }} />
                   <p className={`text-[9px] font-bold leading-relaxed ${theme.subtext}`}>O saldo não é em tempo real — é o último valor registrado no sistema do SitPass.</p>
                 </div>
-
-                {/* Botão para consultar outro cartão (quando há múltiplos) */}
-                <button
-                  onClick={sitpass.consultarSaldo}
-                  className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border ${lightTheme ? 'border-gray-300 text-gray-500' : 'border-white/10 text-slate-500'} active:scale-95 transition-all`}
-                >
+                <button onClick={sitpass.consultarSaldo} className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border ${lightTheme ? 'border-gray-300 text-gray-500' : 'border-white/10 text-slate-500'} active:scale-95 transition-all`}>
                   ← Consultar outro cartão
                 </button>
               </div>
             )}
 
-            {/* Empty state */}
             {!sitpass.saldoData && !sitpass.saldoErro && !sitpass.cartoesLoading && !sitpass.saldoLoading && sitpass.cartoes.length === 0 && !sitpass.cartoesErro && (
               <div className="py-16 text-center opacity-10 flex flex-col items-center">
                 <img src="/sitpass.png" alt="" className="mb-6" style={{ width: 100, height: 100, objectFit: 'contain', opacity: 0.2, borderRadius: 12 }} />
@@ -1085,85 +966,55 @@ const App: React.FC = () => {
           </div>
         )}
 
-      {/* ── ABA MAPA ──────────────────────────────────────────────────────────── */}
+      </div>{/* ── FIM DO CONTAINER PRINCIPAL ── */}
+
+      {/* ── ABA MAPA (fixed, fora do container) ──────────────────────────────── */}
       <div style={{ position: 'fixed', top: '64px', left: 0, right: 0, bottom: '90px', zIndex: 40, display: activeTab === 'map' ? 'block' : 'none' }}>
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* Onboarding do mapa */}
         {showMapOnboarding && mapReady && (
-          <div
-            className="absolute inset-0 bg-black/70 z-[1001] flex items-end justify-center p-4"
-            onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); }}
-          >
+          <div className="absolute inset-0 bg-black/70 z-[1001] flex items-end justify-center p-4" onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); }}>
             <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
               <div className="text-center space-y-3">
                 <span className="text-4xl">🗺️</span>
                 <p className="font-black text-base uppercase tracking-tight text-white leading-tight">Mapa de Pontos</p>
-                <p className={`text-sm ${theme.subtext} leading-relaxed`}>
-                  Toque em qualquer marcador no mapa para ver as linhas que passam naquele ponto.
-                </p>
+                <p className={`text-sm ${theme.subtext} leading-relaxed`}>Toque em qualquer marcador no mapa para ver as linhas que passam naquele ponto.</p>
                 <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-2xl px-4 py-3">
-                  <p className="text-[11px] font-bold text-yellow-400 leading-relaxed">
-                    💡 Use o ícone de lupa no painel para abrir o ponto diretamente na busca!
-                  </p>
+                  <p className="text-[11px] font-bold text-yellow-400 leading-relaxed">💡 Use o ícone de lupa no painel para abrir o ponto diretamente na busca!</p>
                 </div>
               </div>
-              <button
-                onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); haptic(40); }}
-                className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform"
-              >
-                Entendi!
-              </button>
+              <button onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); haptic(40); }} className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform">Entendi!</button>
             </div>
           </div>
         )}
 
         {locationError && (
-          <div className={`absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest`} style={{ backdropFilter: 'blur(8px)' }}>
+          <div className="absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest" style={{ backdropFilter: 'blur(8px)' }}>
             📍 Localização negada — mostrando Senador Canedo
           </div>
         )}
 
         {selectedStop && (
-          <div
-            className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem]`}
+          <div className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem]`}
             style={{ bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '75%', display: 'flex', flexDirection: 'column' }}
             onTouchStart={(e) => {
               const startY = e.touches[0].clientY; const el = e.currentTarget; let lastY = startY;
               const onMove = (ev: TouchEvent) => { const dy = ev.touches[0].clientY - startY; lastY = ev.touches[0].clientY; if (dy > 0) el.style.transform = `translateY(${dy}px)`; };
               const onEnd = () => { const dy = lastY - startY; el.style.transform = ''; if (dy > 80) { setSelectedStop(null); setStopLines([]); setActiveMiniMap(null); } document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); };
               document.addEventListener('touchmove', onMove, { passive: true }); document.addEventListener('touchend', onEnd);
-            }}
-          >
+            }}>
             <div className="flex justify-center pt-3 pb-1 shrink-0 cursor-grab"><div className="w-10 h-1 rounded-full bg-white/20" /></div>
             <div className="flex items-start justify-between px-5 pt-2 pb-3 shrink-0">
               <div className="flex-1 min-w-0">
                 <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
                 <div className="flex items-center gap-2 mt-1">
                   <p className="font-black text-base text-yellow-400 truncate">{selectedStop.nome}</p>
-                  {/* Ícone de lupa → vai para aba busca */}
-                  <button
-                    onClick={() => goToSearchWithStop(selectedStop.id)}
-                    className="shrink-0 p-1.5 rounded-xl bg-yellow-400/15 border border-yellow-400/30 active:scale-95 transition-all"
-                    aria-label="Buscar este ponto"
-                    title="Abrir na busca"
-                  >
-                    🔍
-                  </button>
-                  {/* Compartilhar ponto */}
-                  <button
-                    onClick={() => shareStop(selectedStop.id, selectedStop.nome)}
-                    className="shrink-0 p-1.5 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition-all"
-                    aria-label="Compartilhar ponto"
-                  >
-                    🔗
-                  </button>
+                  <button onClick={() => goToSearchWithStop(selectedStop.id)} className="shrink-0 p-1.5 rounded-xl bg-yellow-400/15 border border-yellow-400/30 active:scale-95 transition-all" aria-label="Buscar este ponto" title="Abrir na busca">🔍</button>
+                  <button onClick={() => shareStop(selectedStop.id, selectedStop.nome)} className="shrink-0 p-1.5 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition-all" aria-label="Compartilhar ponto">🔗</button>
                 </div>
                 <div className="flex items-center gap-3 mt-0.5">
                   <p className={`text-[10px] font-bold ${theme.subtext}`}>Nº {selectedStop.id}</p>
-                  {walkingMinutes !== null && (
-                    <p className={`text-[9px] font-black text-emerald-400`}>🚶 ~{walkingMinutes} min a pé</p>
-                  )}
+                  {walkingMinutes !== null && <p className="text-[9px] font-black text-emerald-400">🚶 ~{walkingMinutes} min a pé</p>}
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0 ml-2">
@@ -1171,11 +1022,9 @@ const App: React.FC = () => {
                 <button onClick={() => { setSelectedStop(null); setStopLines([]); setActiveMiniMap(null); }} className="p-1 active:scale-95" aria-label="Fechar painel"><img src="/fechar.png" alt="" style={{ width: 20, height: 20, objectFit: "contain" }} /></button>
               </div>
             </div>
-
             <div style={{ overflowY: 'auto', flex: 1, paddingBottom: '12px' }} className="px-5 space-y-2">
               {stopLinesLoading && <div className="flex items-center gap-3 py-2"><div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin shrink-0" /><p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Buscando ônibus...</p></div>}
               {stopLinesError && !stopLinesLoading && <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3"><p className="text-[10px] font-black text-red-400 uppercase tracking-widest">{stopLinesError === 'offline' ? 'Sem conexão' : 'Nenhuma linha encontrada'}</p></div>}
-
               {!stopLinesLoading && stopLines.map((line) => {
                 const getColor = (t: string) => {
                   if (!t || t === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
@@ -1200,11 +1049,8 @@ const App: React.FC = () => {
                           <div className={`${getColor(line.subsequentArrival ?? '')} rounded-xl px-2 py-1.5 text-center min-w-[44px] opacity-80`}><p className="font-black text-sm leading-none">{line.subsequentArrival === 'SEM PREVISÃO' ? '—' : line.subsequentArrival}</p><p className="text-[6px] font-black uppercase opacity-70 mt-0.5">min</p></div>
                         </div>
                         {stopLiveLinesMap[line.number] && stopCoordsMap && (
-                          <button
-                            onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoordsMap.lat, stopLng: stopCoordsMap.lng, stopNome: selectedStop.nome, destination: line.destination }); }}
-                            className={`rounded-xl p-2 transition-all active:scale-95 border ${isMapMiniActive ? 'bg-blue-600 border-blue-500' : 'bg-blue-600/15 border-blue-500/30'}`}
-                            aria-label="Ver ao vivo"
-                          >
+                          <button onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoordsMap.lat, stopLng: stopCoordsMap.lng, stopNome: selectedStop.nome, destination: line.destination }); }}
+                            className={`rounded-xl p-2 transition-all active:scale-95 border ${isMapMiniActive ? 'bg-blue-600 border-blue-500' : 'bg-blue-600/15 border-blue-500/30'}`} aria-label="Ver ao vivo">
                             <img src="/onibus_realtime.png" alt="Ao vivo" style={{ width: 18, height: 18, objectFit: 'contain' }} />
                           </button>
                         )}
