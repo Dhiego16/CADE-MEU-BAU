@@ -108,6 +108,7 @@ const App: React.FC = () => {
   const markersRef = useRef<LeafletMarker[]>([]);
   const pontosDataRef = useRef<PontoDataWithMarker[]>([]);
   const leafletLoadingRef = useRef(false);
+  const userMovedMapRef = useRef<boolean>(false);
   const filtrarMarkersPorRaioRef = useRef<((lat: number, lng: number) => void) | null>(null);
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -433,29 +434,34 @@ const App: React.FC = () => {
         pontosDataRef.current.push({ ...ponto, marker });
       });
 
-      moveEndHandler = () => { const c = map.getCenter(); filtrarMarkersPorRaio(c.lat, c.lng); };
+      moveEndHandler = () => {
+        userMovedMapRef.current = true;
+        const c = map.getCenter();
+        filtrarMarkersPorRaio(c.lat, c.lng);
+      };
       map.on('moveend', moveEndHandler); map.on('zoomend', moveEndHandler);
       leafletMapRef.current = map;
       setMapReady(true);
 
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => {
-          const { latitude, longitude } = pos.coords;
-          userLocationRef.current = { lat: latitude, lng: longitude };
-          const userIcon = L.divIcon({ html: `<div style="width:20px;height:20px;background:#3b82f6;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px rgba(59,130,246,0.4);"></div>`, className: '', iconSize: [20, 20], iconAnchor: [10, 10] });
-          L.marker([latitude, longitude], { icon: userIcon }).addTo(map).bindPopup('Você está aqui');
-          map.setView([latitude, longitude], 15);
-          let minDist = Infinity;
-          let nearest: { id: string; nome: string; lat: number; lng: number } | null = null;
-          PONTOS.forEach(p => {
-            const d = calcDist(latitude, longitude, p.lat, p.lng);
-            if (d < minDist) { minDist = d; nearest = p; }
-          });
-          if (nearest && minDist < 1000) {
-            (nearest as { _nearestDist?: number })._nearestDist = minDist;
-          }
-        }, () => { setLocationError(true); pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }, { timeout: 8000, enableHighAccuracy: true });
-      } else { pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude, longitude } = pos.coords;
+    userLocationRef.current = { lat: latitude, lng: longitude };
+    const userIcon = L.divIcon({ html: `<div style="width:20px;height:20px;background:#3b82f6;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px rgba(59,130,246,0.4);"></div>`, className: '', iconSize: [20, 20], iconAnchor: [10, 10] });
+    L.marker([latitude, longitude], { icon: userIcon }).addTo(map).bindPopup('Você está aqui');
+    map.setView([latitude, longitude], 15);
+    filtrarMarkersPorRaio(latitude, longitude); // <-- ADICIONE ESTA LINHA
+    let minDist = Infinity;
+    let nearest: { id: string; nome: string; lat: number; lng: number } | null = null;
+    PONTOS.forEach(p => {
+      const d = calcDist(latitude, longitude, p.lat, p.lng);
+      if (d < minDist) { minDist = d; nearest = p; }
+    });
+    if (nearest && minDist < 1000) {
+      (nearest as { _nearestDist?: number })._nearestDist = minDist;
+    }
+  }, () => { setLocationError(true); pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }, { timeout: 8000, enableHighAccuracy: true });
+} else { pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }
     }).catch(() => { leafletLoadingRef.current = false; });
 
     return () => {
