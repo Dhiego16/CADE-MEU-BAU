@@ -47,7 +47,6 @@
       overflow-x: hidden;
     }
 
-    /* ── NOISE TEXTURE ── */
     body::before {
       content: '';
       position: fixed;
@@ -262,7 +261,6 @@
     .mockup-time-val { font-family: 'Bebas Neue', sans-serif; font-size: 24px; line-height: 1; }
     .mockup-time-unit { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.7; }
 
-    /* ── MOCKUP SITPASS ── */
     .mockup-sitpass {
       background: rgba(251,191,36,0.05);
       border: 1px solid rgba(251,191,36,0.15);
@@ -321,6 +319,12 @@
       font-size: 36px;
       margin-bottom: 20px;
       display: block;
+    }
+
+    .feature-icon img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
     }
 
     .feature-title {
@@ -531,7 +535,6 @@
 
     .mockup-wrap { animation: fadeUp 0.8s 0.4s ease both, float 6s 1.5s ease-in-out infinite; }
 
-    /* ── RESPONSIVE ── */
     @media (max-width: 600px) {
       .stats-inner { grid-template-columns: repeat(3, 1fr); gap: 20px; }
       .step { flex-direction: column; gap: 8px; }
@@ -620,12 +623,11 @@
           </div>
         </div>
 
-        <!-- Mockup SitPass -->
         <div class="mockup-sitpass">
           <div class="mockup-sitpass-label">🎫 SitPass — Bilhete Único</div>
           <div class="mockup-sitpass-row">
-            <div class="mockup-sitpass-name">Estudante</div>
-            <div class="mockup-sitpass-saldo">R$ 12,90</div>
+            <div class="mockup-sitpass-name">Passe Livre Estudantil</div>
+            <div class="mockup-sitpass-saldo">12 viagens</div>
           </div>
         </div>
 
@@ -697,6 +699,21 @@
         <p class="feature-desc">Configure para ser notificado quando o ônibus estiver a 2, 5, 10 ou 15 minutos do seu ponto.</p>
       </div>
       <div class="feature-card reveal">
+        <span class="feature-icon"><img src="https://cademeubau.vercel.app/onibus_realtime.png" alt="Rastreamento ao vivo" /></span>
+        <div class="feature-title">Rastreamento ao Vivo</div>
+        <p class="feature-desc">Veja a posição em tempo real dos ônibus no mapa. Acompanhe a chegada do baú com o ônibus se movendo na tela.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_trabalhador.png" alt="Cartão Trabalhador" /></span>
+        <div class="feature-title">Cartão Trabalhador PLT</div>
+        <p class="feature-desc">Consulte o saldo do seu Passe Livre do Trabalhador direto no app pelo CPF, sem precisar acessar outro site.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_estudante.png" alt="Cartão Estudante" /></span>
+        <div class="feature-title">Passe Livre Estudantil</div>
+        <p class="feature-desc">Veja quantas viagens restam no seu cartão estudantil com aviso automático quando estiver acabando.</p>
+      </div>
+      <div class="feature-card reveal">
         <span class="feature-icon">🎫</span>
         <div class="feature-title">Consulta SitPass</div>
         <p class="feature-desc">Consulte o saldo do seu Bilhete Único direto no app pelo CPF. Aviso automático quando o saldo estiver abaixo do valor da passagem.</p>
@@ -764,7 +781,7 @@
         <div class="step-num">05</div>
         <div class="step-content">
           <div class="step-title">Consulte seu saldo SitPass</div>
-          <p class="step-desc">Na aba SitPass, digite seu CPF para ver o saldo do Bilhete Único. O app avisa se o saldo estiver abaixo do valor da passagem (R$ 4,30) ou da meia tarifa (R$ 2,15).</p>
+          <p class="step-desc">Na aba SitPass, digite seu CPF para ver o saldo do Bilhete Único, Passe Livre do Trabalhador ou Passe Livre Estudantil. O app avisa automaticamente quando o saldo ou as viagens estiverem acabando.</p>
         </div>
       </div>
     </div>
