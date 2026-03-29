@@ -164,6 +164,11 @@ const App: React.FC = () => {
     if (t.toLowerCase().includes('agora')) return 0;
     return parseInt(t.replace(/\D/g, '')) || 9999;
   };
+  
+  const formatarDescricaoCartao = (descricao: string, tipoParceria: string) => {
+    if (tipoParceria === 'ESTUDANTE') return 'Passe Livre Estudantil';
+    return descricao;
+  };
 
   const processLines = useCallback((lines: BusLine[]) => {
     let result = lines;
@@ -881,7 +886,7 @@ const App: React.FC = () => {
           className={`w-full ${theme.card} border rounded-[2rem] p-5 flex items-center gap-4 active:scale-95 transition-all hover:border-yellow-400/50 disabled:opacity-50`}>
           <img src={iconeCartao} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
           <div className="flex-1 text-left min-w-0">
-            <p className="font-black text-sm uppercase text-yellow-400 truncate">{cartao.cartaoDescricao}</p>
+            <p className="font-black text-sm uppercase text-yellow-400 truncate">{formatarDescricaoCartao(cartao.cartaoDescricao, cartao.tipoParceria)}</p>
             <p className={`text-[9px] font-bold ${theme.subtext} mt-0.5`}>Nº {cartao.cartaoNumero}</p>
             <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 mt-0.5`}>{cartao.tipoParceria}</p>
           </div>
@@ -918,7 +923,7 @@ const App: React.FC = () => {
                   } alt="" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }} />
                   <div>
                     <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>{sitpass.saldoData.tipoParceria}</p>
-                    <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{sitpass.saldoData.cartaoDescricao}</p>
+                    <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{formatarDescricaoCartao(sitpass.saldoData.cartaoDescricao, sitpass.saldoData.tipoParceria)}</p>
                     <p className={`text-[9px] font-bold ${theme.subtext}`}>Nº {sitpass.saldoData.cartaoNumero}</p>
                   </div>
                 </div>
