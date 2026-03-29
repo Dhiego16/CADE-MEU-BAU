@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BusLine, ActiveTab, LeafletMap, ThemeTokens } from './types';
 import { haptic, shareLine, REFRESH_INTERVAL, SPLASH_DURATION } from './utils';
 import { buildTheme } from './utils/theme';
+import { ICONS } from './utils/icons';
 import { useBusSearch } from './hooks/useBusSearch';
 import { useFavorites } from './hooks/useFavorites';
 import { useNotifications } from './hooks/useNotifications';
@@ -866,22 +867,30 @@ const App: React.FC = () => {
             )}
 
             {sitpass.cartoes.length > 1 && (
-              <div className="space-y-3" style={{ animation: 'slideUp 0.3s ease-out' }}>
-                <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext} px-1`}>Selecione o cartão</p>
-                {sitpass.cartoes.map(cartao => (
-                  <button key={cartao.index} onClick={() => sitpass.selecionarCartao(cartao.index)} disabled={sitpass.saldoLoading}
-                    className={`w-full ${theme.card} border rounded-[2rem] p-5 flex items-center gap-4 active:scale-95 transition-all hover:border-yellow-400/50 disabled:opacity-50`}>
-                    <img src="/sitpass.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="font-black text-sm uppercase text-yellow-400 truncate">{cartao.cartaoDescricao}</p>
-                      <p className={`text-[9px] font-bold ${theme.subtext} mt-0.5`}>Nº {cartao.cartaoNumero}</p>
-                      <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 mt-0.5`}>{cartao.tipoParceria}</p>
-                    </div>
-                    <span className="text-yellow-400 font-black text-lg shrink-0">›</span>
-                  </button>
-                ))}
-              </div>
-            )}
+  <div className="space-y-3" style={{ animation: 'slideUp 0.3s ease-out' }}>
+    <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext} px-1`}>Selecione o cartão</p>
+    {sitpass.cartoes.map(cartao => {
+      const iconeCartao = cartao.tipoParceria === 'ESTUDANTE'
+        ? ICONS.cartaoEstudante
+        : cartao.tipoParceria === 'PLT'
+        ? ICONS.cartaoTrabalhador
+        : ICONS.sitpass;
+
+      return (
+        <button key={cartao.index} onClick={() => sitpass.selecionarCartao(cartao.index)} disabled={sitpass.saldoLoading}
+          className={`w-full ${theme.card} border rounded-[2rem] p-5 flex items-center gap-4 active:scale-95 transition-all hover:border-yellow-400/50 disabled:opacity-50`}>
+          <img src={iconeCartao} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
+          <div className="flex-1 text-left min-w-0">
+            <p className="font-black text-sm uppercase text-yellow-400 truncate">{cartao.cartaoDescricao}</p>
+            <p className={`text-[9px] font-bold ${theme.subtext} mt-0.5`}>Nº {cartao.cartaoNumero}</p>
+            <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 mt-0.5`}>{cartao.tipoParceria}</p>
+          </div>
+          <span className="text-yellow-400 font-black text-lg shrink-0">›</span>
+        </button>
+      );
+    })}
+  </div>
+)}
 
             {sitpass.saldoLoading && (
               <div className="flex items-center justify-center gap-3 py-8">
