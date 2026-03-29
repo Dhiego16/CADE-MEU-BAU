@@ -909,7 +909,13 @@ const App: React.FC = () => {
             {sitpass.saldoData && !sitpass.saldoLoading && (
               <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
                 <div className="flex items-center gap-3">
-                  <img src="/sitpass.png" alt="" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }} />
+                  <img src={
+                    sitpass.saldoData.tipoParceria === 'ESTUDANTE'
+                      ? ICONS.cartaoEstudante
+                      : sitpass.saldoData.tipoParceria === 'PLT'
+                      ? ICONS.cartaoTrabalhador
+                      : ICONS.sitpass
+                  } alt="" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }} />
                   <div>
                     <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>{sitpass.saldoData.tipoParceria}</p>
                     <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{sitpass.saldoData.cartaoDescricao}</p>
