@@ -33,7 +33,6 @@ export const ICONS = {
   logo:        '/logo.png',
 
   // Cartões SitPass
-  sitpass:           '/sitpass.png',
   cartaoTrabalhador: '/cartao_trabalhador.png',
   cartaoEstudante:   '/cartao_estudante.png',
 } as const;
