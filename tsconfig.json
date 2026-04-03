@@ -22,6 +22,8 @@
     "constants.ts",
     "services",
     "components",
+    "hooks",
+    "utils",
     "App.tsx",
     "index.tsx",
     "pontos.json"
