@@ -1,18 +1,33 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { BusLine, ActiveTab, LeafletMap, ThemeTokens } from './types';
+import { ActiveTab, BusLine, LeafletMap, LeafletMarker, PontoDataWithMarker } from './types';
 import { haptic, shareLine, REFRESH_INTERVAL, SPLASH_DURATION } from './utils';
 import { buildTheme } from './utils/theme';
-import { ICONS } from './utils/icons';
 import { useBusSearch } from './hooks/useBusSearch';
 import { useFavorites } from './hooks/useFavorites';
 import { useNotifications } from './hooks/useNotifications';
 import { useSitpass } from './hooks/useSitpass';
 import { usePWA } from './hooks/usePWA';
-import BusLineCard from './components/BusLineCard';
-import SkeletonCard from './components/SkeletonCard';
-import MiniMap from './components/MiniMap';
+import { usePullToRefresh } from './hooks/usePullToRefresh';
+
+// Components
+import SplashScreen from './components/SplashScreen';
+import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
+import PWABanners from './components/PWABanners';
+
+// Modals
+import OnboardingModal from './components/modals/OnboardingModal';
+import AlertModal from './components/modals/AlertModal';
+import NicknameModal from './components/modals/NicknameModal';
+import IosInstallModal from './components/modals/IosInstallModal';
+
+// Tabs
+import SearchTab from './components/tabs/SearchTab';
+import FavsTab from './components/tabs/FavsTab';
+import SitPassTab from './components/tabs/SitPassTab';
+import MapTab from './components/tabs/MapTab';
+
 import PONTOS_DATA from './pontos.json';
-import { LeafletLib, LeafletMarker, PontoDataWithMarker } from './types';
 
 interface MiniMapConfig {
   key: string;
@@ -23,75 +38,26 @@ interface MiniMapConfig {
   destination: string;
 }
 
-// ─── Pull-to-refresh hook ─────────────────────────────────────────────────────
-function usePullToRefresh(onRefresh: () => void, enabled: boolean) {
-  const startYRef = useRef<number | null>(null);
-  const [pulling, setPulling] = useState(false);
-  const [pullDist, setPullDist] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-    const THRESHOLD = 72;
-
-    const onTouchStart = (e: TouchEvent) => {
-      const el = document.querySelector('.app-container');
-      if (!el || el.scrollTop > 0) return;
-      startYRef.current = e.touches[0].clientY;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (startYRef.current === null) return;
-      const dy = e.touches[0].clientY - startYRef.current;
-      if (dy > 0) {
-        setPulling(true);
-        setPullDist(Math.min(dy, THRESHOLD + 20));
-      }
-    };
-
-    const onTouchEnd = () => {
-      if (pullDist >= THRESHOLD) {
-        haptic(40);
-        onRefresh();
-      }
-      startYRef.current = null;
-      setPulling(false);
-      setPullDist(0);
-    };
-
-    window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('touchend', onTouchEnd);
-    return () => {
-      window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [enabled, pullDist, onRefresh]);
-
-  return { pulling, pullDist };
-}
-
 const App: React.FC = () => {
+  // ── Theme & tab ────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
   const [isSplash, setIsSplash] = useState(true);
   const [lightTheme, setLightTheme] = useState(() => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
   });
+
+  // ── Onboarding ─────────────────────────────────────────────────────────────
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  const [sortByTime, setSortByTime] = useState(false);
+  // ── Filters ────────────────────────────────────────────────────────────────
   const [destFilter, setDestFilter] = useState('');
 
+  // ── MiniMap ────────────────────────────────────────────────────────────────
   const [activeMiniMap, setActiveMiniMap] = useState<MiniMapConfig | null>(null);
   const [miniMapRefreshKey, setMiniMapRefreshKey] = useState(0);
 
-  const toggleMiniMap = useCallback((config: MiniMapConfig) => {
-    setActiveMiniMap(prev =>
-      prev?.key === config.key ? null : { ...config }
-    );
-  }, []);
-
+  // ── Map state ──────────────────────────────────────────────────────────────
   const [mapReady, setMapReady] = useState(false);
   const [locationError, setLocationError] = useState(false);
   const [showMapOnboarding, setShowMapOnboarding] = useState(() => {
@@ -104,21 +70,21 @@ const App: React.FC = () => {
   const [stopLiveLinesMap, setStopLiveLinesMap] = useState<Record<string, boolean>>({});
   const [mapRefreshCountdown, setMapRefreshCountdown] = useState(15);
 
-  const mapRef = useRef<HTMLDivElement>(null);
+  // ── Map refs ───────────────────────────────────────────────────────────────
+  const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<LeafletMarker[]>([]);
   const pontosDataRef = useRef<PontoDataWithMarker[]>([]);
   const leafletLoadingRef = useRef(false);
-  const userMovedMapRef = useRef<boolean>(false);
-  const filtrarMarkersPorRaioRef = useRef<((lat: number, lng: number) => void) | null>(null);
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
-  const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const filtrarMarkersPorRaioRef = useRef<((lat: number, lng: number) => void) | null>(null);
   const selectedStopRef = useRef<{ id: string; nome: string } | null>(null);
+  const mapRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevTabRef = useRef<string>('');
-
   const pontoCacheRef = useRef<Map<string, { data: BusLine[]; ts: number }>>(new Map());
 
+  // ── Hooks ──────────────────────────────────────────────────────────────────
   const pwa = usePWA();
   const notifications = useNotifications();
   const sitpass = useSitpass();
@@ -159,28 +125,18 @@ const App: React.FC = () => {
 
   const theme = useMemo(() => buildTheme(lightTheme), [lightTheme]);
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const parseTime = (t?: string): number => {
     if (!t || t === 'SEM PREVISÃO') return 9999;
     if (t.toLowerCase().includes('agora')) return 0;
     return parseInt(t.replace(/\D/g, '')) || 9999;
   };
-  
-  const formatarDescricaoCartao = (descricao: string, tipoParceria: string) => {
-    if (tipoParceria === 'ESTUDANTE') return 'Passe Livre Estudantil';
-    return descricao;
-  };
 
   const processLines = useCallback((lines: BusLine[]) => {
-    let result = lines;
-    if (destFilter.trim()) {
-      const q = destFilter.trim().toUpperCase();
-      result = result.filter(l => l.destination.toUpperCase().includes(q) || l.number.toUpperCase().includes(q));
-    }
-    if (sortByTime) {
-      result = [...result].sort((a, b) => parseTime(a.nextArrival) - parseTime(b.nextArrival));
-    }
-    return result;
-  }, [destFilter, sortByTime]);
+    if (!destFilter.trim()) return lines;
+    const q = destFilter.trim().toUpperCase();
+    return lines.filter(l => l.destination.toUpperCase().includes(q) || l.number.toUpperCase().includes(q));
+  }, [destFilter]);
 
   const displayedBusLines = useMemo(() => processLines(busLines), [busLines, processLines]);
   const displayedFavLines = useMemo(() => processLines(favoriteBusLines), [favoriteBusLines, processLines]);
@@ -197,6 +153,40 @@ const App: React.FC = () => {
     onShare: shareLine,
   }), [stopId, favorites, notifications.activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, notifications.removeAlert, notifications.setShowAlertModal]);
 
+  const groupedFavLines = displayedFavLines.reduce<Record<string, BusLine[]>>((acc, line) => {
+    const key = line.stopSource ?? 'desconhecido';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(line);
+    return acc;
+  }, {});
+
+  const getStopCoords = useCallback((stopSource: string) => {
+    const normalizedId = stopSource.padStart(5, '0');
+    const fromRef = pontosDataRef.current.find(p => p.id === normalizedId);
+    if (fromRef) return fromRef;
+    const fromJson = (PONTOS_DATA as Array<{ id: string; lat: number; lng: number; nome: string }>)
+      .find(p => p.id === normalizedId);
+    if (fromJson) return { ...fromJson, marker: null as unknown as LeafletMarker };
+    return { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
+  }, []);
+
+  const toggleMiniMap = useCallback((config: MiniMapConfig) => {
+    setActiveMiniMap(prev => prev?.key === config.key ? null : { ...config });
+  }, []);
+
+  const shareStop = useCallback(async (pontoId: string, nomePonto: string) => {
+    const url = `${window.location.origin}?ponto=${pontoId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Cadê meu Baú?', text: `🚍 Ponto ${pontoId} — ${nomePonto}`, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        alert('Link copiado!');
+      }
+    } catch { /* cancelado */ }
+    haptic(30);
+  }, []);
+
   const goToSearchWithStop = useCallback((pontoId: string) => {
     setStopId(pontoId);
     setLineFilter('');
@@ -206,6 +196,7 @@ const App: React.FC = () => {
     setTimeout(() => handleSearch(pontoId, ''), 120);
   }, [setStopId, setLineFilter, handleSearch]);
 
+  // ── Map: buscar linhas do ponto ────────────────────────────────────────────
   const buscarLinhasPontoInterno = useCallback(async (pontoId: string) => {
     if (!pontoId) return;
 
@@ -253,10 +244,7 @@ const App: React.FC = () => {
         const key = `${pontoId}::${line.number}`;
         const mins = parseTime(line.nextArrival);
         if (mins <= 2 && !notifications.activeAlerts[key]) {
-          notifications.sendNotification(
-            '🚍 Baú chegando!',
-            `Linha ${line.number} chega em ${mins === 0 ? 'AGORA' : `${mins} min`} no ponto ${pontoId}!`
-          );
+          notifications.sendNotification('🚍 Baú chegando!', `Linha ${line.number} chega em ${mins === 0 ? 'AGORA' : `${mins} min`} no ponto ${pontoId}!`);
         }
       });
 
@@ -274,27 +262,19 @@ const App: React.FC = () => {
     } catch { setStopLinesError('offline'); setStopLinesLoading(false); }
   }, [mergeLines, notifications]);
 
-  const getStopCoords = useCallback((stopSource: string) => {
-    const normalizedId = stopSource.padStart(5, '0');
-    const fromRef = pontosDataRef.current.find(p => p.id === normalizedId);
-    if (fromRef) return fromRef;
-    const fromJson = (PONTOS_DATA as Array<{ id: string; lat: number; lng: number; nome: string }>)
-      .find(p => p.id === normalizedId);
-    if (fromJson) return { ...fromJson, marker: null as unknown as LeafletMarker };
-    return { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
-  }, []);
+  // ── Walking distance ───────────────────────────────────────────────────────
+  const walkingMinutes = useMemo(() => {
+    if (!selectedStop || !userLocationRef.current) return null;
+    const p = pontosDataRef.current.find(pt => pt.id === selectedStop.id);
+    if (!p) return null;
+    const dLat = p.lat - userLocationRef.current.lat;
+    const dLng = p.lng - userLocationRef.current.lng;
+    const distM = Math.sqrt(dLat * dLat + dLng * dLng) * 111000;
+    const mins = Math.round(distM / 80);
+    return mins > 0 ? mins : null;
+  }, [selectedStop]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch(); };
-
-  const groupedFavLines = displayedFavLines.reduce<Record<string, BusLine[]>>((acc, line) => {
-    const key = line.stopSource ?? 'desconhecido';
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(line);
-    return acc;
-  }, {});
-
-  const favCount = favorites.length;
-
+  // ── Pull to refresh ────────────────────────────────────────────────────────
   const pullEnabled = (activeTab === 'search' && busLines.length > 0) || (activeTab === 'favs' && favoriteBusLines.length > 0);
   const onPullRefresh = useCallback(() => {
     if (activeTab === 'search') handleSearch();
@@ -302,6 +282,7 @@ const App: React.FC = () => {
   }, [activeTab, handleSearch, loadFavoritesWithCurrentFavs]);
   const { pulling, pullDist } = usePullToRefresh(onPullRefresh, pullEnabled);
 
+  // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ponto = params.get('ponto');
@@ -341,13 +322,19 @@ const App: React.FC = () => {
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   useEffect(() => {
-    const shouldRun = (activeTab === 'search' && busLines.length > 0 && !isLoading) || (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading);
+    const shouldRun =
+      (activeTab === 'search' && busLines.length > 0 && !isLoading) ||
+      (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading);
     if (timerRef.current) clearInterval(timerRef.current);
     if (!shouldRun) { setCountdown(REFRESH_INTERVAL); return; }
     setCountdown(REFRESH_INTERVAL);
     timerRef.current = setInterval(() => {
       setCountdown(prev => {
-        if (prev <= 1) { if (activeTabRef.current === 'search') handleSearchRef.current(); else loadFavoritesRef.current(); return REFRESH_INTERVAL; }
+        if (prev <= 1) {
+          if (activeTabRef.current === 'search') handleSearchRef.current();
+          else loadFavoritesRef.current();
+          return REFRESH_INTERVAL;
+        }
         return prev - 1;
       });
     }, 1000);
@@ -355,9 +342,7 @@ const App: React.FC = () => {
   }, [activeTab, busLines.length, favoriteBusLines.length, isLoading, isFavoritesLoading]);
 
   useEffect(() => { if (busLines.length > 0) notifications.checkAlerts(busLines); }, [busLines, notifications.checkAlerts]);
-  useEffect(() => {
-    if (busLines.length > 0 && activeMiniMap) setMiniMapRefreshKey(k => k + 1);
-  }, [busLines]); // eslint-disable-line
+  useEffect(() => { if (busLines.length > 0 && activeMiniMap) setMiniMapRefreshKey(k => k + 1); }, [busLines]); // eslint-disable-line
   useEffect(() => { if (favoriteBusLines.length > 0) notifications.checkAlerts(favoriteBusLines); }, [favoriteBusLines, notifications.checkAlerts]);
 
   useEffect(() => {
@@ -378,742 +363,232 @@ const App: React.FC = () => {
     if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current);
     mapRefreshTimerRef.current = setInterval(() => {
       setMapRefreshCountdown(prev => {
-        if (prev <= 1) { const s = selectedStopRef.current; if (s) buscarLinhasPontoInterno(s.id); return 15; }
+        if (prev <= 1) {
+          const s = selectedStopRef.current;
+          if (s) buscarLinhasPontoInterno(s.id);
+          return 15;
+        }
         return prev - 1;
       });
     }, 1000);
     return () => { if (mapRefreshTimerRef.current) clearInterval(mapRefreshTimerRef.current); };
   }, [selectedStop, buscarLinhasPontoInterno]);
 
-  useEffect(() => {
-    if (activeTab !== 'map' || leafletMapRef.current || leafletLoadingRef.current) return;
-    leafletLoadingRef.current = true;
-
-    const seenIds = new Set<string>();
-    const PONTOS = (PONTOS_DATA as Array<{ id: string; lat: number; lng: number; nome: string }>)
-      .filter(p => { if (seenIds.has(p.id)) return false; seenIds.add(p.id); return true; });
-
-    const loadLeaflet = () => new Promise<void>((resolve, reject) => {
-      if ((window as { L?: unknown }).L) { resolve(); return; }
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Falha ao carregar Leaflet'));
-      document.head.appendChild(script);
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(link);
-    });
-
-    let moveEndHandler: (() => void) | null = null;
-
-    loadLeaflet().then(() => {
-      if (!mapRef.current || leafletMapRef.current) { leafletLoadingRef.current = false; return; }
-      const L = (window as unknown as { L: LeafletLib }).L;
-
-      const map = L.map(mapRef.current, { center: [-16.7200, -49.0900], zoom: 14, zoomControl: false });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-      const pontoIcon = L.icon({ iconUrl: '/ponto.png', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36] });
-
-      const calcDist = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-        const R = 6371000; const dLat = (lat2 - lat1) * Math.PI / 180; const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      };
-
-      const filtrarMarkersPorRaio = (userLat: number, userLng: number) => {
-        pontosDataRef.current.forEach(p => { const d = calcDist(userLat, userLng, p.lat, p.lng); p.marker.setOpacity(d <= 500 ? 1 : 0); });
-      };
-      filtrarMarkersPorRaioRef.current = filtrarMarkersPorRaio;
-
-      PONTOS.forEach(ponto => {
-        const marker = L.marker([ponto.lat, ponto.lng], { icon: pontoIcon, opacity: 0 }).addTo(map).on('click', () => {
-          const loc = userLocationRef.current;
-          if (loc) filtrarMarkersPorRaio(loc.lat, loc.lng);
-          setSelectedStop({ id: ponto.id, nome: ponto.nome });
-          setActiveMiniMap(null);
-          setStopLines([]); setStopLiveLinesMap({}); setStopLinesError(null); setStopLinesLoading(true);
-          buscarLinhasPontoInterno(ponto.id);
-          haptic(40);
-        });
-        markersRef.current.push(marker);
-        pontosDataRef.current.push({ ...ponto, marker });
-      });
-
-      moveEndHandler = () => {
-        userMovedMapRef.current = true;
-        const c = map.getCenter();
-        filtrarMarkersPorRaio(c.lat, c.lng);
-      };
-      map.on('moveend', moveEndHandler); 
-      map.on('zoomend', moveEndHandler);
-      map.on('dragend', moveEndHandler);
-      leafletMapRef.current = map;
-      setMapReady(true);
-
-      if (navigator.geolocation) {
-  navigator.geolocation.getCurrentPosition(pos => {
-    const { latitude, longitude } = pos.coords;
-    userLocationRef.current = { lat: latitude, lng: longitude };
-    const userIcon = L.divIcon({ html: `<div style="width:20px;height:20px;background:#3b82f6;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px rgba(59,130,246,0.4);"></div>`, className: '', iconSize: [20, 20], iconAnchor: [10, 10] });
-    L.marker([latitude, longitude], { icon: userIcon }).addTo(map).bindPopup('Você está aqui');
-    map.setView([latitude, longitude], 15);
-    filtrarMarkersPorRaio(latitude, longitude); // <-- ADICIONE ESTA LINHA
-    let minDist = Infinity;
-    let nearest: { id: string; nome: string; lat: number; lng: number } | null = null;
-    PONTOS.forEach(p => {
-      const d = calcDist(latitude, longitude, p.lat, p.lng);
-      if (d < minDist) { minDist = d; nearest = p; }
-    });
-    if (nearest && minDist < 1000) {
-      (nearest as { _nearestDist?: number })._nearestDist = minDist;
-    }
-  }, () => { setLocationError(true); pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }, { timeout: 8000, enableHighAccuracy: true });
-} else { pontosDataRef.current.forEach(p => p.marker.setOpacity(1)); }
-    }).catch(() => { leafletLoadingRef.current = false; });
-
-    return () => {
-      if (leafletMapRef.current && moveEndHandler) {
-        leafletMapRef.current.off('moveend', moveEndHandler);
-        leafletMapRef.current.off('zoomend', moveEndHandler);
-      }
-    };
-  }, [activeTab, buscarLinhasPontoInterno]);
-
-  const walkingMinutes = useMemo(() => {
-    if (!selectedStop || !userLocationRef.current) return null;
-    const p = pontosDataRef.current.find(pt => pt.id === selectedStop.id);
-    if (!p) return null;
-    const dLat = p.lat - userLocationRef.current.lat;
-    const dLng = p.lng - userLocationRef.current.lng;
-    const distDeg = Math.sqrt(dLat * dLat + dLng * dLng);
-    const distM = distDeg * 111000;
-    const mins = Math.round(distM / 80);
-    return mins > 0 ? mins : null;
-  }, [selectedStop]);
-
-  const shareStop = useCallback(async (pontoId: string, nomePonto: string) => {
-    const url = `${window.location.origin}?ponto=${pontoId}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Cadê meu Baú?', text: `🚍 Ponto ${pontoId} — ${nomePonto}`, url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        alert('Link copiado!');
-      }
-    } catch { /* cancelado */ }
-    haptic(30);
+  // ── Map: select stop handler ───────────────────────────────────────────────
+  const handleSelectStop = useCallback((stop: { id: string; nome: string }) => {
+    setSelectedStop(stop);
+    setActiveMiniMap(null);
+    setStopLines([]);
+    setStopLiveLinesMap({});
+    setStopLinesError(null);
+    setStopLinesLoading(true);
   }, []);
 
-  if (isSplash) {
-    return (
-      <div className="h-screen w-screen bg-black flex flex-col items-center justify-center p-10 overflow-hidden text-center">
-        <div className="relative mb-8 flex flex-col items-center scale-110">
-          <div className="w-40 h-40 bg-yellow-400 rounded-[3rem] flex items-center justify-center shadow-[0_0_50px_rgba(251,191,36,0.4)] mb-8 transform rotate-[-5deg] overflow-hidden">
-            <img src="/logo.png" alt="Cadê meu Baú" className="w-32 h-32 object-contain" onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerHTML = '<span class="text-8xl">🚍</span>'; }} />
-          </div>
-          <div className="bg-yellow-400 text-black px-6 py-2 font-black italic text-2xl skew-x-[-12deg] shadow-[8px_8px_0px_rgba(251,191,36,0.3)] uppercase tracking-tighter">Cadê meu Baú?</div>
-        </div>
-        <div className="w-48 h-2 bg-white/10 rounded-full overflow-hidden relative">
-          <div className="absolute top-0 left-0 h-full bg-yellow-400 w-1/2 animate-[loading_1.5s_infinite_linear]" />
-        </div>
-        <p className="mt-6 text-[10px] font-black uppercase tracking-[0.5em] text-slate-500 animate-pulse">Rastreando Linhas...</p>
-        <style>{`@keyframes loading { from { left: -50%; } to { left: 100%; } }`}</style>
-      </div>
-    );
-  }
+  const handleCloseStop = useCallback(() => {
+    setSelectedStop(null);
+    setStopLines([]);
+    setActiveMiniMap(null);
+  }, []);
+
+  // ── Splash ─────────────────────────────────────────────────────────────────
+  if (isSplash) return <SplashScreen />;
+
+  // ── Global styles ──────────────────────────────────────────────────────────
+  const globalStyles = `
+    @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes staggerIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes urgencyPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.3); } }
+    .stagger-card { animation: staggerIn 0.3s ease-out both; }
+    .page-enter { animation: staggerIn 0.3s ease-out both; }
+    .btn-active:active { transform: scale(0.95); opacity: 0.8; }
+    .urgent-card { animation: urgencyPulse 1.5s ease-in-out infinite; border-color: rgba(239,68,68,0.5) !important; }
+    ::-webkit-scrollbar { display: none; }
+    .app-container { -webkit-overflow-scrolling: touch; }
+  `;
 
   return (
     <div className={`h-screen w-screen ${theme.bg} ${theme.text} flex flex-col relative overflow-hidden transition-colors duration-300`}>
-      <style>{`
-        @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes staggerIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes urgencyPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.3); } }
-        .stagger-card { animation: staggerIn 0.3s ease-out both; }
-        .page-enter { animation: staggerIn 0.3s ease-out both; }
-        .btn-active:active { transform: scale(0.95); opacity: 0.8; }
-        .urgent-card { animation: urgencyPulse 1.5s ease-in-out infinite; border-color: rgba(239,68,68,0.5) !important; }
-        ::-webkit-scrollbar { display: none; }
-        .app-container { -webkit-overflow-scrolling: touch; }
-      `}</style>
+      <style>{globalStyles}</style>
 
-      {/* Onboarding */}
-      {showOnboarding && (() => {
-        const steps = [
-          { icon: '/localizacao.png', title: 'Bem-vindo ao Cadê meu Baú!', desc: 'Consulte em segundos quando o seu ônibus chega em qualquer ponto de Goiânia.', tip: null },
-          { icon: '/informacao.png', title: 'Encontre o número do ponto', desc: 'O número está na plaquinha fixada no poste do ponto de ônibus.', tip: 'Geralmente tem 5 dígitos. Ex: 31700, 42150' },
-          { icon: '/buscar.png', title: 'Digite e busque', desc: 'Cole o número no campo "Número do Ponto" e toque em Localizar Baú.', tip: 'Os dados atualizam sozinhos a cada 20 segundos!' },
-          { icon: '/favorito.png', title: 'Salve seus favoritos', desc: 'Toque na estrela de uma linha para salvá-la. Na próxima vez ela já aparece atualizada.', tip: 'Segure o dedo num card salvo para dar um apelido a ele.' },
-        ];
-        const step = steps[onboardingStep]; const isLast = onboardingStep === steps.length - 1;
-        return (
-          <div className="fixed inset-0 bg-black/90 z-[200] flex items-end justify-center p-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
-            <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`}>
-              <div className="flex justify-center gap-2">{steps.map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === onboardingStep ? 'w-6 bg-yellow-400' : 'w-1.5 bg-white/20'}`} />)}</div>
-              <div className="text-center space-y-3">
-                <img src={step.icon} alt="" className="mx-auto" style={{ width: 64, height: 64, objectFit: "contain" }} />
-                <p className="font-black text-lg uppercase tracking-tight text-white leading-tight">{step.title}</p>
-                <p className={`text-sm ${theme.subtext} leading-relaxed`}>{step.desc}</p>
-                {step.tip && <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-2xl px-4 py-3"><p className="text-[11px] font-bold text-yellow-400 leading-relaxed">{step.tip}</p></div>}
-              </div>
-              <div className="flex gap-3">
-                {onboardingStep > 0 && <button onClick={() => setOnboardingStep(p => p - 1)} className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest border ${theme.subtext} ${lightTheme ? 'border-gray-300' : 'border-white/10'}`}>Voltar</button>}
-                <button onClick={() => { if (isLast) { localStorage.setItem('cade_meu_bau_onboarding_done', 'true'); setShowOnboarding(false); haptic(50); } else { setOnboardingStep(p => p + 1); haptic(30); } }} className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform">
-                  {isLast ? 'Vamos lá!' : 'Próximo →'}
-                </button>
-              </div>
-              {!isLast && <button onClick={() => { localStorage.setItem('cade_meu_bau_onboarding_done', 'true'); setShowOnboarding(false); }} className={`w-full text-center text-[9px] font-black uppercase tracking-widest ${theme.subtext} opacity-40`}>Pular tutorial</button>}
-            </div>
-          </div>
-        );
-      })()}
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+      {showOnboarding && (
+        <OnboardingModal
+          step={onboardingStep}
+          lightTheme={lightTheme}
+          theme={theme}
+          onNext={() => setOnboardingStep(p => p + 1)}
+          onBack={() => setOnboardingStep(p => p - 1)}
+          onSkip={() => { localStorage.setItem('cade_meu_bau_onboarding_done', 'true'); setShowOnboarding(false); }}
+          onFinish={() => { localStorage.setItem('cade_meu_bau_onboarding_done', 'true'); setShowOnboarding(false); }}
+        />
+      )}
 
-      {/* Modal alerta */}
       {notifications.showAlertModal && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4" onClick={() => notifications.setShowAlertModal(null)}>
-          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-black uppercase tracking-widest text-yellow-400"><img src="/alert_on.png" alt="" style={{ width: 16, height: 16, objectFit: "contain", display: "inline", marginRight: 6 }} />Alertar quando chegar</p>
-              <button onClick={() => notifications.setShowAlertModal(null)} className="p-1 active:scale-95" aria-label="Fechar"><img src="/fechar.png" alt="" style={{ width: 20, height: 20, objectFit: "contain" }} /></button>
-            </div>
-            <p className={`text-[9px] font-bold ${theme.subtext} uppercase tracking-widest`}>Notificar quando o baú estiver a:</p>
-            <div className="grid grid-cols-2 gap-3">
-              {[2, 5, 10, 15].map(min => (
-                <button key={min} onClick={() => notifications.setAlert(notifications.showAlertModal!, min)} className={`${theme.card} border rounded-2xl py-4 font-black text-center active:scale-95 transition-transform hover:border-yellow-400`}>
-                  <span className="block text-2xl font-black text-yellow-400">{min}</span>
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>minutos</span>
-                </button>
-              ))}
-            </div>
-            {notifications.notifPermission === 'denied' && <p className="text-[9px] text-red-400 font-bold uppercase tracking-widest text-center">Notificações bloqueadas. Ative nas configurações do navegador.</p>}
-          </div>
-        </div>
+        <AlertModal
+          lineKey={notifications.showAlertModal}
+          notifPermission={notifications.notifPermission}
+          theme={theme}
+          onClose={() => notifications.setShowAlertModal(null)}
+          onSetAlert={notifications.setAlert}
+        />
       )}
 
-      {/* Modal nickname */}
       {editingNickname && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-end justify-center p-4" onClick={() => setEditingNickname(null)}>
-          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.25s ease-out' }}>
-            <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400"><img src="/editar.png" alt="" style={{ width: 18, height: 18, objectFit: "contain" }} /> Apelido da Linha</p>
-            <input id="nickname-input" type="text" placeholder="Ex: Meu trabalho, Casa da mãe..." value={nicknameInput} onChange={e => setNicknameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveNickname()} maxLength={30}
-              className={`w-full ${theme.input} border rounded-2xl px-4 py-4 font-black outline-none focus:border-yellow-400 transition-all text-base`} />
-            <div className="flex gap-3">
-              <button onClick={() => { setNicknameInput(''); saveNickname(); }} className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest border ${theme.subtext} ${lightTheme ? 'border-gray-300' : 'border-white/10'}`}>Remover apelido</button>
-              <button onClick={saveNickname} className="flex-1 bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest">Salvar</button>
-            </div>
-          </div>
-        </div>
+        <NicknameModal
+          nicknameInput={nicknameInput}
+          lightTheme={lightTheme}
+          theme={theme}
+          onClose={() => setEditingNickname(null)}
+          onSave={saveNickname}
+          onRemove={() => { setNicknameInput(''); saveNickname(); }}
+          onChange={setNicknameInput}
+        />
       )}
 
-      {/* Modal iOS */}
       {pwa.showIosInstructions && (
-        <div className="fixed inset-0 bg-black/90 z-[100] flex items-end justify-center p-4" onClick={() => pwa.setShowIosInstructions(false)}>
-          <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-5`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-black uppercase tracking-widest text-yellow-400">Como instalar</p>
-              <button onClick={() => pwa.setShowIosInstructions(false)} className="p-1 active:scale-95" aria-label="Fechar"><img src="/fechar.png" alt="" style={{ width: 20, height: 20, objectFit: "contain" }} /></button>
-            </div>
-            <div className="space-y-3">
-              {(pwa.isIosDevice ? [
-                { icon: '1️⃣', title: 'Toque no botão compartilhar', desc: 'O ícone ↑ na barra inferior do Safari' },
-                { icon: '2️⃣', title: 'Role para baixo', desc: 'Procure "Adicionar à Tela de Início"' },
-                { icon: '3️⃣', title: 'Toque em "Adicionar"', desc: 'O app aparecerá na sua tela inicial!' },
-              ] : [
-                { icon: '1️⃣', title: 'Toque no menu do Chrome', desc: 'Os três pontinhos ⋮ no canto superior direito' },
-                { icon: '2️⃣', title: 'Selecione a opção', desc: '"Adicionar à tela inicial" ou "Instalar app"' },
-                { icon: '3️⃣', title: 'Confirme a instalação', desc: 'Pronto! O ícone aparece na sua tela inicial!' },
-              ]).map(step => (
-                <div key={step.icon} className={`flex items-start gap-3 ${theme.card} border rounded-2xl p-3`}>
-                  <span className="text-2xl shrink-0">{step.icon}</span>
-                  <div><p className="font-black text-[11px] uppercase tracking-wide">{step.title}</p><p className={`text-[9px] ${theme.subtext} font-bold mt-0.5`}>{step.desc}</p></div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => { pwa.setShowIosInstructions(false); pwa.dismissInstallBanner(); }} className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest">Entendi!</button>
-          </div>
-        </div>
+        <IosInstallModal
+          isIosDevice={pwa.isIosDevice}
+          theme={theme}
+          onClose={() => pwa.setShowIosInstructions(false)}
+          onDismiss={pwa.dismissInstallBanner}
+        />
       )}
 
-      {/* Header */}
-      <header className={`pt-[env(safe-area-inset-top)] ${theme.header} border-b p-4 flex justify-between items-center shrink-0 z-50`}>
-        <div className="font-black italic text-yellow-400 text-xl tracking-tighter skew-x-[-10deg]">CADÊ MEU BAÚ?</div>
-        <div className="flex items-center gap-3">
-          {staleData && <div className="text-[8px] font-black uppercase tracking-widest text-red-400 animate-pulse border border-red-500/30 px-2 py-1 rounded-xl">Sem internet</div>}
-          {((activeTab === 'search' && busLines.length > 0 && !isLoading) || (activeTab === 'favs' && favoriteBusLines.length > 0 && !isFavoritesLoading)) && (
-            <div className="text-right flex flex-col items-end">
-              <span className={`text-[7px] font-black ${theme.subtext} uppercase leading-none mb-0.5`}>Auto-Refresh</span>
-              <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /><span className="text-sm font-black text-yellow-400 tabular-nums leading-none">{countdown}s</span></div>
-            </div>
-          )}
-          {(isLoading || isFavoritesLoading) && <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />}
-          <button onClick={() => { setLightTheme(p => !p); haptic(30); }} className={`text-xl p-1.5 transition-all active:scale-110 ${theme.subtext}`} aria-label="Alternar tema">{lightTheme ? '🌙' : '☀️'}</button>
-        </div>
-      </header>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <AppHeader
+        theme={theme}
+        lightTheme={lightTheme}
+        staleData={staleData}
+        activeTab={activeTab}
+        busLinesCount={busLines.length}
+        favoriteLinesCount={favoriteBusLines.length}
+        isLoading={isLoading}
+        isFavoritesLoading={isFavoritesLoading}
+        countdown={countdown}
+        onToggleTheme={() => setLightTheme(p => !p)}
+      />
 
-      {/* Pull-to-refresh indicator */}
+      {/* ── Pull-to-refresh indicator ───────────────────────────────────────── */}
       {pulling && (
-        <div className="flex items-center justify-center gap-2 overflow-hidden transition-all" style={{ height: Math.min(pullDist, 56), opacity: Math.min(pullDist / 72, 1) }}>
+        <div
+          className="flex items-center justify-center gap-2 overflow-hidden transition-all"
+          style={{ height: Math.min(pullDist, 56), opacity: Math.min(pullDist / 72, 1) }}
+        >
           <div className={`w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full ${pullDist >= 72 ? 'animate-spin' : ''}`} />
-          <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>{pullDist >= 72 ? 'Solte para atualizar' : 'Puxe para atualizar'}</span>
+          <span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>
+            {pullDist >= 72 ? 'Solte para atualizar' : 'Puxe para atualizar'}
+          </span>
         </div>
       )}
 
-      {/* ── CONTAINER PRINCIPAL (abas search / favs / sitpass) ── */}
+      {/* ── Main scrollable container ────────────────────────────────────────── */}
       <div className="flex-grow overflow-y-auto app-container px-4 pt-2 pb-32">
+        <PWABanners pwa={pwa} />
 
-        {/* Banners PWA */}
-        {pwa.showUpdateBanner && (
-          <div style={{ animation: 'slideUp 0.4s ease-out' }}>
-            <div className="bg-emerald-500 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(16,185,129,0.4)]">
-              <img src="/alert_on.png" alt="" style={{ width: 32, height: 32, objectFit: "contain", flexShrink: 0 }} />
-              <div className="flex-1 min-w-0"><p className="font-black text-white text-[11px] uppercase tracking-wider leading-tight">Nova versão disponível!</p><p className="text-white/70 text-[9px] font-bold uppercase tracking-widest leading-tight mt-0.5">Toque para atualizar agora</p></div>
-              <button onClick={() => { pwa.applyUpdate(); haptic(50); }} className="bg-white text-emerald-600 font-black text-[10px] uppercase tracking-widest px-3 py-2 rounded-xl active:scale-95 shrink-0">Atualizar</button>
-            </div>
-          </div>
-        )}
-        {pwa.showInstallBanner && !pwa.isInstalled && (
-          <div style={{ animation: 'slideUp 0.4s ease-out' }}>
-            <div className="bg-yellow-400 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(251,191,36,0.4)]">
-              <img src="/buscar.png" alt="" style={{ width: 32, height: 32, objectFit: "contain", flexShrink: 0 }} />
-              <div className="flex-1 min-w-0"><p className="font-black text-black text-[11px] uppercase tracking-wider leading-tight">Instale o app!</p><p className="text-black/60 text-[9px] font-bold uppercase tracking-widest leading-tight mt-0.5">Acesso rápido • Funciona offline</p></div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={pwa.handleInstall} className="bg-black text-yellow-400 font-black text-[10px] uppercase tracking-widest px-3 py-2 rounded-xl active:scale-95">Instalar</button>
-                <button onClick={pwa.dismissInstallBanner} className="p-1" aria-label="Fechar banner"><img src="/fechar.png" alt="" style={{ width: 20, height: 20, objectFit: "contain", opacity: 0.5 }} /></button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── ABA BUSCA ─────────────────────────────────────────────────────── */}
         {activeTab === 'search' && (
-          <div className="page-enter space-y-5">
-            <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
-              <div className="flex gap-2">
-                <div className="flex-[3] relative">
-                  <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>Número do Ponto</span>
-                  <input type="text" inputMode="numeric" placeholder="Ex: 31700" value={stopId} onChange={e => setStopId(e.target.value)} onKeyDown={handleKeyDown}
-                    className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl`} />
-                </div>
-                <div className="flex-[2] relative">
-                  <span className={`absolute left-0 top-2 text-[8px] font-black ${theme.subtext} uppercase text-center w-full pointer-events-none`}>Linha (OPCIONAL)</span>
-                  <input type="text" placeholder="Ex: 327" value={lineFilter} onChange={e => setLineFilter(e.target.value)} onKeyDown={handleKeyDown}
-                    className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl text-center`} />
-                </div>
-              </div>
-              {busLines.length > 0 && (
-                <div className="relative">
-                  <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>Filtrar destino</span>
-                  <input type="text" placeholder="Ex: Terminal, Centro..." value={destFilter} onChange={e => setDestFilter(e.target.value)}
-                    className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-sm`} />
-                  {destFilter && <button onClick={() => setDestFilter('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>}
-                </div>
-              )}
-              <button onClick={() => handleSearch()} disabled={isLoading} className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
-                {isLoading ? 'Rastreando...' : 'Localizar Baú'}
-              </button>
-              {searchHistory.length > 0 && busLines.length === 0 && !isLoading && (
-                <div>
-                  <p className={`text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2 px-1`}>Buscas Recentes</p>
-                  <div className="flex flex-wrap gap-2">
-                    {searchHistory.map(h => (
-                      <button key={h} onClick={() => { setStopId(h); handleSearch(h); haptic(30); }} className={`${theme.historyBtn} border text-xs font-black px-3 py-2 rounded-xl active:scale-95 transition-transform tracking-wider`}>📍 {h}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            {errorMsg && (() => {
-              const errors: Record<string, { icon: string; title: string; desc: string; color: string }> = {
-                offline: { icon: '/informacao.png', title: 'Sem conexão', desc: 'Verifique sua internet e tente novamente.', color: 'border-slate-500/30 text-slate-400 bg-slate-500/10' },
-                not_found: { icon: '📍', title: 'Ponto não encontrado', desc: `O ponto "${stopId}" não existe ou está inativo.`, color: 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' },
-                no_lines: { icon: '/onibus_realtime.png', title: 'Linha não opera aqui', desc: `A linha "${lineFilter}" não para neste ponto agora.`, color: 'border-orange-500/30 text-orange-400 bg-orange-500/10' },
-                invalid_stop: { icon: '/alerta.png', title: 'Número inválido', desc: 'Digite um número de ponto válido. Ex: 31700', color: 'border-red-500/30 text-red-400 bg-red-500/10' },
-              };
-              const e = errors[errorMsg] ?? errors['offline'];
-              return (
-                <div className={`border p-4 rounded-2xl flex items-start gap-3 ${e.color}`}>
-                  {e.icon.startsWith('/') ? <img src={e.icon} alt="" style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0 }} /> : <span style={{ fontSize: 24, flexShrink: 0, lineHeight: 1 }}>{e.icon}</span>}
-                  <div>
-                    <p className="font-black text-[11px] uppercase tracking-widest">{e.title}</p>
-                    <p className="text-[9px] font-bold mt-1 opacity-80 leading-relaxed">{e.desc}</p>
-                    {errorMsg === 'offline' && <button onClick={() => handleSearch()} className="mt-2 text-[9px] font-black uppercase tracking-widest underline opacity-70">Tentar novamente →</button>}
-                  </div>
-                </div>
-              );
-            })()}
-            {isLoading && [0, 1, 2].map(i => <div key={i} className="stagger-card" style={{ animationDelay: `${i * 80}ms` }}><SkeletonCard light={lightTheme} /></div>)}
-            {!isLoading && (
-              <div className="space-y-3">
-                {displayedBusLines.map((line, i) => {
-                  const sId = (selectedStop?.id ?? line.stopSource ?? stopId).padStart(5, '0');
-                  const miniKey = `${line.number}-${sId}`;
-                  const stopCoords = getStopCoords(sId);
-                  const isActive = activeMiniMap?.key === miniKey;
-                  const isUrgent = parseTime(line.nextArrival) <= 2;
-                  return (
-                    <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}><BusLineCard line={line} staggerIndex={i} {...cardProps} /></div>
-                      {liveLineMap[line.number] && (
-                        <button onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoords.lat, stopLng: stopCoords.lng, stopNome: selectedStop?.nome ?? stopCoords.nome ?? `Ponto ${sId}`, destination: line.destination }); }}
-                          className={`w-full mt-1 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all ${isActive ? 'bg-blue-700 text-white' : 'bg-blue-600/15 text-blue-400 border border-blue-500/30'}`}>
-                          <img src="/onibus_realtime.png" alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                          {isActive ? 'Fechar mapa ao vivo' : `Ver linha ${line.number} ao vivo`}
-                          {!isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
-                        </button>
-                      )}
-                      {isActive && activeMiniMap && (
-                        <MiniMap key={activeMiniMap?.key} stopLat={activeMiniMap.stopLat} stopLng={activeMiniMap.stopLng} stopNome={activeMiniMap.stopNome} lineNumber={activeMiniMap.lineNumber} destination={activeMiniMap.destination} refreshKey={miniMapRefreshKey} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme} />
-                      )}
-                    </div>
-                  );
-                })}
-                {busLines.length > 0 && displayedBusLines.length === 0 && destFilter && (
-                  <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-4 text-center">
-                    <p className="font-black text-[11px] text-yellow-400 uppercase tracking-widest">Nenhuma linha para "{destFilter}"</p>
-                    <button onClick={() => setDestFilter('')} className="mt-2 text-[9px] font-black uppercase tracking-widest text-yellow-400 underline">Limpar filtro</button>
-                  </div>
-                )}
-                {busLines.length === 0 && !errorMsg && (
-                  <div className="py-20 text-center opacity-10 flex flex-col items-center">
-                    <img src="/onibus_realtime.png" alt="" className="mb-6" style={{ width: 90, height: 90, objectFit: "contain", opacity: 0.15 }} />
-                    <p className={`font-black text-[12px] uppercase tracking-[0.5em] px-10 leading-relaxed ${theme.subtext}`}>Aguardando número do ponto...</p>
-                  </div>
-                )}
-              </div>
-            )}
-            <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer" onClick={() => haptic(30)} className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400' : 'border-white/5 text-slate-600'} transition-all font-black text-[10px] uppercase tracking-widest`}>
-              💬 Algo errado? Me avisa
-            </a>
-          </div>
+          <SearchTab
+            stopId={stopId}
+            lineFilter={lineFilter}
+            destFilter={destFilter}
+            busLines={busLines}
+            displayedBusLines={displayedBusLines}
+            isLoading={isLoading}
+            errorMsg={errorMsg}
+            searchHistory={searchHistory}
+            liveLineMap={liveLineMap}
+            activeMiniMap={activeMiniMap}
+            miniMapRefreshKey={miniMapRefreshKey}
+            lightTheme={lightTheme}
+            theme={theme}
+            cardProps={cardProps}
+            parseTime={parseTime}
+            getStopCoords={getStopCoords}
+            selectedStop={selectedStop}
+            onStopIdChange={setStopId}
+            onLineFilterChange={setLineFilter}
+            onDestFilterChange={setDestFilter}
+            onSearch={() => handleSearch()}
+            onHistorySearch={(id) => { setStopId(id); handleSearch(id); }}
+            onToggleMiniMap={toggleMiniMap}
+            onCloseMiniMap={() => setActiveMiniMap(null)}
+          />
         )}
 
-        {/* ── ABA FAVORITOS ─────────────────────────────────────────────────── */}
         {activeTab === 'favs' && (
-          <div className="page-enter space-y-4">
-            <div className="flex items-center justify-between px-2 mb-2">
-              <h2 className={`text-[10px] font-black uppercase tracking-[0.5em] ${theme.subtext} flex items-center gap-2`}>
-                <img src="/favorito.png" alt="" style={{ width: 18, height: 18, objectFit: "contain" }} /> Minha Garagem
-              </h2>
-              {favorites.length > 0 && !isFavoritesLoading && (
-                <button onClick={() => { loadFavoritesSchedules(favorites); haptic(30); }} className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} border ${lightTheme ? 'border-gray-300' : 'border-white/10'} px-3 py-2 rounded-xl active:scale-95 transition-transform`}>Atualizar</button>
-              )}
-            </div>
-            {favoriteBusLines.length > 0 && (
-              <div className="relative px-1">
-                <input type="text" placeholder="🔍 Filtrar por destino ou linha..." value={destFilter} onChange={e => setDestFilter(e.target.value)}
-                  className={`w-full ${theme.input} border rounded-2xl px-4 py-3 font-black outline-none focus:border-yellow-400 transition-all text-sm`} />
-                {destFilter && <button onClick={() => setDestFilter('')} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>}
-              </div>
-            )}
-            {favorites.length > 0 && !isFavoritesLoading && <p className={`text-[8px] font-black ${theme.subtext} uppercase tracking-widest px-2 opacity-50`}><img src="/editar.png" alt="" style={{ width: 14, height: 14, objectFit: "contain" }} /> Segure o dedo em um card para dar apelido</p>}
-            {isFavoritesLoading && favorites.slice(0, 3).map((_, i) => <div key={i} className="stagger-card" style={{ animationDelay: `${i * 80}ms` }}><SkeletonCard light={lightTheme} /></div>)}
-            {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
-              <div key={pontoId} className="space-y-3">
-                <div className="flex items-center gap-2 px-1 pt-2">
-                  📍<span className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Ponto {pontoId}</span>
-                  <div className={`flex-1 h-px ${theme.divider}`} />
-                  <button onClick={() => shareStop(pontoId, `Ponto ${pontoId}`)} className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 active:opacity-100 transition-opacity`} aria-label="Compartilhar ponto">🔗</button>
-                </div>
-                {lines.map((line, i) => {
-                  const key = `${line.stopSource ?? stopId}::${line.number}`;
-                  const isUrgent = parseTime(line.nextArrival) <= 2;
-                  return (
-                    <div key={line.id} className="stagger-card" style={{ animationDelay: `${i * 60}ms` }}>
-                      <div className={isUrgent ? 'urgent-card rounded-[2.5rem]' : ''}><BusLineCard line={line} isRemoving={removingFavKey === key} staggerIndex={i} {...cardProps} /></div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-            {favorites.length === 0 && <div className="py-28 text-center opacity-20 px-10"><p className="font-black text-[12px] uppercase tracking-[0.3em] mb-4">Garagem Vazia</p><p className="text-[10px] leading-relaxed uppercase tracking-widest font-bold">Toque na estrela de uma linha para que ela apareça aqui.</p></div>}
-            {!isFavoritesLoading && favorites.length > 0 && favoriteBusLines.length === 0 && (
-              <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-4 flex items-start gap-3">
-                <img src="/alerta.png" alt="" style={{ width: 24, height: 24, objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
-                <div>
-                  <p className="font-black text-[11px] text-yellow-400 uppercase tracking-widest">Sem horários disponíveis</p>
-                  <p className={`text-[9px] font-bold mt-1 ${theme.subtext} leading-relaxed`}>Os pontos salvos podem estar sem operação agora. Tente atualizar.</p>
-                  <button onClick={() => { loadFavoritesSchedules(favorites); haptic(30); }} className="mt-2 text-[9px] font-black uppercase tracking-widest text-yellow-400 underline">Tentar novamente →</button>
-                </div>
-              </div>
-            )}
-            <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer" onClick={() => haptic(30)} className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400' : 'border-white/5 text-slate-600'} transition-all font-black text-[10px] uppercase tracking-widest`}>
-              💬 Algo errado? Me avisa
-            </a>
-          </div>
+          <FavsTab
+            favorites={favorites}
+            favoriteBusLines={favoriteBusLines}
+            displayedFavLines={displayedFavLines}
+            groupedFavLines={groupedFavLines}
+            isFavoritesLoading={isFavoritesLoading}
+            destFilter={destFilter}
+            stopId={stopId}
+            removingFavKey={removingFavKey}
+            lightTheme={lightTheme}
+            theme={theme}
+            cardProps={cardProps}
+            parseTime={parseTime}
+            onDestFilterChange={setDestFilter}
+            onRefresh={loadFavoritesWithCurrentFavs}
+            onShareStop={shareStop}
+          />
         )}
 
-        {/* ── ABA SITPASS ───────────────────────────────────────────────────── */}
         {activeTab === 'sitpass' && (
-          <div className="page-enter space-y-5">
-            <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
-              <div className="relative">
-                <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>CPF</span>
-                <input type="text" inputMode="numeric" placeholder="000.000.000-00" value={sitpass.cpfSitpass} onChange={sitpass.handleCpfChange}
-                  onKeyDown={e => e.key === 'Enter' && sitpass.consultarSaldo()} maxLength={14}
-                  className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none transition-all placeholder:text-slate-700 text-xl ${sitpass.cpfError ? 'border-red-500' : 'focus:border-yellow-400'}`} />
-                {sitpass.cpfError && <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2 px-1">{sitpass.cpfError}</p>}
-              </div>
-              <button onClick={sitpass.consultarSaldo} disabled={sitpass.cartoesLoading || sitpass.saldoLoading}
-                className="w-full bg-yellow-400 text-black py-5 rounded-2xl font-black btn-active uppercase text-sm tracking-[0.2em] shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
-                {sitpass.cartoesLoading ? 'Buscando cartões...' : sitpass.saldoLoading ? 'Consultando...' : 'Consultar Saldo'}
-              </button>
-            </div>
-
-            {sitpass.cartoesErro && (
-              <div className="border border-red-500/30 bg-red-500/10 text-red-400 p-4 rounded-2xl flex items-start gap-3">
-                <img src="/alerta.png" alt="" style={{ width: 24, height: 24, objectFit: 'contain', flexShrink: 0 }} />
-                <div><p className="font-black text-[11px] uppercase tracking-widest">Erro</p><p className="text-[9px] font-bold mt-1 opacity-80">{sitpass.cartoesErro}</p></div>
-              </div>
-            )}
-
-            {sitpass.cartoes.length > 1 && (
-  <div className="space-y-3" style={{ animation: 'slideUp 0.3s ease-out' }}>
-    <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext} px-1`}>Selecione o cartão</p>
-    {sitpass.cartoes.map(cartao => {
-      const iconeCartao = cartao.tipoParceria === 'ESTUDANTE'
-        ? ICONS.cartaoEstudante
-        : cartao.tipoParceria === 'PLT'
-        ? ICONS.cartaoTrabalhador
-        : ICONS.sitpass;
-
-      return (
-        <button key={cartao.index} onClick={() => sitpass.selecionarCartao(cartao.index)} disabled={sitpass.saldoLoading}
-          className={`w-full ${theme.card} border rounded-[2rem] p-5 flex items-center gap-4 active:scale-95 transition-all hover:border-yellow-400/50 disabled:opacity-50`}>
-          <img src={iconeCartao} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
-          <div className="flex-1 text-left min-w-0">
-            <p className="font-black text-sm uppercase text-yellow-400 truncate">{formatarDescricaoCartao(cartao.cartaoDescricao, cartao.tipoParceria)}</p>
-            <p className={`text-[9px] font-bold ${theme.subtext} mt-0.5`}>Nº {cartao.cartaoNumero}</p>
-            <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-50 mt-0.5`}>{cartao.tipoParceria}</p>
-          </div>
-          <span className="text-yellow-400 font-black text-lg shrink-0">›</span>
-        </button>
-      );
-    })}
-  </div>
-)}
-
-            {sitpass.saldoLoading && (
-              <div className="flex items-center justify-center gap-3 py-8">
-                <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-                <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Consultando saldo...</p>
-              </div>
-            )}
-
-            {sitpass.saldoErro && (
-              <div className="border border-red-500/30 bg-red-500/10 text-red-400 p-4 rounded-2xl flex items-start gap-3">
-                <img src="/alerta.png" alt="" style={{ width: 24, height: 24, objectFit: 'contain', flexShrink: 0 }} />
-                <div><p className="font-black text-[11px] uppercase tracking-widest">Erro</p><p className="text-[9px] font-bold mt-1 opacity-80">{sitpass.saldoErro}</p></div>
-              </div>
-            )}
-
-            {sitpass.saldoData && !sitpass.saldoLoading && (
-              <div className="border border-yellow-400/20 bg-yellow-400/5 rounded-[2.5rem] p-6 space-y-4" style={{ animation: 'slideUp 0.3s ease-out' }}>
-                <div className="flex items-center gap-3">
-                  <img src={
-                    sitpass.saldoData.tipoParceria === 'ESTUDANTE'
-                      ? ICONS.cartaoEstudante
-                      : sitpass.saldoData.tipoParceria === 'PLT'
-                      ? ICONS.cartaoTrabalhador
-                      : ICONS.sitpass
-                  } alt="" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8 }} />
-                  <div>
-                    <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>{sitpass.saldoData.tipoParceria}</p>
-                    <p className={`font-black text-sm uppercase ${theme.saldoText}`}>{formatarDescricaoCartao(sitpass.saldoData.cartaoDescricao, sitpass.saldoData.tipoParceria)}</p>
-                    <p className={`text-[9px] font-bold ${theme.subtext}`}>Nº {sitpass.saldoData.cartaoNumero}</p>
-                  </div>
-                </div>
-                <div className={`${theme.divider} h-px w-full`} />
-                {sitpass.saldoData.tipo_saldo === 'viagens' ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Viagens restantes</span>
-                      <span className="text-4xl font-black text-yellow-400">
-                        {sitpass.saldoData.viagens_restantes}
-                        <span className={`text-lg font-black ${theme.subtext} opacity-50`}>/{sitpass.saldoData.viagens_total}</span>
-                      </span>
-                    </div>
-                    <div className={`w-full h-2 rounded-full ${lightTheme ? 'bg-gray-200' : 'bg-white/10'}`}>
-                      <div className="h-2 rounded-full bg-yellow-400 transition-all duration-500" style={{ width: `${((sitpass.saldoData.viagens_restantes ?? 0) / (sitpass.saldoData.viagens_total ?? 1)) * 100}%` }} />
-                    </div>
-                    {(sitpass.saldoData.viagens_restantes ?? 0) <= 5 && (
-                      <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
-                        <img src="/alerta.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginTop: 2 }} />
-                        <p className="text-[9px] font-bold leading-relaxed text-red-400">Poucas viagens restantes. Recarregue seu cartão.</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Saldo disponível</span>
-                      <span className="text-4xl font-black text-yellow-400">{sitpass.saldoData.saldo_formatado}</span>
-                    </div>
-                    {(() => {
-                      const n = parseFloat((sitpass.saldoData.saldo ?? '0').replace('.', '').replace(',', '.'));
-                      if (n < 2.15) return (
-                        <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
-                          <img src="/alerta.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginTop: 2 }} />
-                          <p className="text-[9px] font-bold leading-relaxed text-red-400">Saldo insuficiente para qualquer passagem. Recarregue antes de embarcar.</p>
-                        </div>
-                      );
-                      if (n < 4.30) return (
-                        <div className="border border-yellow-500/30 bg-yellow-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
-                          <img src="/alerta.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginTop: 2 }} />
-                          <p className="text-[9px] font-bold leading-relaxed text-yellow-400">Saldo insuficiente para a tarifa inteira (R$ 4,30). Recarregue antes de embarcar.</p>
-                        </div>
-                      );
-                      return null;
-                    })()}
-                  </div>
-                )}
-                <div className={`border ${lightTheme ? 'border-gray-200 bg-gray-50' : 'border-white/5 bg-black/20'} rounded-2xl px-4 py-3 flex items-start gap-2`}>
-                  <img src="/informacao.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginTop: 2 }} />
-                  <p className={`text-[9px] font-bold leading-relaxed ${theme.subtext}`}>O saldo não é em tempo real — é o último valor registrado no sistema do SitPass.</p>
-                </div>
-                <button onClick={sitpass.consultarSaldo} className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border ${lightTheme ? 'border-gray-300 text-gray-500' : 'border-white/10 text-slate-500'} active:scale-95 transition-all`}>
-                  ← Consultar outro cartão
-                </button>
-              </div>
-            )}
-
-            {!sitpass.saldoData && !sitpass.saldoErro && !sitpass.cartoesLoading && !sitpass.saldoLoading && sitpass.cartoes.length === 0 && !sitpass.cartoesErro && (
-              <div className="py-16 text-center opacity-10 flex flex-col items-center">
-                <img src="/sitpass.png" alt="" className="mb-6" style={{ width: 100, height: 100, objectFit: 'contain', opacity: 0.2, borderRadius: 12 }} />
-                <p className={`font-black text-[12px] uppercase tracking-[0.5em] px-10 leading-relaxed ${theme.subtext}`}>Digite seu CPF para consultar o saldo</p>
-              </div>
-            )}
-
-            <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener noreferrer" onClick={() => haptic(30)} className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400' : 'border-white/5 text-slate-600'} transition-all font-black text-[10px] uppercase tracking-widest`}>
-              💬 Algo errado? Me avisa
-            </a>
-          </div>
-        )}
-
-      </div>{/* ── FIM DO CONTAINER PRINCIPAL ── */}
-
-      {/* ── ABA MAPA (fixed, fora do container) ──────────────────────────────── */}
-      <div style={{ position: 'fixed', top: '64px', left: 0, right: 0, bottom: '90px', zIndex: 40, display: activeTab === 'map' ? 'block' : 'none' }}>
-        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-
-        {showMapOnboarding && mapReady && (
-          <div className="absolute inset-0 bg-black/70 z-[1001] flex items-end justify-center p-4" onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); }}>
-            <div className={`${theme.card} border w-full max-w-sm rounded-[2rem] p-6 space-y-4`} onClick={e => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
-              <div className="text-center space-y-3">
-                <span className="text-4xl">🗺️</span>
-                <p className="font-black text-base uppercase tracking-tight text-white leading-tight">Mapa de Pontos</p>
-                <p className={`text-sm ${theme.subtext} leading-relaxed`}>Toque em qualquer marcador no mapa para ver as linhas que passam naquele ponto.</p>
-                <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-2xl px-4 py-3">
-                  <p className="text-[11px] font-bold text-yellow-400 leading-relaxed">💡 Use o ícone de lupa no painel para abrir o ponto diretamente na busca!</p>
-                </div>
-              </div>
-              <button onClick={() => { setShowMapOnboarding(false); localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true'); haptic(40); }} className="w-full bg-yellow-400 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform">Entendi!</button>
-            </div>
-          </div>
-        )}
-
-        {locationError && (
-          <div className="absolute top-3 left-3 right-3 z-[1000] border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest" style={{ backdropFilter: 'blur(8px)' }}>
-            📍 Localização negada — mostrando Senador Canedo
-          </div>
-        )}
-
-        {selectedStop && (
-          <div className={`absolute left-0 right-0 z-[1000] ${theme.card} border-t rounded-t-[2rem]`}
-            style={{ bottom: 0, animation: 'slideUp 0.3s ease-out', maxHeight: '75%', display: 'flex', flexDirection: 'column' }}
-            onTouchStart={(e) => {
-              const startY = e.touches[0].clientY; const el = e.currentTarget; let lastY = startY;
-              const onMove = (ev: TouchEvent) => { const dy = ev.touches[0].clientY - startY; lastY = ev.touches[0].clientY; if (dy > 0) el.style.transform = `translateY(${dy}px)`; };
-              const onEnd = () => { const dy = lastY - startY; el.style.transform = ''; if (dy > 80) { setSelectedStop(null); setStopLines([]); setActiveMiniMap(null); } document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onEnd); };
-              document.addEventListener('touchmove', onMove, { passive: true }); document.addEventListener('touchend', onEnd);
-            }}>
-            <div className="flex justify-center pt-3 pb-1 shrink-0 cursor-grab"><div className="w-10 h-1 rounded-full bg-white/20" /></div>
-            <div className="flex items-start justify-between px-5 pt-2 pb-3 shrink-0">
-              <div className="flex-1 min-w-0">
-                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext}`}>📍 Ponto selecionado</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="font-black text-base text-yellow-400 truncate">{selectedStop.nome}</p>
-                  <button onClick={() => goToSearchWithStop(selectedStop.id)} className="shrink-0 p-1.5 rounded-xl bg-yellow-400/15 border border-yellow-400/30 active:scale-95 transition-all" aria-label="Buscar este ponto" title="Abrir na busca">🔍</button>
-                  <button onClick={() => shareStop(selectedStop.id, selectedStop.nome)} className="shrink-0 p-1.5 rounded-xl bg-white/5 border border-white/10 active:scale-95 transition-all" aria-label="Compartilhar ponto">🔗</button>
-                </div>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <p className={`text-[10px] font-bold ${theme.subtext}`}>Nº {selectedStop.id}</p>
-                  {walkingMinutes !== null && <p className="text-[9px] font-black text-emerald-400">🚶 ~{walkingMinutes} min a pé</p>}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0 ml-2">
-                {!stopLinesLoading && <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /><span className={`text-[9px] font-black tabular-nums ${theme.subtext}`}>{mapRefreshCountdown}s</span></div>}
-                <button onClick={() => { setSelectedStop(null); setStopLines([]); setActiveMiniMap(null); }} className="p-1 active:scale-95" aria-label="Fechar painel"><img src="/fechar.png" alt="" style={{ width: 20, height: 20, objectFit: "contain" }} /></button>
-              </div>
-            </div>
-            <div style={{ overflowY: 'auto', flex: 1, paddingBottom: '12px' }} className="px-5 space-y-2">
-              {stopLinesLoading && <div className="flex items-center gap-3 py-2"><div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin shrink-0" /><p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Buscando ônibus...</p></div>}
-              {stopLinesError && !stopLinesLoading && <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3"><p className="text-[10px] font-black text-red-400 uppercase tracking-widest">{stopLinesError === 'offline' ? 'Sem conexão' : 'Nenhuma linha encontrada'}</p></div>}
-              {!stopLinesLoading && stopLines.map((line) => {
-                const getColor = (t: string) => {
-                  if (!t || t === 'SEM PREVISÃO') return 'bg-slate-800 text-slate-500';
-                  if (t.toLowerCase().includes('agora')) return 'bg-red-600 text-white';
-                  const m = parseInt(t) || 999; if (m <= 3) return 'bg-red-600 text-white'; if (m <= 8) return 'bg-yellow-500 text-black'; return 'bg-emerald-500 text-white';
-                };
-                const miniKey = `map-${line.number}-${selectedStop.id}`;
-                const isMapMiniActive = activeMiniMap?.key === miniKey;
-                const stopCoordsMap = pontosDataRef.current.find(p => p.id === selectedStop.id);
-                const isUrgent = parseTime(line.nextArrival) <= 2;
-                return (
-                  <div key={line.id}>
-                    <div className={`${theme.card} border rounded-2xl px-4 py-3 flex items-center gap-3 ${isUrgent ? 'urgent-card' : ''}`}>
-                      <span className="text-yellow-400 font-black text-xl w-14 text-center shrink-0">{line.number}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext}`}>Indo para</p>
-                        <p className={`font-black text-[11px] uppercase truncate ${theme.destText}`}>{line.destination}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <div className="flex gap-1.5">
-                          <div className={`${getColor(line.nextArrival ?? '')} rounded-xl px-2 py-1.5 text-center min-w-[44px]`}><p className="font-black text-sm leading-none">{line.nextArrival === 'SEM PREVISÃO' ? '—' : line.nextArrival}</p><p className="text-[6px] font-black uppercase opacity-70 mt-0.5">min</p></div>
-                          <div className={`${getColor(line.subsequentArrival ?? '')} rounded-xl px-2 py-1.5 text-center min-w-[44px] opacity-80`}><p className="font-black text-sm leading-none">{line.subsequentArrival === 'SEM PREVISÃO' ? '—' : line.subsequentArrival}</p><p className="text-[6px] font-black uppercase opacity-70 mt-0.5">min</p></div>
-                        </div>
-                        {stopLiveLinesMap[line.number] && stopCoordsMap && (
-                          <button onClick={() => { haptic(40); toggleMiniMap({ key: miniKey, lineNumber: line.number, stopLat: stopCoordsMap.lat, stopLng: stopCoordsMap.lng, stopNome: selectedStop.nome, destination: line.destination }); }}
-                            className={`rounded-xl p-2 transition-all active:scale-95 border ${isMapMiniActive ? 'bg-blue-600 border-blue-500' : 'bg-blue-600/15 border-blue-500/30'}`} aria-label="Ver ao vivo">
-                            <img src="/onibus_realtime.png" alt="Ao vivo" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {isMapMiniActive && activeMiniMap && stopCoordsMap && (
-                      <MiniMap key={activeMiniMap?.key} stopLat={stopCoordsMap.lat} stopLng={stopCoordsMap.lng} stopNome={selectedStop.nome} lineNumber={line.number} destination={line.destination} refreshKey={miniMapRefreshKey} onClose={() => setActiveMiniMap(null)} theme={theme} lightTheme={lightTheme} />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {!mapReady && (
-          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 z-[999] ${theme.bg}`}>
-            <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-            <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Carregando mapa...</p>
-          </div>
+          <SitPassTab
+            sitpass={sitpass}
+            lightTheme={lightTheme}
+            theme={theme}
+          />
         )}
       </div>
 
-      {/* ── Nav ───────────────────────────────────────────────────────────────── */}
-      <nav className={`fixed bottom-0 left-0 right-0 ${theme.nav} border-t px-6 pb-12 pt-5 flex justify-between items-center z-50`}>
-        {[
-          { tab: 'search', icon: '/buscar.png', label: 'Busca' },
-          { tab: 'favs', icon: '/salvos.png', label: 'Favoritos', badge: favCount },
-          { tab: 'map', icon: '/mapa.png', label: 'Mapa' },
-          { tab: 'sitpass', icon: '/sitpass.png', label: 'SitPass' },
-        ].map(({ tab, icon, label, badge }) => (
-          <button key={tab} onClick={() => { setActiveTab(tab as ActiveTab); haptic(30); setDestFilter(''); }} className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === tab ? 'scale-125 opacity-100' : 'opacity-40'}`} aria-label={label}>
-            <div className="relative" style={{ width: 28, height: 28 }}>
-              <img src={icon} alt={label} style={{ width: 28, height: 28, objectFit: 'contain' }} />
-              {badge != null && badge > 0 && <span className="absolute -top-2 -right-2 bg-yellow-400 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">{badge > 9 ? '9+' : badge}</span>}
-            </div>
-            <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${activeTab === tab ? 'text-yellow-400' : theme.inactiveNav}`}>{label}</span>
-          </button>
-        ))}
-      </nav>
+      {/* ── Map tab (fixed, outside scroll container) ────────────────────────── */}
+      <MapTab
+        activeTab={activeTab}
+        theme={theme}
+        lightTheme={lightTheme}
+        activeMiniMap={activeMiniMap}
+        miniMapRefreshKey={miniMapRefreshKey}
+        selectedStop={selectedStop}
+        stopLines={stopLines}
+        stopLinesLoading={stopLinesLoading}
+        stopLinesError={stopLinesError}
+        stopLiveLinesMap={stopLiveLinesMap}
+        mapRefreshCountdown={mapRefreshCountdown}
+        showMapOnboarding={showMapOnboarding}
+        locationError={locationError}
+        walkingMinutes={walkingMinutes}
+        parseTime={parseTime}
+        onToggleMiniMap={toggleMiniMap}
+        onCloseMiniMap={() => setActiveMiniMap(null)}
+        onCloseStop={handleCloseStop}
+        onGoToSearch={goToSearchWithStop}
+        onShareStop={shareStop}
+        onMapReady={() => setMapReady(true)}
+        onLocationError={() => setLocationError(true)}
+        onSelectStop={handleSelectStop}
+        onBuscarLinhas={buscarLinhasPontoInterno}
+        onDismissOnboarding={() => {
+          setShowMapOnboarding(false);
+          localStorage.setItem('cade_meu_bau_map_onboarding_done', 'true');
+        }}
+        mapRef={mapRef}
+        leafletMapRef={leafletMapRef}
+        markersRef={markersRef}
+        pontosDataRef={pontosDataRef}
+        leafletLoadingRef={leafletLoadingRef}
+        userLocationRef={userLocationRef}
+        filtrarMarkersPorRaioRef={filtrarMarkersPorRaioRef}
+      />
+
+      {/* ── Bottom nav ──────────────────────────────────────────────────────── */}
+      <BottomNav
+        activeTab={activeTab}
+        favCount={favorites.length}
+        theme={theme}
+        onTabChange={(tab) => { setActiveTab(tab); setDestFilter(''); }}
+      />
     </div>
   );
 };
