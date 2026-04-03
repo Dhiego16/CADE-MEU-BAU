@@ -2,17 +2,6 @@ import { useState, useCallback, useRef } from 'react';
 import { BusLine } from '../types';
 import { haptic } from '../utils';
 
-// ─── Helper: converte chave VAPID base64 para Uint8Array ─────────────────────
-function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const buffer = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) {
-    buffer[i] = rawData.charCodeAt(i);
-  }
-  return buffer.buffer;
-}
 export function useNotifications() {
   const [activeAlerts, setActiveAlerts] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_alerts') || '{}'); } catch { return {}; }
@@ -24,7 +13,6 @@ export function useNotifications() {
   const activeAlertsRef = useRef(activeAlerts);
   const lastCheckedLinesRef = useRef<string>('');
 
-  // Mantém ref sincronizada com state
   const updateActiveAlerts = useCallback((updater: (prev: Record<string, number>) => Record<string, number>) => {
     setActiveAlerts(prev => {
       const next = updater(prev);
@@ -64,64 +52,6 @@ export function useNotifications() {
     }
   }, []);
 
-  // ─── Registra alerta no servidor para funcionar em segundo plano ───────────
-  const registerPushAlert = useCallback(async (
-    lineKey: string,
-    minutes: number,
-    stopId: string,
-    lineNumber: string,
-    destination: string
-  ): Promise<boolean> => {
-    try {
-      // Verifica se o navegador suporta Push API
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.warn('Push API não suportada neste navegador');
-        return false;
-      }
-
-      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-      if (!vapidKey) {
-        console.warn('VAPID_PUBLIC_KEY não configurada');
-        return false;
-      }
-
-      const reg = await navigator.serviceWorker.ready;
-
-      // Pega subscription existente ou cria uma nova
-      let subscription = await reg.pushManager.getSubscription();
-      if (!subscription) {
-        subscription = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey),
-        });
-      }
-
-      // Envia pro servidor
-      const response = await fetch('/api/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subscription,
-          lineKey,
-          minutes,
-          stopId,
-          lineNumber,
-          destination,
-        }),
-      });
-
-      if (!response.ok) {
-        console.warn('Erro ao registrar alerta no servidor');
-        return false;
-      }
-
-      return true;
-    } catch (err) {
-      console.error('Erro ao registrar push:', err);
-      return false;
-    }
-  }, []);
-
   const removeAlert = useCallback((lineKey: string) => {
     haptic(40);
     updateActiveAlerts(prev => {
@@ -142,22 +72,11 @@ export function useNotifications() {
     updateActiveAlerts(prev => ({ ...prev, [lineKey]: minutes }));
     setShowAlertModal(null);
 
-    // Extrai stopId e lineNumber do lineKey (formato "stopId::lineNumber")
-    const parts = lineKey.split('::');
-    const stopId = parts[0] || '';
-    const lineNumber = parts[1] || '';
-
-    // Tenta registrar no servidor para funcionar em segundo plano
-    // Se falhar, o alerta local ainda funciona enquanto o app estiver aberto
-    registerPushAlert(lineKey, minutes, stopId, lineNumber, '').catch(() => {
-      console.warn('Push em segundo plano não disponível, usando alerta local');
-    });
-
     await sendNotification(
       '🚍 Alerta configurado!',
       `Você será avisado quando o baú estiver a ${minutes} min.`
     );
-  }, [requestNotifPermission, updateActiveAlerts, sendNotification, registerPushAlert]);
+  }, [requestNotifPermission, updateActiveAlerts, sendNotification]);
 
   const checkAlerts = useCallback(async (lines: BusLine[]) => {
     const alerts = activeAlertsRef.current;
@@ -197,6 +116,5 @@ export function useNotifications() {
     checkAlerts,
     sendNotification,
     requestNotifPermission,
-    registerPushAlert,
   };
 }
