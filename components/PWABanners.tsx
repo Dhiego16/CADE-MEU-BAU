@@ -33,7 +33,7 @@ const PWABanners: React.FC<PWABannersProps> = ({ pwa }) => (
     {pwa.showInstallBanner && !pwa.isInstalled && (
       <div style={{ animation: 'slideUp 0.4s ease-out' }}>
         <div className="bg-yellow-400 rounded-[2rem] p-4 flex items-center gap-3 shadow-[0_8px_30px_rgba(251,191,36,0.4)]">
-          <img src="/buscar.png" alt="" style={{ width: 32, height: 32, objectFit: 'contain', flexShrink: 0 }} />
+          <img src="/informacao.png" alt="" style={{ width: 32, height: 32, objectFit: 'contain', flexShrink: 0 }} />
           <div className="flex-1 min-w-0">
             <p className="font-black text-black text-[11px] uppercase tracking-wider leading-tight">
               Instale o app!
