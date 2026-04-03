@@ -391,16 +391,15 @@ const SearchTab: React.FC<SearchTabProps> = ({
           )}
         </div>
       )}
-
-      
-        href="https://forms.gle/JwtHNRw7pjaZtfV19"
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={() => haptic(30)}
-        className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400' : 'border-white/5 text-slate-600'} transition-all font-black text-[10px] uppercase tracking-widest`}
-      >
-        💬 Algo errado? Me avisa
-      </a>
+        <a
+  href="https://forms.gle/JwtHNRw7pjaZtfV19"
+  target="_blank"
+  rel="noopener noreferrer"
+  onClick={() => haptic(30)}
+  className={`flex items-center justify-center gap-2 w-full py-4 rounded-2xl border ${lightTheme ? 'border-gray-200 text-gray-400' : 'border-white/5 text-slate-600'} transition-all font-black text-[10px] uppercase tracking-widest`}
+>
+  💬 Algo errado? Me avisa
+</a>
     </div>
   );
 };
