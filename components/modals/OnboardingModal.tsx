@@ -1,6 +1,6 @@
 import React from 'react';
-import { ThemeTokens } from '../types';
-import { haptic } from '../utils';
+import { ThemeTokens } from '../../types';
+import { haptic } from '../../utils';
 
 interface OnboardingModalProps {
   step: number;
