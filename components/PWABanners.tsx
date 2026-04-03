@@ -39,7 +39,7 @@ const PWABanners: React.FC<PWABannersProps> = ({ pwa }) => (
               Instale o app!
             </p>
             <p className="text-black/60 text-[9px] font-bold uppercase tracking-widest leading-tight mt-0.5">
-              Acesso rápido • Funciona offline
+              Acesso rápido
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
