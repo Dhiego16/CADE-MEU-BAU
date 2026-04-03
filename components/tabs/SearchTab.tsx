@@ -1,10 +1,11 @@
 import React from 'react';
-import { BusLine, FavoriteItem, ThemeTokens } from '../../types';
+import { BusLine, ThemeTokens } from '../../types';
 import { haptic } from '../../utils';
 import BusLineCard from '../BusLineCard';
 import SkeletonCard from '../SkeletonCard';
 import MiniMap from '../MiniMap';
 import { BusLineCardProps } from '../BusLineCard';
+import { NearbyStop } from '../../hooks/useNearbyStops';
 
 interface MiniMapConfig {
   key: string;
@@ -33,30 +34,74 @@ interface SearchTabProps {
   parseTime: (t?: string) => number;
   getStopCoords: (id: string) => { lat: number; lng: number; nome: string; id: string };
   selectedStop: { id: string; nome: string } | null;
+  nearbyStops: NearbyStop[];
+  locationStatus: 'idle' | 'loading' | 'granted' | 'denied' | 'unavailable';
   onStopIdChange: (val: string) => void;
   onLineFilterChange: (val: string) => void;
   onDestFilterChange: (val: string) => void;
   onSearch: () => void;
   onHistorySearch: (id: string) => void;
+  onNearbyStopSearch: (id: string) => void;
+  onRequestLocation: () => void;
   onToggleMiniMap: (config: MiniMapConfig) => void;
   onCloseMiniMap: () => void;
 }
+
+// ── Card de ponto próximo ─────────────────────────────────────────────────────
+const NearbyStopCard: React.FC<{
+  stop: NearbyStop;
+  theme: ThemeTokens;
+  light: boolean;
+  onPress: () => void;
+}> = ({ stop, theme, light, onPress }) => (
+  <button
+    onClick={onPress}
+    className={`${theme.card} border rounded-2xl px-4 py-3 flex items-center gap-3 w-full active:scale-95 transition-all hover:border-yellow-400/50`}
+    style={{ animation: 'staggerIn 0.3s ease-out both' }}
+  >
+    <div className="shrink-0 w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
+      <span className="text-lg">📍</span>
+    </div>
+    <div className="flex-1 min-w-0 text-left">
+      <p className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext} mb-0.5`}>
+        Ponto {stop.id}
+      </p>
+      <p className={`font-black text-[12px] truncate ${theme.destText}`}>
+        {stop.nome.replace(/\s*\(\d+\)$/, '')}
+      </p>
+    </div>
+    <div className="shrink-0 text-right">
+      <p className="font-black text-sm text-emerald-400">
+        ~{stop.walkingMinutes} min
+      </p>
+      <p className={`text-[8px] font-bold ${theme.subtext}`}>
+        {stop.distanceM < 1000
+          ? `${Math.round(stop.distanceM)}m`
+          : `${(stop.distanceM / 1000).toFixed(1)}km`}
+      </p>
+    </div>
+  </button>
+);
 
 const SearchTab: React.FC<SearchTabProps> = ({
   stopId, lineFilter, destFilter,
   busLines, displayedBusLines, isLoading, errorMsg,
   searchHistory, liveLineMap, activeMiniMap, miniMapRefreshKey,
   lightTheme, theme, cardProps, parseTime, getStopCoords, selectedStop,
+  nearbyStops, locationStatus,
   onStopIdChange, onLineFilterChange, onDestFilterChange,
-  onSearch, onHistorySearch, onToggleMiniMap, onCloseMiniMap,
+  onSearch, onHistorySearch, onNearbyStopSearch, onRequestLocation,
+  onToggleMiniMap, onCloseMiniMap,
 }) => {
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') onSearch(); };
 
+  const showNearbySection = busLines.length === 0 && !isLoading && !errorMsg;
+
   const errors: Record<string, { icon: string; title: string; desc: string; color: string }> = {
-    offline:      { icon: '/informacao.png', title: 'Sem conexão',       desc: 'Verifique sua internet e tente novamente.',                         color: 'border-slate-500/30 text-slate-400 bg-slate-500/10' },
-    not_found:    { icon: '📍',             title: 'Ponto não encontrado', desc: `O ponto "${stopId}" não existe ou está inativo.`,                 color: 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' },
-    no_lines:     { icon: '/onibus_realtime.png', title: 'Linha não opera aqui', desc: `A linha "${lineFilter}" não para neste ponto agora.`,       color: 'border-orange-500/30 text-orange-400 bg-orange-500/10' },
-    invalid_stop: { icon: '/alerta.png',    title: 'Número inválido',    desc: 'Digite um número de ponto válido. Ex: 31700',                        color: 'border-red-500/30 text-red-400 bg-red-500/10' },
+    offline:      { icon: '/informacao.png', title: 'Sem conexão',         desc: 'Verifique sua internet e tente novamente.',               color: 'border-slate-500/30 text-slate-400 bg-slate-500/10' },
+    not_found:    { icon: '📍',             title: 'Ponto não encontrado', desc: `O ponto "${stopId}" não existe ou está inativo.`,         color: 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' },
+    no_lines:     { icon: '/onibus_realtime.png', title: 'Linha não opera aqui', desc: `A linha "${lineFilter}" não para neste ponto agora.`, color: 'border-orange-500/30 text-orange-400 bg-orange-500/10' },
+    invalid_stop: { icon: '/alerta.png',    title: 'Número inválido',      desc: 'Digite um número de ponto válido. Ex: 31700',             color: 'border-red-500/30 text-red-400 bg-red-500/10' },
   };
 
   return (
@@ -138,6 +183,107 @@ const SearchTab: React.FC<SearchTabProps> = ({
           </div>
         )}
       </div>
+
+      {/* ── Seção de pontos próximos ────────────────────────────────────────── */}
+      {showNearbySection && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext} flex items-center gap-2`}>
+              🧭 Pontos próximos
+            </p>
+            {locationStatus === 'granted' && nearbyStops.length > 0 && (
+              <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">
+                GPS ativo
+              </span>
+            )}
+          </div>
+
+          {/* Idle — nunca pediu permissão */}
+          {locationStatus === 'idle' && (
+            <button
+              onClick={() => { onRequestLocation(); haptic(30); }}
+              className={`w-full ${theme.card} border rounded-2xl px-4 py-4 flex items-center gap-3 active:scale-95 transition-all hover:border-yellow-400/50`}
+            >
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                <span className="text-lg">📡</span>
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-black text-[11px] text-blue-400 uppercase tracking-widest">
+                  Usar minha localização
+                </p>
+                <p className={`text-[9px] font-bold mt-0.5 ${theme.subtext}`}>
+                  Encontrar pontos de ônibus próximos a você
+                </p>
+              </div>
+              <span className="text-blue-400 font-black text-lg shrink-0">›</span>
+            </button>
+          )}
+
+          {/* Loading GPS */}
+          {locationStatus === 'loading' && (
+            <div className={`${theme.card} border rounded-2xl px-4 py-4 flex items-center gap-3`}>
+              <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>
+                Buscando sua localização...
+              </p>
+            </div>
+          )}
+
+          {/* Negado */}
+          {locationStatus === 'denied' && (
+            <div className={`${theme.card} border border-red-500/20 rounded-2xl px-4 py-4 flex items-start gap-3`}>
+              <span className="text-lg shrink-0 mt-0.5">🚫</span>
+              <div>
+                <p className="font-black text-[11px] text-red-400 uppercase tracking-widest">
+                  Localização bloqueada
+                </p>
+                <p className={`text-[9px] font-bold mt-1 ${theme.subtext} leading-relaxed`}>
+                  Ative a permissão de localização nas configurações do navegador para ver os pontos próximos.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Indisponível */}
+          {locationStatus === 'unavailable' && (
+            <div className={`${theme.card} border rounded-2xl px-4 py-3`}>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>
+                GPS não disponível neste dispositivo
+              </p>
+            </div>
+          )}
+
+          {/* Pontos encontrados */}
+          {locationStatus === 'granted' && nearbyStops.length > 0 && (
+            <div className="space-y-2">
+              {nearbyStops.map(stop => (
+                <NearbyStopCard
+                  key={stop.id}
+                  stop={stop}
+                  theme={theme}
+                  light={lightTheme}
+                  onPress={() => { onNearbyStopSearch(stop.id); haptic(40); }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* GPS ativo mas nenhum ponto próximo */}
+          {locationStatus === 'granted' && nearbyStops.length === 0 && (
+            <div className={`${theme.card} border rounded-2xl px-4 py-4 flex items-start gap-3`}>
+              <span className="text-lg shrink-0">🔍</span>
+              <div>
+                <p className="font-black text-[11px] text-yellow-400 uppercase tracking-widest">
+                  Nenhum ponto próximo
+                </p>
+                <p className={`text-[9px] font-bold mt-1 ${theme.subtext} leading-relaxed`}>
+                  Não encontramos pontos num raio de 2km. Digite o número do ponto manualmente.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error */}
       {errorMsg && (() => {
@@ -235,7 +381,7 @@ const SearchTab: React.FC<SearchTabProps> = ({
             </div>
           )}
 
-          {busLines.length === 0 && !errorMsg && (
+          {busLines.length === 0 && !errorMsg && !showNearbySection && (
             <div className="py-20 text-center opacity-10 flex flex-col items-center">
               <img src="/onibus_realtime.png" alt="" className="mb-6" style={{ width: 90, height: 90, objectFit: 'contain', opacity: 0.15 }} />
               <p className={`font-black text-[12px] uppercase tracking-[0.5em] px-10 leading-relaxed ${theme.subtext}`}>
@@ -246,7 +392,7 @@ const SearchTab: React.FC<SearchTabProps> = ({
         </div>
       )}
 
-      <a
+      
         href="https://forms.gle/JwtHNRw7pjaZtfV19"
         target="_blank"
         rel="noopener noreferrer"

@@ -8,6 +8,7 @@ import { useNotifications } from './hooks/useNotifications';
 import { useSitpass } from './hooks/useSitpass';
 import { usePWA } from './hooks/usePWA';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
+import { useNearbyStops } from './hooks/useNearbyStops';
 
 // Components
 import SplashScreen from './components/SplashScreen';
@@ -88,6 +89,7 @@ const App: React.FC = () => {
   const pwa = usePWA();
   const notifications = useNotifications();
   const sitpass = useSitpass();
+  const { nearbyStops, locationStatus, requestLocation } = useNearbyStops();
 
   const {
     busLines, setBusLines,
@@ -511,6 +513,16 @@ const App: React.FC = () => {
             onHistorySearch={(id) => { setStopId(id); handleSearch(id); }}
             onToggleMiniMap={toggleMiniMap}
             onCloseMiniMap={() => setActiveMiniMap(null)}
+	    nearbyStops={nearbyStops}
+    	    locationStatus={locationStatus}
+    	    onRequestLocation={requestLocation}
+    	    onNearbyStopSearch={(id) => { 
+      	      setStopId(id); 
+      	      setLineFilter('');
+      	      setDestFilter('');
+      	      handleSearch(id, ''); 
+      	      haptic(40);
+	    }}
           />
         )}
 
