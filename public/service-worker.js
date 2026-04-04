@@ -1,143 +1,130 @@
-const CACHE_NAME = 'cade-meu-bau-v6';
+const CACHE_VERSION = 'v7';
+const CACHE_NAME = `cade-meu-bau-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
 ];
+
+const API_PATTERNS = [
+  '/api/',
+  'rmtcgoiania.com.br',
+  'sitpass',
+  'realtimebus',
+];
+
+const isApiRequest = (url) => API_PATTERNS.some(p => url.includes(p));
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return Promise.allSettled(
-        STATIC_ASSETS.map(url => cache.add(url).catch(() => {}))
-      );
-    })
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(STATIC_ASSETS.map(url => cache.add(url).catch(() => {})))
+    ).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      )
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(names => Promise.all(
+        names
+          .filter(n => n.startsWith('cade-meu-bau-') && n !== CACHE_NAME)
+          .map(n => caches.delete(n))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
-  const url = new URL(event.request.url);
+  const url = event.request.url;
 
-  if (url.hostname.includes('bot-onibus.vercel.app')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  if (url.hostname.includes('sitpass')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  if (url.hostname !== self.location.hostname) {
+  if (isApiRequest(url)) {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+      fetch(event.request, { cache: 'no-store' })
+        .catch(() => new Response(JSON.stringify({ erro: 'offline' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }))
+    );
+    return;
+  }
+
+  const isNavigate = event.request.mode === 'navigate';
+  const isAsset = url.match(/\.(js|css|png|jpg|svg|ico|woff2?)(\?|$)/);
+
+  if (isAsset) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        const fetchAndCache = fetch(event.request).then(res => {
+          if (res && res.status === 200) {
+            caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
           }
-          return response;
-        })
-        .catch(() => caches.match(event.request))
+          return res;
+        });
+        return cached || fetchAndCache;
+      })
     );
     return;
   }
 
   event.respondWith(
     fetch(event.request)
-      .then((response) => {
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+      .then(res => {
+        if (res && res.status === 200 && !isNavigate) {
+          caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
         }
-        return response;
+        return res;
       })
-      .catch(() => {
-        return caches.match(event.request).then((cached) => {
+      .catch(() =>
+        caches.match(event.request).then(cached => {
           if (cached) return cached;
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-        });
-      })
+          if (isNavigate) return caches.match('/index.html');
+          return new Response('offline', { status: 503 });
+        })
+      )
   );
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'GET_VERSION') {
+    event.source?.postMessage({ type: 'VERSION', version: CACHE_VERSION });
   }
 });
 
-// ─── Push em segundo plano ────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return;
-
   let data;
-  try {
-    data = event.data.json();
-  } catch {
-    data = {
-      title: '🚍 Cadê meu Baú?',
-      body: event.data.text(),
-    };
-  }
-
-  const options = {
-    body: data.body,
-    icon: data.icon || '/icons/icon-192x192.png',
-    badge: data.badge || '/icons/icon-72x72.png',
-    vibrate: [200, 100, 200],
-    tag: 'cade-meu-bau-alert',
-    renotify: true,
-    // Guarda a URL para abrir ao clicar
-    data: data.data || { url: '/' },
-  };
+  try { data = event.data.json(); }
+  catch { data = { title: '🚍 Cadê meu Baú?', body: event.data.text() }; }
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/icon-72x72.png',
+      vibrate: [200, 100, 200],
+      tag: 'cade-meu-bau-alert',
+      renotify: true,
+      data: data.data || { url: '/' },
+    })
   );
 });
 
-// ─── Clique na notificação ────────────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  const targetUrl = (event.notification.data && event.notification.data.url)
+  const targetUrl = event.notification.data?.url
     ? self.location.origin + event.notification.data.url
     : self.location.origin + '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Se já tiver uma janela do app aberta, foca e navega
-      for (const client of clientList) {
-        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-          client.navigate(targetUrl);
-          return client.focus();
-        }
-      }
-      // Senão abre uma nova janela diretamente no ponto/linha
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const existing = list.find(c => c.url.startsWith(self.location.origin));
+      if (existing) { existing.navigate(targetUrl); return existing.focus(); }
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
 });

@@ -18,6 +18,7 @@ export interface BusLineCardProps {
   onRemoveAlert: (key: string) => void;
   onShowAlertModal: (key: string) => void;
   onShare: (stopId: string, lineNumber: string) => void;
+  onStartTrip?: (line: BusLine) => void;
 }
 
 const BusLineCard = memo(({
@@ -106,6 +107,15 @@ const BusLineCard = memo(({
           >
             <img src="/share.png" alt="Compartilhar" style={{width:24, height:24, objectFit:'contain', opacity: 0.5}} />
           </button>
+{onStartTrip && (
+  <button
+    onClick={e => { e.stopPropagation(); onStartTrip(line); haptic(40); }}
+    className="p-1.5 transition-all active:scale-125"
+    title="Iniciar modo viagem"
+  >
+    <img src="/localizacao.png" alt="Viagem" style={{width:24, height:24, objectFit:'contain', opacity:0.5}} />
+  </button>
+)}
         </div>
       </div>
       <div className="flex gap-2">

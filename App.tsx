@@ -9,12 +9,14 @@ import { useSitpass } from './hooks/useSitpass';
 import { usePWA } from './hooks/usePWA';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
 import { useNearbyStops } from './hooks/useNearbyStops';
+import { useTripMode } from './hooks/useTripMode';
 
 // Components
 import SplashScreen from './components/SplashScreen';
 import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 import PWABanners from './components/PWABanners';
+import TripModeOverlay from './components/TripModeOverlay';
 
 // Modals
 import OnboardingModal from './components/modals/OnboardingModal';
@@ -127,6 +129,9 @@ const App: React.FC = () => {
 
   const theme = useMemo(() => buildTheme(lightTheme), [lightTheme]);
 
+  // ── Trip Mode ──────────────────────────────────────────────────────────────
+  const tripMode = useTripMode(notifications.sendNotification);
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   const parseTime = (t?: string): number => {
     if (!t || t === 'SEM PREVISÃO') return 9999;
@@ -153,7 +158,12 @@ const App: React.FC = () => {
     onRemoveAlert: notifications.removeAlert,
     onShowAlertModal: notifications.setShowAlertModal,
     onShare: shareLine,
-  }), [stopId, favorites, notifications.activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, notifications.removeAlert, notifications.setShowAlertModal]);
+    onStartTrip: (line: BusLine) => {
+      const sId = line.stopSource ?? stopId;
+      const coords = getStopCoords(sId);
+      tripMode.startTrip(line, sId, coords.nome);
+    },
+  }), [stopId, favorites, notifications.activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, notifications.removeAlert, notifications.setShowAlertModal, tripMode.startTrip]);
 
   const groupedFavLines = displayedFavLines.reduce<Record<string, BusLine[]>>((acc, line) => {
     const key = line.stopSource ?? 'desconhecido';
@@ -343,9 +353,23 @@ const App: React.FC = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [activeTab, busLines.length, favoriteBusLines.length, isLoading, isFavoritesLoading]);
 
-  useEffect(() => { if (busLines.length > 0) notifications.checkAlerts(busLines); }, [busLines, notifications.checkAlerts]);
-  useEffect(() => { if (busLines.length > 0 && activeMiniMap) setMiniMapRefreshKey(k => k + 1); }, [busLines]); // eslint-disable-line
-  useEffect(() => { if (favoriteBusLines.length > 0) notifications.checkAlerts(favoriteBusLines); }, [favoriteBusLines, notifications.checkAlerts]);
+  useEffect(() => {
+    if (busLines.length > 0) {
+      notifications.checkAlerts(busLines);
+      tripMode.updateFromLines(busLines);
+    }
+  }, [busLines]); // eslint-disable-line
+
+  useEffect(() => {
+    if (busLines.length > 0 && activeMiniMap) setMiniMapRefreshKey(k => k + 1);
+  }, [busLines]); // eslint-disable-line
+
+  useEffect(() => {
+    if (favoriteBusLines.length > 0) {
+      notifications.checkAlerts(favoriteBusLines);
+      tripMode.updateFromLines(favoriteBusLines);
+    }
+  }, [favoriteBusLines]); // eslint-disable-line
 
   useEffect(() => {
     if (activeTab !== 'map' || !leafletMapRef.current) return;
@@ -411,6 +435,18 @@ const App: React.FC = () => {
   return (
     <div className={`h-screen w-screen ${theme.bg} ${theme.text} flex flex-col relative overflow-hidden transition-colors duration-300`}>
       <style>{globalStyles}</style>
+
+      {/* ── Modo Viagem ─────────────────────────────────────────────────────── */}
+      {tripMode.isActive && tripMode.tripTarget && tripMode.secondsRemaining !== null && (
+        <TripModeOverlay
+          tripTarget={tripMode.tripTarget}
+          secondsRemaining={tripMode.secondsRemaining}
+          isArriving={tripMode.isArriving}
+          theme={theme}
+          lightTheme={lightTheme}
+          onCancel={tripMode.cancelTrip}
+        />
+      )}
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showOnboarding && (
@@ -513,16 +549,16 @@ const App: React.FC = () => {
             onHistorySearch={(id) => { setStopId(id); handleSearch(id); }}
             onToggleMiniMap={toggleMiniMap}
             onCloseMiniMap={() => setActiveMiniMap(null)}
-	    nearbyStops={nearbyStops}
-    	    locationStatus={locationStatus}
-    	    onRequestLocation={requestLocation}
-    	    onNearbyStopSearch={(id) => { 
-      	      setStopId(id); 
-      	      setLineFilter('');
-      	      setDestFilter('');
-      	      handleSearch(id, ''); 
-      	      haptic(40);
-	    }}
+            nearbyStops={nearbyStops}
+            locationStatus={locationStatus}
+            onRequestLocation={requestLocation}
+            onNearbyStopSearch={(id) => {
+              setStopId(id);
+              setLineFilter('');
+              setDestFilter('');
+              handleSearch(id, '');
+              haptic(40);
+            }}
           />
         )}
 

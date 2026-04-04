@@ -6,6 +6,7 @@ import SkeletonCard from '../SkeletonCard';
 import MiniMap from '../MiniMap';
 import { BusLineCardProps } from '../BusLineCard';
 import { NearbyStop } from '../../hooks/useNearbyStops';
+import StopSearchAutocomplete from '../StopSearchAutocomplete';
 
 interface MiniMapConfig {
   key: string;
@@ -108,35 +109,51 @@ const SearchTab: React.FC<SearchTabProps> = ({
     <div className="page-enter space-y-5">
       {/* Search form */}
       <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
-        <div className="flex gap-2">
-          <div className="flex-[3] relative">
-            <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>
-              Número do Ponto
-            </span>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="Ex: 31700"
-              value={stopId}
-              onChange={e => onStopIdChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl`}
-            />
-          </div>
-          <div className="flex-[2] relative">
-            <span className={`absolute left-0 top-2 text-[8px] font-black ${theme.subtext} uppercase text-center w-full pointer-events-none`}>
-              Linha (OPCIONAL)
-            </span>
-            <input
-              type="text"
-              placeholder="Ex: 327"
-              value={lineFilter}
-              onChange={e => onLineFilterChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl text-center`}
-            />
-          </div>
-        </div>
+  <div className="flex gap-2">
+    <div className="flex-[3] relative">
+      <span className={`absolute left-4 top-2 text-[8px] font-black ${theme.subtext} uppercase pointer-events-none`}>
+        Número do Ponto
+      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="Ex: 31700"
+        value={stopId}
+        onChange={e => onStopIdChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl`}
+      />
+    </div>
+    <div className="flex-[2] relative">
+      <span className={`absolute left-0 top-2 text-[8px] font-black ${theme.subtext} uppercase text-center w-full pointer-events-none`}>
+        Linha (OPCIONAL)
+      </span>
+      <input
+        type="text"
+        placeholder="Ex: 327"
+        value={lineFilter}
+        onChange={e => onLineFilterChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className={`w-full ${theme.input} border rounded-2xl px-4 pt-6 pb-3 font-black outline-none focus:border-yellow-400 transition-all placeholder:text-slate-700 text-xl text-center`}
+      />
+    </div>
+  </div>
+
+  {/* ── Busca por nome ─────────────────────────────────────────────── */}
+  <div className={`border-t pt-3 ${lightTheme ? 'border-gray-100' : 'border-white/5'}`}>
+    <span className={`block text-[8px] font-black ${theme.subtext} uppercase tracking-widest mb-2 px-1`}>
+      Ou buscar por nome
+    </span>
+    <StopSearchAutocomplete
+      theme={theme}
+      lightTheme={lightTheme}
+      onSelectStop={(id) => {
+        onStopIdChange(id);
+        onLineFilterChange('');
+        onSearch();
+      }}
+    />
+  </div>
 
         {busLines.length > 0 && (
           <div className="relative">
