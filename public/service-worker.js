@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const CACHE_NAME = `cade-meu-bau-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
@@ -12,6 +12,7 @@ const API_PATTERNS = [
   'rmtcgoiania.com.br',
   'sitpass',
   'realtimebus',
+  'workers.dev',
 ];
 
 const isApiRequest = (url) => API_PATTERNS.some(p => url.includes(p));
@@ -58,13 +59,14 @@ self.addEventListener('fetch', (event) => {
   if (isAsset) {
     event.respondWith(
       caches.match(event.request).then(cached => {
-        const fetchAndCache = fetch(event.request).then(res => {
+        const fetchPromise = fetch(event.request).then(res => {
           if (res && res.status === 200) {
-            caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
+            const resClone = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(event.request, resClone));
           }
           return res;
         });
-        return cached || fetchAndCache;
+        return cached || fetchPromise;
       })
     );
     return;
@@ -74,7 +76,8 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then(res => {
         if (res && res.status === 200 && !isNavigate) {
-          caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
+          const resClone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, resClone));
         }
         return res;
       })
