@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { BusLine } from '../types';
 import { haptic } from '../utils';
+import { registerAlert, unregisterAlert } from './usePushNotifications';
 
 export function useNotifications() {
   const [activeAlerts, setActiveAlerts] = useState<Record<string, number>>(() => {
@@ -59,6 +60,14 @@ export function useNotifications() {
       delete next[lineKey];
       return next;
     });
+
+    // Remove também no Worker
+    const workerKeys = JSON.parse(localStorage.getItem('cade_meu_bau_worker_alert_keys') || '{}');
+    if (workerKeys[lineKey]) {
+      unregisterAlert(workerKeys[lineKey]);
+      delete workerKeys[lineKey];
+      localStorage.setItem('cade_meu_bau_worker_alert_keys', JSON.stringify(workerKeys));
+    }
   }, [updateActiveAlerts]);
 
   const setAlert = useCallback(async (lineKey: string, minutes: number) => {
@@ -69,13 +78,25 @@ export function useNotifications() {
     }
 
     haptic([40, 30, 60]);
+
+    // Alerta local (funciona com app aberto)
     updateActiveAlerts(prev => ({ ...prev, [lineKey]: minutes }));
     setShowAlertModal(null);
 
+    // Confirmação imediata
     await sendNotification(
       '🚍 Alerta configurado!',
-      `Você será avisado quando o baú estiver a ${minutes} min.`
+      `Você será avisado quando o baú estiver a ${minutes} min — mesmo com o app fechado.`
     );
+
+    // Alerta em background via Worker
+    const [sId, lineNumber] = lineKey.split('::');
+    const result = await registerAlert(sId, lineNumber, minutes);
+    if (result.ok && result.key) {
+      const workerKeys = JSON.parse(localStorage.getItem('cade_meu_bau_worker_alert_keys') || '{}');
+      workerKeys[lineKey] = result.key;
+      localStorage.setItem('cade_meu_bau_worker_alert_keys', JSON.stringify(workerKeys));
+    }
   }, [requestNotifPermission, updateActiveAlerts, sendNotification]);
 
   const checkAlerts = useCallback(async (lines: BusLine[]) => {
