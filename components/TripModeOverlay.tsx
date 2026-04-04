@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ThemeTokens } from '../types';
-import { TripTarget } from '../useTripMode';
+import { TripTarget } from '../hooks/useTripMode';
 import { haptic } from '../utils';
 
 interface TripModeOverlayProps {
