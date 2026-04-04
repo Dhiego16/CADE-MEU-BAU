@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ThemeTokens } from './types';
-import PONTOS_DATA from './pontos.json';
+import { ThemeTokens } from '../types';
+import PONTOS_DATA from '../pontos.json';
 
 interface PontoData {
   id: string;

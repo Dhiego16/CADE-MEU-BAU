@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { BusLine } from './types';
-import { haptic } from './utils';
+import { BusLine } from '../types';
+import { haptic } from '../utils';
 
 export interface TripTarget {
   stopId: string;

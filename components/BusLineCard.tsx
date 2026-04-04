@@ -25,7 +25,7 @@ const BusLineCard = memo(({
   line, isRemoving = false, staggerIndex = 0,
   stopId, favorites, activeAlerts, lightTheme: _lightTheme, theme,
   onToggleFavorite, onStartLongPress, onCancelLongPress,
-  onRemoveAlert, onShowAlertModal, onShare,
+  onRemoveAlert, onShowAlertModal, onShare, onStartTrip,
 }: BusLineCardProps) => {
   const sId = line.stopSource ?? stopId;
   const key = `${sId}::${line.number}`;
