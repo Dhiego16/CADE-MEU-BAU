@@ -188,7 +188,7 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
     : atStop
       ? '📍 Você está no ponto!'
       : hurry
-        ? '🏃 CORRE! Ônibus chega antes de você'
+        ? '🏃 CORRE! Baú chega antes de você'
         : isArriving
           ? 'Chegando agora'
           : 'Modo viagem ativo';
