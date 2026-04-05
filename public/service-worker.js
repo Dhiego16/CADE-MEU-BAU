@@ -99,20 +99,14 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
-  let data;
-  try { data = event.data.json(); }
-  catch { data = { title: '🚍 Cadê meu Baú?', body: event.data.text() }; }
-
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
+    self.registration.showNotification('🚍 Baú chegando!', {
+      body: 'Seu ônibus está chegando! Abra o app para ver.',
       icon: '/icons/icon-192x192.png',
       badge: '/icons/icon-72x72.png',
       vibrate: [200, 100, 200],
       tag: 'cade-meu-bau-alert',
       renotify: true,
-      data: data.data || { url: '/' },
     })
   );
 });
