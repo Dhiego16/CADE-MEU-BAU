@@ -100,13 +100,23 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('push', (event) => {
   event.waitUntil(
-    self.registration.showNotification('🚍 Baú chegando!', {
-      body: 'Seu ônibus está chegando! Abra o app para ver.',
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png',
-      vibrate: [200, 100, 200],
-      tag: 'cade-meu-bau-alert',
-      renotify: true,
+    // Verifica se o app está aberto e em foco
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const appAberto = list.some(c => 
+        c.url.startsWith(self.location.origin) && c.visibilityState === 'visible'
+      );
+
+      // Se app estiver aberto e visível, não mostra push (ele já notificou)
+      if (appAberto) return;
+
+      return self.registration.showNotification('🚍 Baú chegando!', {
+        body: 'Seu ônibus está chegando! Abra o app para ver.',
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-72x72.png',
+        vibrate: [200, 100, 200],
+        tag: 'cade-meu-bau-alert',
+        renotify: true,
+      });
     })
   );
 });
