@@ -161,7 +161,7 @@ const App: React.FC = () => {
     onStartTrip: (line: BusLine) => {
       const sId = line.stopSource ?? stopId;
       const coords = getStopCoords(sId);
-      tripMode.startTrip(line, sId, coords.nome);
+      tripMode.startTrip(line, sId, coords.nome, coords.lat, coords.lng);
     },
   }), [stopId, favorites, notifications.activeAlerts, lightTheme, theme, toggleFavorite, startLongPress, cancelLongPress, notifications.removeAlert, notifications.setShowAlertModal, tripMode.startTrip]);
 
@@ -442,6 +442,10 @@ const App: React.FC = () => {
           tripTarget={tripMode.tripTarget}
           secondsRemaining={tripMode.secondsRemaining}
           isArriving={tripMode.isArriving}
+          urgencyStatus={tripMode.urgencyStatus}
+          userLocation={tripMode.userLocation}
+          routeInfo={tripMode.routeInfo}
+          locationStatus={tripMode.locationStatus}
           theme={theme}
           lightTheme={lightTheme}
           onCancel={tripMode.cancelTrip}
