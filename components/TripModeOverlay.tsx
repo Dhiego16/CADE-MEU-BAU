@@ -45,6 +45,15 @@ const Ring: React.FC<{ progress: number; isArriving: boolean }> = ({ progress, i
   );
 };
 
+const geoDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const dLat = lat2 - lat1;
+  const dLng = lng2 - lng1;
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+};
+
+const normDestino = (s: string): string =>
+  s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '').trim();
+
 const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
   tripTarget, secondsRemaining, isArriving, urgencyStatus,
   userLocation, routeInfo, locationStatus,
@@ -58,8 +67,11 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
   const leafletMapRef = useRef<LeafletMap | null>(null);
   const userMarkerRef = useRef<LeafletMarker | null>(null);
   const stopMarkerRef = useRef<LeafletMarker | null>(null);
+  const busMarkerRef = useRef<LeafletMarker | null>(null);
   const routeLayerRef = useRef<unknown>(null);
   const isMountedRef = useRef(true);
+  const busIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const arrived = secondsRemaining === 0;
   const atStop = urgencyStatus === 'arrived_at_stop';
@@ -73,6 +85,55 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
   useEffect(() => {
     if (atStop) haptic([300, 100, 300, 100, 300]);
   }, [atStop]);
+
+  // ── Fetch ônibus ao vivo ──────────────────────────────────────────────────
+  const fetchBus = async (map: LeafletMap, L: LeafletLib) => {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    const { signal } = abortRef.current;
+
+    try {
+      const res = await fetch(`/api/realtimebus?linha=${tripTarget.lineNumber}`, { signal });
+      if (!res.ok || !isMountedRef.current) return;
+      const onibus = await res.json();
+      if (!Array.isArray(onibus) || onibus.length === 0 || !isMountedRef.current) return;
+
+      type BusData = { lat: number; lng: number; destino?: string };
+      const withCoords: BusData[] = onibus.filter((b: BusData) => b.lat && b.lng);
+      if (!withCoords.length) return;
+
+      const destNorm = normDestino(tripTarget.destination);
+      const mesmoDestino = withCoords.filter(b =>
+        normDestino(b.destino ?? '').includes(destNorm) || destNorm.includes(normDestino(b.destino ?? ''))
+      );
+      const candidatos = mesmoDestino.length > 0 ? mesmoDestino : withCoords;
+
+      const maisProximo = candidatos.reduce<BusData | null>((closest, bus) => {
+        if (!closest) return bus;
+        return geoDistance(tripTarget.stopLat, tripTarget.stopLng, bus.lat, bus.lng) <
+          geoDistance(tripTarget.stopLat, tripTarget.stopLng, closest.lat, closest.lng)
+          ? bus : closest;
+      }, null);
+
+      if (!maisProximo || signal.aborted || !isMountedRef.current) return;
+
+      if (busMarkerRef.current) {
+        busMarkerRef.current.setLatLng([maisProximo.lat, maisProximo.lng]);
+      } else {
+        const busIcon = L.icon({
+          iconUrl: '/onibus_realtime.png',
+          iconSize: [32, 32],
+          iconAnchor: [16, 32],
+          popupAnchor: [0, -32],
+        });
+        busMarkerRef.current = L.marker([maisProximo.lat, maisProximo.lng], { icon: busIcon })
+          .addTo(map)
+          .bindPopup(`Linha ${tripTarget.lineNumber}`);
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+    }
+  };
 
   // ── Inicializa mapa ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -106,17 +167,26 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-      // Marcador do ponto
       const stopIcon = L.icon({ iconUrl: '/ponto.png', iconSize: [32, 32], iconAnchor: [16, 32] });
       stopMarkerRef.current = L.marker([tripTarget.stopLat, tripTarget.stopLng], { icon: stopIcon })
         .addTo(map)
         .bindPopup(tripTarget.stopNome);
 
       leafletMapRef.current = map;
+
+      // Fetch ônibus imediato e a cada 15s
+      fetchBus(map, L);
+      busIntervalRef.current = setInterval(() => {
+        if (isMountedRef.current) fetchBus(map, L);
+      }, 15000);
+
     }).catch(() => {});
 
     return () => {
       isMountedRef.current = false;
+      if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
+      if (busIntervalRef.current) { clearInterval(busIntervalRef.current); busIntervalRef.current = null; }
+      if (busMarkerRef.current) { busMarkerRef.current.remove(); busMarkerRef.current = null; }
       if (userMarkerRef.current) { userMarkerRef.current.remove(); userMarkerRef.current = null; }
       if (stopMarkerRef.current) { stopMarkerRef.current.remove(); stopMarkerRef.current = null; }
       if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; }
@@ -142,7 +212,6 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
       userMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon }).addTo(map);
     }
 
-    // Centraliza entre usuário e ponto
     map.fitBounds(
       [
         [Math.min(userLocation.lat, tripTarget.stopLat), Math.min(userLocation.lng, tripTarget.stopLng)],
@@ -155,15 +224,12 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
   // ── Desenha rota no mapa ──────────────────────────────────────────────────
   useEffect(() => {
     if (!routeInfo || !leafletMapRef.current) return;
-    const L = (window as unknown as { L?: LeafletLib & { polyline: (coords: [number,number][], opts: object) => { addTo: (m: LeafletMap) => unknown; remove: () => void } } }).L;
+    const L = (window as unknown as { L?: LeafletLib & { polyline: (coords: [number, number][], opts: object) => { addTo: (m: LeafletMap) => unknown; remove: () => void } } }).L;
     if (!L) return;
 
-    // Remove rota anterior
     if (routeLayerRef.current) (routeLayerRef.current as { remove: () => void }).remove();
 
-    // Converte [lng, lat] → [lat, lng] para Leaflet
     const latLngs = routeInfo.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]);
-
     routeLayerRef.current = L.polyline(latLngs, {
       color: hurry ? '#ef4444' : '#3b82f6',
       weight: 4,
@@ -172,23 +238,20 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
     }).addTo(leafletMapRef.current);
   }, [routeInfo, hurry]);
 
-  // Cor do background baseado no status
   const bgGradient = atStop
     ? 'linear-gradient(160deg, #052005 0%, #0f3d0f 100%)'
-    : hurry
+    : hurry || isArriving
       ? 'linear-gradient(160deg, #1a0505 0%, #3d0f0f 100%)'
-      : isArriving
-        ? 'linear-gradient(160deg, #1a0505 0%, #3d0f0f 100%)'
-        : 'linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%)';
+      : 'linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%)';
 
-  const accentColor = atStop ? '#22c55e' : hurry ? '#ef4444' : isArriving ? '#ef4444' : '#fbbf24';
+  const accentColor = atStop ? '#22c55e' : hurry || isArriving ? '#ef4444' : '#fbbf24';
 
   const statusLabel = arrived
     ? 'Chegou!'
     : atStop
-      ? '📍 Você está no ponto!'
+      ? 'Você está no ponto!'
       : hurry
-        ? '🏃 CORRE! Baú chega antes de você'
+        ? 'CORRE! Baú chega antes de você'
         : isArriving
           ? 'Chegando agora'
           : 'Modo viagem ativo';
@@ -207,18 +270,18 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
       <div style={{ flex: '1', position: 'relative', minHeight: 0 }}>
         <div ref={mapDivRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* Status badge sobre o mapa */}
+        {/* Status badge */}
         <div
           className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 rounded-2xl flex items-center gap-2"
-          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', border: `1px solid ${accentColor}40` }}
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', border: `1px solid ${accentColor}40`, whiteSpace: 'nowrap' }}
         >
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor, animation: 'tripPulse 1s ease-in-out infinite' }} />
+          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: accentColor, animation: 'tripPulse 1s ease-in-out infinite' }} />
           <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: accentColor }}>
             {statusLabel}
           </span>
         </div>
 
-        {/* GPS loading */}
+        {/* GPS status */}
         {locationStatus === 'loading' && (
           <div className="absolute bottom-3 left-3 z-[1000] flex items-center gap-2 px-3 py-2 rounded-xl"
             style={{ background: 'rgba(0,0,0,0.7)' }}>
@@ -226,11 +289,10 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
             <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Buscando GPS...</span>
           </div>
         )}
-
         {locationStatus === 'denied' && (
           <div className="absolute bottom-3 left-3 z-[1000] px-3 py-2 rounded-xl"
             style={{ background: 'rgba(0,0,0,0.7)' }}>
-            <span className="text-[9px] font-black text-red-400 uppercase tracking-widest">📍 GPS negado</span>
+            <span className="text-[9px] font-black text-red-400 uppercase tracking-widest">GPS negado</span>
           </div>
         )}
       </div>
@@ -240,9 +302,8 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
         className="shrink-0 px-4 pt-4 pb-8 flex flex-col gap-3"
         style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
       >
-        {/* Linha info + countdown */}
         <div className="flex items-center gap-3">
-          {/* Countdown ring compacto */}
+          {/* Countdown ring */}
           <div className="relative shrink-0 flex items-center justify-center" style={{ width: 110, height: 110 }}>
             <Ring progress={progress} isArriving={isArriving || hurry} />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -261,7 +322,7 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
             </div>
           </div>
 
-          {/* Info da linha + distância */}
+          {/* Info */}
           <div className="flex-1 min-w-0 flex flex-col gap-2">
             <div>
               <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.4)' }}>
@@ -275,15 +336,17 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
               </p>
             </div>
 
-            {/* Métricas */}
             <div className="flex gap-2">
               {routeInfo && (
                 <div
                   className="flex-1 rounded-xl px-3 py-2"
-                  style={{ background: hurry ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)', border: `1px solid ${hurry ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)'}` }}
+                  style={{
+                    background: hurry ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                    border: `1px solid ${hurry ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                  }}
                 >
                   <p className="text-[7px] font-black uppercase tracking-widest" style={{ color: hurry ? '#ef4444' : '#3b82f6' }}>
-                    🚶 A pé
+                    A pé
                   </p>
                   <p className="font-black text-sm" style={{ color: hurry ? '#ef4444' : '#3b82f6' }}>
                     ~{routeInfo.walkingMinutes} min
@@ -300,7 +363,7 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
                 className="flex-1 rounded-xl px-3 py-2"
                 style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)' }}
               >
-                <p className="text-[7px] font-black uppercase tracking-widest text-yellow-400">🚍 Ônibus</p>
+                <p className="text-[7px] font-black uppercase tracking-widest text-yellow-400">Ônibus</p>
                 <p className="font-black text-sm text-yellow-400">
                   ~{Math.ceil((secondsRemaining ?? 0) / 60)} min
                 </p>
@@ -319,7 +382,7 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
             style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)' }}
           >
             <p className="font-black text-sm text-green-400 uppercase tracking-wider">
-              ✅ Você está no ponto!
+              Você está no ponto!
             </p>
             <p className="text-[9px] font-bold text-green-400/60 mt-0.5">
               Aguarde o ônibus chegar
@@ -327,7 +390,7 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
           </div>
         )}
 
-        {/* Chegou o ônibus */}
+        {/* Ônibus chegou */}
         {arrived && !atStop && (
           <div
             className="w-full rounded-2xl p-3 text-center"
