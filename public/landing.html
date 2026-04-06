@@ -4,9 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cadê meu Baú? — Monitor de Ônibus em Goiânia</title>
-  <meta name="description" content="Descubra em segundos quando o seu ônibus chega. Tempo real, sem anúncios, sem cadastro." />
+  <meta name="description" content="Descubra em segundos quando o seu ônibus chega. Tempo real, sem anúncios, sem cadastro. Para Goiânia e região metropolitana." />
 
-  <!-- Open Graph / WhatsApp -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Cadê meu Baú?" />
   <meta property="og:title" content="Cadê meu Baú? — Monitor de Ônibus em Goiânia" />
@@ -16,33 +15,32 @@
   <meta property="og:image:height" content="512" />
   <meta property="og:url" content="https://cademeubau.vercel.app/sobre" />
   <meta property="og:locale" content="pt_BR" />
-
-  <!-- Twitter/X Card -->
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Cadê meu Baú? — Monitor de Ônibus em Goiânia" />
   <meta name="twitter:description" content="Descubra em segundos quando o seu ônibus chega. Tempo real, sem anúncios, sem cadastro." />
-  <meta property="og:image" content="https://cademeubau.vercel.app/logo.png?v=2" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-  
+  <meta name="twitter:image" content="https://cademeubau.vercel.app/logo.png?v=2" />
+
   <link rel="icon" type="image/png" href="/logo.png" />
   <link rel="apple-touch-icon" href="/logo.png" />
-  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
-  <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192x192.png" />
-  
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#fbbf24" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --yellow: #fbbf24;
-      --yellow-dim: #f59e0b;
-      --black: #000;
-      --dark: #0a0a0a;
-      --card: #111;
-      --border: rgba(255,255,255,0.08);
+      --dark: #080808;
+      --card: #101010;
+      --card2: #161616;
+      --border: rgba(255,255,255,0.07);
+      --border-y: rgba(251,191,36,0.2);
       --text: #fff;
-      --muted: #666;
+      --muted: #555;
+      --muted2: #888;
     }
 
     html { scroll-behavior: smooth; }
@@ -58,505 +56,315 @@
       content: '';
       position: fixed;
       inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
       pointer-events: none;
       z-index: 0;
     }
 
-    /* ── HERO ── */
+    /* NAV */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 18px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(8,8,8,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--yellow); text-decoration: none; letter-spacing: 0.05em; }
+    .nav-links { display: flex; align-items: center; gap: 28px; }
+    .nav-links a { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted2); text-decoration: none; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--yellow); }
+    .nav-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--yellow); color: #000; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; padding: 10px 20px; border-radius: 100px; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s; }
+    .nav-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(251,191,36,0.3); }
+
+    /* HERO */
     .hero {
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 24px;
-      position: relative;
-      text-align: center;
-      overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 120px 24px 80px;
+      position: relative; text-align: center; overflow: hidden;
     }
-
-    .hero::after {
-      content: '';
-      position: absolute;
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(251,191,36,0.12) 0%, transparent 70%);
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -60%);
-      pointer-events: none;
-      z-index: 0;
+    .hero-glow {
+      position: absolute; width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(251,191,36,0.09) 0%, transparent 65%);
+      top: 40%; left: 50%; transform: translate(-50%, -50%);
+      pointer-events: none; z-index: 0;
     }
-
     .hero > * { position: relative; z-index: 1; }
 
     .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      border: 1px solid var(--border);
-      background: rgba(251,191,36,0.08);
-      color: var(--yellow);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      padding: 8px 16px;
-      border-radius: 100px;
-      margin-bottom: 32px;
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid var(--border-y); background: rgba(251,191,36,0.06);
+      color: var(--yellow); font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+      padding: 8px 18px; border-radius: 100px; margin-bottom: 36px;
       animation: fadeDown 0.6s ease both;
     }
-
-    .hero-badge span {
-      width: 6px; height: 6px;
-      background: var(--yellow);
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
+    .badge-dot { width: 6px; height: 6px; background: var(--yellow); border-radius: 50%; animation: pulse 2s infinite; }
 
     .hero-title {
       font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(72px, 15vw, 160px);
-      line-height: 0.9;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      margin-bottom: 8px;
+      font-size: clamp(80px, 16vw, 180px);
+      line-height: 0.88; letter-spacing: -0.02em;
       animation: fadeDown 0.6s 0.1s ease both;
     }
-
-    .hero-title em {
-      color: var(--yellow);
-      font-style: normal;
-      display: block;
-    }
+    .hero-title em { color: var(--yellow); font-style: normal; display: block; }
 
     .hero-sub {
-      font-size: clamp(16px, 3vw, 22px);
-      color: var(--muted);
-      font-weight: 500;
-      max-width: 500px;
-      line-height: 1.5;
-      margin: 24px auto 48px;
+      font-size: clamp(15px, 2.5vw, 19px); color: var(--muted2); font-weight: 500;
+      max-width: 460px; line-height: 1.65; margin: 28px auto 52px;
       animation: fadeDown 0.6s 0.2s ease both;
     }
 
-    .hero-cta {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      justify-content: center;
-      animation: fadeDown 0.6s 0.3s ease both;
-    }
+    .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; animation: fadeDown 0.6s 0.3s ease both; }
 
     .btn-primary {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--yellow);
-      color: var(--black);
-      font-family: 'DM Sans', sans-serif;
-      font-weight: 700;
-      font-size: 14px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      text-decoration: none;
-      padding: 18px 36px;
-      border-radius: 100px;
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--yellow); color: #000; font-weight: 700; font-size: 13px;
+      letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
+      padding: 18px 36px; border-radius: 100px; border: none; cursor: pointer;
       transition: transform 0.2s, box-shadow 0.2s;
-      box-shadow: 0 0 40px rgba(251,191,36,0.3);
+      box-shadow: 0 0 40px rgba(251,191,36,0.22);
     }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 0 60px rgba(251,191,36,0.5);
-    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 60px rgba(251,191,36,0.42); }
 
     .btn-secondary {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      background: transparent;
-      color: var(--muted);
-      font-family: 'DM Sans', sans-serif;
-      font-weight: 700;
-      font-size: 14px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      text-decoration: none;
-      padding: 18px 36px;
-      border-radius: 100px;
-      border: 1px solid var(--border);
+      display: inline-flex; align-items: center; gap: 10px;
+      background: transparent; color: var(--muted2); font-weight: 700; font-size: 13px;
+      letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
+      padding: 18px 36px; border-radius: 100px; border: 1px solid var(--border);
       transition: all 0.2s;
     }
     .btn-secondary:hover { border-color: var(--yellow); color: var(--yellow); }
 
-    /* ── MOCKUP ── */
+    /* MOCKUPS */
     .mockup-wrap {
       margin-top: 80px;
-      position: relative;
-      animation: fadeUp 0.8s 0.4s ease both;
+      display: flex; align-items: flex-start; justify-content: center; gap: 20px;
+      animation: fadeUp 0.8s 0.4s ease both, float 7s 1.5s ease-in-out infinite;
     }
 
     .mockup-phone {
-      width: 280px;
-      background: #111;
-      border: 1.5px solid rgba(255,255,255,0.12);
-      border-radius: 40px;
-      padding: 20px 16px;
-      box-shadow: 0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04);
-      margin: 0 auto;
+      width: 255px; background: #0d0d0d;
+      border: 1.5px solid rgba(255,255,255,0.1); border-radius: 40px;
+      padding: 20px 14px 24px;
+      box-shadow: 0 48px 120px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.03), 0 0 80px rgba(251,191,36,0.05);
     }
+    .mockup-phone.secondary { width: 215px; margin-top: 48px; opacity: 0.82; }
 
-    .mockup-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-    .mockup-logo {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 16px;
-      color: var(--yellow);
-      letter-spacing: 0.05em;
-    }
-    .mockup-refresh {
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--yellow);
-    }
+    .mockup-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .mockup-logo { font-family: 'Bebas Neue', sans-serif; font-size: 14px; color: var(--yellow); letter-spacing: 0.05em; }
+    .mockup-refresh { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--yellow); display: flex; align-items: center; gap: 4px; }
+    .refresh-dot { width: 5px; height: 5px; background: #22c55e; border-radius: 50%; animation: pulse 1.5s infinite; }
 
-    .mockup-card {
-      background: #1a1a1a;
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 24px;
-      padding: 16px;
-      margin-bottom: 10px;
-    }
-    .mockup-card-top {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    .mockup-line-num {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 32px;
-      color: var(--yellow);
-      width: 56px;
-      text-align: center;
-      line-height: 1;
-    }
+    .mockup-card { background: #1a1a1a; border: 1px solid rgba(255,255,255,0.05); border-radius: 20px; padding: 13px; margin-bottom: 8px; }
+    .mockup-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .mockup-num { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--yellow); width: 50px; text-align: center; line-height: 1; }
     .mockup-dest { flex: 1; }
-    .mockup-dest-label { font-size: 8px; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: 0.15em; }
-    .mockup-dest-name { font-size: 11px; font-weight: 700; color: #fff; text-transform: uppercase; margin-top: 2px; }
-    .mockup-status { font-size: 8px; font-weight: 700; color: #22c55e; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 4px; margin-top: 4px; }
-    .mockup-dot { width: 5px; height: 5px; background: #22c55e; border-radius: 50%; }
+    .mockup-dest-label { font-size: 7px; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.15em; }
+    .mockup-dest-name { font-size: 10px; font-weight: 700; color: #fff; text-transform: uppercase; margin-top: 2px; line-height: 1.2; }
+    .mockup-status { font-size: 7px; font-weight: 700; color: #22c55e; text-transform: uppercase; display: flex; align-items: center; gap: 3px; margin-top: 3px; }
+    .status-dot { width: 4px; height: 4px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
 
-    .mockup-times { display: flex; gap: 8px; }
-    .mockup-time-box {
-      flex: 1;
-      border-radius: 16px;
-      padding: 10px 8px;
-      text-align: center;
-    }
-    .mockup-time-box.green { background: #16a34a; }
-    .mockup-time-box.yellow { background: #ca8a04; }
-    .mockup-time-label { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; margin-bottom: 4px; }
-    .mockup-time-val { font-family: 'Bebas Neue', sans-serif; font-size: 24px; line-height: 1; }
-    .mockup-time-unit { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.7; }
+    .mockup-times { display: flex; gap: 6px; }
+    .time-box { flex: 1; border-radius: 14px; padding: 10px 6px; text-align: center; }
+    .time-box.g { background: #16a34a; }
+    .time-box.a { background: #b45309; }
+    .time-box.s { background: #1e293b; }
+    .time-label { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; margin-bottom: 3px; }
+    .time-val { font-family: 'Bebas Neue', sans-serif; font-size: 22px; line-height: 1; }
+    .time-unit { font-size: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.7; }
 
-    .mockup-sitpass {
-      background: rgba(251,191,36,0.05);
-      border: 1px solid rgba(251,191,36,0.15);
-      border-radius: 20px;
-      padding: 14px;
-      margin-top: 10px;
-    }
-    .mockup-sitpass-label { font-size: 7px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 6px; }
-    .mockup-sitpass-row { display: flex; align-items: center; justify-content: space-between; }
-    .mockup-sitpass-name { font-size: 9px; font-weight: 700; color: #aaa; }
-    .mockup-sitpass-saldo { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--yellow); line-height: 1; }
+    /* Trip mode mockup */
+    .trip-screen { background: linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%); border-radius: 28px; padding: 14px 12px; text-align: center; }
+    .trip-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2); border-radius: 100px; padding: 4px 10px; margin-bottom: 12px; }
+    .trip-badge span { width: 5px; height: 5px; background: var(--yellow); border-radius: 50%; animation: pulse 1s infinite; }
+    .trip-badge p { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--yellow); }
+    .trip-ring { width: 78px; height: 78px; margin: 0 auto 12px; position: relative; }
+    .trip-ring svg { transform: rotate(-90deg); }
+    .trip-time-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .trip-countdown { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--yellow); line-height: 1; }
+    .trip-countdown-label { font-size: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); margin-top: 2px; }
+    .trip-info { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 8px; margin-bottom: 8px; }
+    .trip-line-label { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); }
+    .trip-dest { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #fff; margin-top: 2px; }
+    .trip-metrics { display: flex; gap: 6px; }
+    .trip-metric { flex: 1; border-radius: 10px; padding: 7px 5px; text-align: center; }
+    .trip-metric.w { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.25); }
+    .trip-metric.b { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2); }
+    .trip-metric-label { font-size: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+    .trip-metric.w .trip-metric-label { color: #3b82f6; }
+    .trip-metric.b .trip-metric-label { color: var(--yellow); }
+    .trip-metric-val { font-family: 'Bebas Neue', sans-serif; font-size: 17px; line-height: 1; margin-top: 2px; }
+    .trip-metric.w .trip-metric-val { color: #3b82f6; }
+    .trip-metric.b .trip-metric-val { color: var(--yellow); }
 
-    /* ── FEATURES ── */
-    .section {
-      padding: 100px 24px;
-      max-width: 1100px;
-      margin: 0 auto;
+    /* TICKER */
+    .ticker-wrap {
+      overflow: hidden; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      background: rgba(251,191,36,0.025); padding: 15px 0; position: relative; z-index: 1;
     }
+    .ticker { display: flex; white-space: nowrap; animation: ticker 32s linear infinite; }
+    .ticker:hover { animation-play-state: paused; }
+    .ticker-item { font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 0.12em; color: var(--yellow); opacity: 0.35; padding: 0 24px; transition: opacity 0.2s; cursor: default; }
+    .ticker-item:hover { opacity: 0.9; }
+    .ticker-sep { color: var(--muted); opacity: 0.3; margin: 0 2px; }
 
-    .section-label {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: var(--yellow);
-      margin-bottom: 16px;
-    }
+    /* STATS */
+    .stats-bar { background: var(--card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 56px 24px; position: relative; z-index: 1; }
+    .stats-inner { max-width: 860px; margin: 0 auto; display: grid; grid-template-columns: repeat(3,1fr); gap: 40px; text-align: center; }
+    .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: clamp(48px,8vw,88px); color: var(--yellow); line-height: 1; letter-spacing: -0.02em; }
+    .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); margin-top: 8px; line-height: 1.4; }
 
-    .section-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(40px, 6vw, 72px);
-      line-height: 0.95;
-      letter-spacing: -0.01em;
-      margin-bottom: 60px;
-    }
+    /* SECTIONS */
+    .section { padding: 100px 24px; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+    .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--yellow); margin-bottom: 16px; }
+    .section-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(44px,7vw,80px); line-height: 0.92; letter-spacing: -0.01em; margin-bottom: 64px; }
 
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-    }
+    /* FEATURES */
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(275px, 1fr)); gap: 16px; }
 
     .feature-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 28px;
-      padding: 32px;
-      transition: border-color 0.2s, transform 0.2s;
+      background: var(--card); border: 1px solid var(--border); border-radius: 28px; padding: 32px;
+      transition: border-color 0.3s, transform 0.3s, background 0.3s;
+      position: relative; overflow: hidden;
     }
-    .feature-card:hover {
-      border-color: rgba(251,191,36,0.3);
-      transform: translateY(-4px);
+    .feature-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at 0% 0%, rgba(251,191,36,0.04) 0%, transparent 60%);
+      opacity: 0; transition: opacity 0.3s;
     }
+    .feature-card:hover { border-color: var(--border-y); transform: translateY(-4px); background: var(--card2); }
+    .feature-card:hover::before { opacity: 1; }
 
     .feature-icon {
-      font-size: 36px;
-      margin-bottom: 20px;
-      display: block;
+      width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
+      background: rgba(251,191,36,0.07); border: 1px solid var(--border-y);
+      border-radius: 14px; margin-bottom: 20px; font-size: 21px;
+    }
+    .feature-icon img { width: 25px; height: 25px; object-fit: contain; }
+    .feature-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.03em; margin-bottom: 10px; }
+    .feature-desc { font-size: 14px; color: var(--muted2); line-height: 1.65; }
+
+    /* Destaque Modo Viagem */
+    .feature-card.highlight {
+      background: linear-gradient(135deg, #0c1829 0%, #090912 100%);
+      border-color: rgba(59,130,246,0.2);
+      grid-column: span 2;
+    }
+    .feature-card.highlight:hover { border-color: rgba(59,130,246,0.45); }
+    @media (max-width: 680px) { .feature-card.highlight { grid-column: span 1; } }
+
+    .highlight-inner { display: flex; gap: 32px; align-items: center; }
+    @media (max-width: 680px) { .highlight-inner { flex-direction: column; } }
+    .highlight-content { flex: 1; }
+    .highlight-tag {
+      display: inline-block; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25);
+      color: #60a5fa; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em;
+      padding: 4px 10px; border-radius: 100px; margin-bottom: 14px;
+    }
+    .highlight-preview {
+      width: 175px; flex-shrink: 0;
+      background: linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%);
+      border: 1px solid rgba(59,130,246,0.13); border-radius: 20px; padding: 14px 11px;
     }
 
-    .feature-icon img {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
-    }
-
-    .feature-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 24px;
-      letter-spacing: 0.02em;
-      margin-bottom: 10px;
-      color: var(--text);
-    }
-
-    .feature-desc {
-      font-size: 14px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    /* ── STATS ── */
-    .stats-bar {
-      background: var(--card);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      padding: 48px 24px;
-    }
-
-    .stats-inner {
-      max-width: 900px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 40px;
-      text-align: center;
-    }
-
-    .stat-num {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(48px, 8vw, 80px);
-      color: var(--yellow);
-      line-height: 1;
-      letter-spacing: -0.02em;
-    }
-
-    .stat-label {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.2em;
-      color: var(--muted);
-      margin-top: 8px;
-    }
-
-    /* ── HOW IT WORKS ── */
-    .steps { display: flex; flex-direction: column; gap: 0; }
-
-    .step {
-      display: flex;
-      gap: 32px;
-      align-items: flex-start;
-      padding: 40px 0;
-      border-bottom: 1px solid var(--border);
-      position: relative;
-    }
+    /* STEPS */
+    .steps { display: flex; flex-direction: column; }
+    .step { display: flex; gap: 32px; align-items: flex-start; padding: 44px 0; border-bottom: 1px solid var(--border); }
     .step:last-child { border-bottom: none; }
+    .step-num { font-family: 'Bebas Neue', sans-serif; font-size: 68px; line-height: 1; color: rgba(251,191,36,0.1); width: 90px; flex-shrink: 0; }
+    .step-content { flex: 1; padding-top: 10px; }
+    .step-title { font-family: 'Bebas Neue', sans-serif; font-size: 29px; color: var(--text); margin-bottom: 10px; letter-spacing: 0.02em; }
+    .step-desc { font-size: 15px; color: var(--muted2); line-height: 1.65; }
 
-    .step-num {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 80px;
-      line-height: 1;
-      color: rgba(251,191,36,0.15);
-      width: 100px;
-      flex-shrink: 0;
+    /* PWA BANNER */
+    #pwaBanner {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 200; background: #111; border: 1px solid var(--border-y); border-radius: 20px;
+      padding: 16px 20px; box-shadow: 0 24px 60px rgba(0,0,0,0.8), 0 0 40px rgba(251,191,36,0.08);
+      display: flex; align-items: center; gap: 16px;
+      min-width: 320px; max-width: 420px;
+      animation: slideUp 0.4s ease both;
     }
+    #pwaBanner.hidden { display: none; }
+    .pwa-icon { width: 44px; height: 44px; background: var(--yellow); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .pwa-icon img { width: 28px; height: 28px; object-fit: contain; }
+    .pwa-text { flex: 1; }
+    .pwa-title { font-size: 13px; font-weight: 700; color: #fff; }
+    .pwa-sub { font-size: 11px; color: var(--muted2); margin-top: 2px; }
+    .pwa-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .pwa-install { background: var(--yellow); color: #000; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 16px; border-radius: 100px; border: none; cursor: pointer; transition: transform 0.2s; }
+    .pwa-install:hover { transform: scale(1.05); }
+    .pwa-dismiss { background: transparent; color: var(--muted); font-size: 20px; border: none; cursor: pointer; padding: 2px 4px; line-height: 1; }
 
-    .step-content { flex: 1; padding-top: 12px; }
-    .step-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 32px;
-      color: var(--text);
-      margin-bottom: 8px;
-      letter-spacing: 0.02em;
-    }
-    .step-desc { font-size: 15px; color: var(--muted); line-height: 1.6; }
-
-    /* ── CTA FINAL ── */
-    .cta-section {
-      padding: 120px 24px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-
+    /* CTA */
+    .cta-section { padding: 120px 24px; text-align: center; position: relative; overflow: hidden; z-index: 1; }
     .cta-section::before {
-      content: '';
-      position: absolute;
-      width: 800px;
-      height: 400px;
-      background: radial-gradient(ellipse, rgba(251,191,36,0.08) 0%, transparent 70%);
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
+      content: ''; position: absolute; width: 900px; height: 500px;
+      background: radial-gradient(ellipse, rgba(251,191,36,0.07) 0%, transparent 70%);
+      top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none;
     }
-
     .cta-section > * { position: relative; z-index: 1; }
-
-    .cta-title {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(56px, 10vw, 120px);
-      line-height: 0.9;
-      letter-spacing: -0.02em;
-      margin-bottom: 32px;
-    }
-
+    .cta-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(60px,12vw,130px); line-height: 0.88; letter-spacing: -0.02em; margin-bottom: 40px; }
     .cta-title em { color: var(--yellow); font-style: normal; }
 
-    /* ── FOOTER ── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 40px 24px;
-      text-align: center;
-    }
-
-    .footer-logo {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 28px;
-      color: var(--yellow);
-      margin-bottom: 12px;
-    }
-
-    .footer-text {
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    .footer-links {
-      display: flex;
-      gap: 24px;
-      justify-content: center;
-      margin-top: 20px;
-    }
-
-    .footer-links a {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      text-decoration: none;
-      transition: color 0.2s;
-    }
+    /* FOOTER */
+    footer { border-top: 1px solid var(--border); padding: 48px 24px; text-align: center; position: relative; z-index: 1; }
+    .footer-logo { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: var(--yellow); margin-bottom: 14px; letter-spacing: 0.05em; }
+    .footer-text { font-size: 13px; color: var(--muted); line-height: 1.7; max-width: 400px; margin: 0 auto; }
+    .footer-links { display: flex; gap: 28px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
+    .footer-links a { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: color 0.2s; }
     .footer-links a:hover { color: var(--yellow); }
+    .footer-made { margin-top: 28px; font-size: 11px; color: #222; }
 
-    /* ── TICKER TAPE ── */
-    .ticker-wrap {
-      overflow: hidden;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      background: rgba(251,191,36,0.04);
-      padding: 14px 0;
-    }
-
-    .ticker {
-      display: flex;
-      white-space: nowrap;
-      animation: ticker 20s linear infinite;
-    }
-
-    .ticker-item {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: 18px;
-      letter-spacing: 0.1em;
-      color: var(--yellow);
-      opacity: 0.5;
-      padding: 0 32px;
-    }
-
-    .ticker-item span { color: var(--muted); margin: 0 8px; }
-
-    /* ── SCROLL REVEAL ── */
-    .reveal {
-      opacity: 0;
-      transform: translateY(24px);
-      transition: opacity 0.6s ease, transform 0.6s ease;
-    }
+    /* REVEAL */
+    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
     .reveal.visible { opacity: 1; transform: translateY(0); }
 
-    /* ── ANIMATIONS ── */
-    @keyframes fadeDown {
-      from { opacity: 0; transform: translateY(-16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(24px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-    @keyframes ticker {
-      from { transform: translateX(0); }
-      to   { transform: translateX(-50%); }
-    }
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-12px); }
-    }
+    /* KEYFRAMES */
+    @keyframes fadeDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(28px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+    @keyframes ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+    @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
+    @keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(16px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
 
-    .mockup-wrap { animation: fadeUp 0.8s 0.4s ease both, float 6s 1.5s ease-in-out infinite; }
-
-    @media (max-width: 600px) {
-      .stats-inner { grid-template-columns: repeat(3, 1fr); gap: 20px; }
-      .step { flex-direction: column; gap: 8px; }
-      .step-num { font-size: 48px; width: auto; }
+    @media (max-width: 640px) {
+      nav { padding: 14px 20px; }
+      .nav-links { display: none; }
+      .stats-inner { gap: 16px; }
+      .stat-num { font-size: 36px; }
+      .stat-label { font-size: 9px; }
+      .step { flex-direction: column; gap: 4px; }
+      .step-num { font-size: 44px; width: auto; }
       .hero-cta { flex-direction: column; align-items: center; }
-      .btn-primary, .btn-secondary { width: 100%; max-width: 320px; justify-content: center; }
+      .btn-primary, .btn-secondary { width: 100%; max-width: 300px; justify-content: center; }
+      .mockup-wrap { flex-direction: column; align-items: center; }
+      .mockup-phone.secondary { margin-top: 0; }
+      #pwaBanner { min-width: calc(100vw - 32px); bottom: 16px; }
     }
   </style>
 </head>
 <body>
 
+  <!-- NAV -->
+  <nav>
+    <a href="https://cademeubau.vercel.app/sobre" class="nav-logo">Cadê meu Baú?</a>
+    <div class="nav-links">
+      <a href="#funcionalidades">Funcionalidades</a>
+      <a href="#como-funciona">Como usar</a>
+      <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank">Feedback</a>
+    </div>
+    <a href="https://cademeubau.vercel.app" class="nav-btn">🚍 Abrir App</a>
+  </nav>
+
   <!-- HERO -->
   <section class="hero">
+    <div class="hero-glow"></div>
+
     <div class="hero-badge">
-      <span></span> Tempo real · Goiânia e região
+      <span class="badge-dot"></span>
+      Tempo real · Goiânia e região
     </div>
 
     <h1 class="hero-title">
@@ -569,7 +377,7 @@
     </p>
 
     <div class="hero-cta">
-      <a href="https://cademeubau.vercel.app" class="btn-primary">
+      <a href="https://cademeubau.vercel.app" class="btn-primary" id="heroBtn">
         🚍 Abrir o App
       </a>
       <a href="#como-funciona" class="btn-secondary">
@@ -578,165 +386,233 @@
     </div>
 
     <div class="mockup-wrap">
+      <!-- Tela principal: busca -->
       <div class="mockup-phone">
         <div class="mockup-header">
           <div class="mockup-logo">CADÊ MEU BAÚ?</div>
-          <div class="mockup-refresh">↻ 18s</div>
+          <div class="mockup-refresh"><span class="refresh-dot"></span> 18s</div>
         </div>
-
         <div class="mockup-card">
           <div class="mockup-card-top">
-            <div class="mockup-line-num">327</div>
+            <div class="mockup-num">327</div>
             <div class="mockup-dest">
               <div class="mockup-dest-label">Indo para:</div>
               <div class="mockup-dest-name">Aracy Amaral</div>
-              <div class="mockup-status"><span class="mockup-dot"></span> Online agora</div>
+              <div class="mockup-status"><span class="status-dot"></span> Online agora</div>
             </div>
-            <div style="font-size:20px; color:#fbbf24;">★</div>
+            <div style="font-size:17px;color:#fbbf24;">★</div>
           </div>
           <div class="mockup-times">
-            <div class="mockup-time-box green">
-              <div class="mockup-time-label">Chega em</div>
-              <div class="mockup-time-val">4</div>
-              <div class="mockup-time-unit">minutos</div>
-            </div>
-            <div class="mockup-time-box yellow">
-              <div class="mockup-time-label">Próximo</div>
-              <div class="mockup-time-val">22</div>
-              <div class="mockup-time-unit">minutos</div>
-            </div>
+            <div class="time-box g"><div class="time-label">Chega em</div><div class="time-val">4</div><div class="time-unit">minutos</div></div>
+            <div class="time-box a"><div class="time-label">Próximo</div><div class="time-val">22</div><div class="time-unit">minutos</div></div>
           </div>
         </div>
-
-        <div class="mockup-card" style="opacity:0.6;">
+        <div class="mockup-card" style="opacity:0.5;">
           <div class="mockup-card-top">
-            <div class="mockup-line-num">283</div>
+            <div class="mockup-num">283</div>
             <div class="mockup-dest">
               <div class="mockup-dest-label">Indo para:</div>
-              <div class="mockup-dest-name">T. Praça da Biblia</div>
-              <div class="mockup-status"><span class="mockup-dot"></span> Online agora</div>
+              <div class="mockup-dest-name">T. Praça da Bíblia</div>
+              <div class="mockup-status"><span class="status-dot"></span> Online agora</div>
             </div>
           </div>
           <div class="mockup-times">
-            <div class="mockup-time-box green" style="background:#15803d;">
-              <div class="mockup-time-label">Chega em</div>
-              <div class="mockup-time-val">11</div>
-              <div class="mockup-time-unit">minutos</div>
+            <div class="time-box g" style="background:#15803d;"><div class="time-label">Chega em</div><div class="time-val">11</div><div class="time-unit">minutos</div></div>
+            <div class="time-box s"><div class="time-label">Próximo</div><div class="time-val" style="font-size:8px;padding-top:5px;color:#475569;font-family:'DM Sans',sans-serif;font-weight:700;">SEM<br>PREV.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tela secundária: Modo Viagem -->
+      <div class="mockup-phone secondary">
+        <div class="trip-screen">
+          <div class="trip-badge"><span></span><p>Modo Viagem</p></div>
+          <div class="trip-ring">
+            <svg width="78" height="78" viewBox="0 0 78 78">
+              <circle cx="39" cy="39" r="31" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="6"/>
+              <circle cx="39" cy="39" r="31" fill="none" stroke="#fbbf24" stroke-width="6"
+                stroke-linecap="round" stroke-dasharray="195" stroke-dashoffset="55"/>
+            </svg>
+            <div class="trip-time-overlay">
+              <div class="trip-countdown">06:40</div>
+              <div class="trip-countdown-label">restante</div>
             </div>
-            <div class="mockup-time-box" style="background:#1e293b;">
-              <div class="mockup-time-label">Próximo</div>
-              <div class="mockup-time-val" style="font-size:10px; padding-top:6px; color:#475569;">SEM<br>PREV.</div>
+          </div>
+          <div class="trip-info">
+            <div class="trip-line-label">Linha 327</div>
+            <div class="trip-dest">Aracy Amaral</div>
+          </div>
+          <div class="trip-metrics">
+            <div class="trip-metric w">
+              <div class="trip-metric-label">A pé</div>
+              <div class="trip-metric-val">5m</div>
+            </div>
+            <div class="trip-metric b">
+              <div class="trip-metric-label">Ônibus</div>
+              <div class="trip-metric-val">7m</div>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   </section>
 
   <!-- TICKER -->
   <div class="ticker-wrap">
-    <div class="ticker">
-      <div class="ticker-item">Terminal Isidória <span>·</span></div>
-      <div class="ticker-item">T. Cruzeiro do Sul <span>·</span></div>
-      <div class="ticker-item">T. Praça da Biblia <span>·</span></div>
-      <div class="ticker-item">Shopping Flamboyant <span>·</span></div>
-      <div class="ticker-item">Terminal Padre Pelágio <span>·</span></div>
-      <div class="ticker-item">T. Praça A <span>·</span></div>
-      <div class="ticker-item">Setor Bueno <span>·</span></div>
-      <div class="ticker-item">Terminal Osvaldo Augustinho <span>·</span></div>
-      <div class="ticker-item">Aracy Amaral <span>·</span></div>
-      <div class="ticker-item">T. Novo Mundo <span>·</span></div>
-      <div class="ticker-item">Campus UFG <span>·</span></div>
-      <div class="ticker-item">Shopping Flamboyant <span>·</span></div>
-      <div class="ticker-item">Terminal Padre Pelágio <span>·</span></div>
-      <div class="ticker-item">T. Praça A <span>·</span></div>
-      <div class="ticker-item">Setor Bueno <span>·</span></div>
-      <div class="ticker-item">Jardim Goiás <span>·</span></div>
+    <div class="ticker" aria-hidden="true">
+      <span class="ticker-item">Terminal Isidória <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Cruzeiro do Sul <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Praça da Bíblia <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Shopping Flamboyant <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Terminal Padre Pelágio <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Praça A <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Setor Bueno <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Terminal Osvaldo Augustinho <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Aracy Amaral <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Novo Mundo <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Campus UFG <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Jardim Goiás <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Senador Canedo <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Recanto do Bosque <span class="ticker-sep">·</span></span>
+      <!-- Duplicado para loop -->
+      <span class="ticker-item">Terminal Isidória <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Cruzeiro do Sul <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Praça da Bíblia <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Shopping Flamboyant <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Terminal Padre Pelágio <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Praça A <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Setor Bueno <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Terminal Osvaldo Augustinho <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Aracy Amaral <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Novo Mundo <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Campus UFG <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Jardim Goiás <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">Senador Canedo <span class="ticker-sep">·</span></span>
+      <span class="ticker-item">T. Recanto do Bosque <span class="ticker-sep">·</span></span>
     </div>
   </div>
 
   <!-- STATS -->
   <div class="stats-bar reveal">
     <div class="stats-inner">
-      <div>
-        <div class="stat-num">20s</div>
-        <div class="stat-label">Atualização automática</div>
-      </div>
-      <div>
-        <div class="stat-num">100%</div>
-        <div class="stat-label">Gratuito e sem anúncios</div>
-      </div>
-      <div>
-        <div class="stat-num">0</div>
-        <div class="stat-label">Cadastros necessários</div>
-      </div>
+      <div><div class="stat-num">20s</div><div class="stat-label">Atualização automática</div></div>
+      <div><div class="stat-num">100%</div><div class="stat-label">Gratuito e sem anúncios</div></div>
+      <div><div class="stat-num">0</div><div class="stat-label">Cadastros necessários</div></div>
     </div>
   </div>
 
   <!-- FEATURES -->
-  <section class="section">
+  <section class="section" id="funcionalidades">
     <div class="reveal">
       <div class="section-label">Funcionalidades</div>
       <h2 class="section-title">Tudo que você<br>precisa saber</h2>
     </div>
 
     <div class="features-grid">
+
+      <!-- DESTAQUE -->
+      <div class="feature-card highlight reveal">
+        <div class="highlight-inner">
+          <div class="highlight-content">
+            <span class="highlight-tag">Novo</span>
+            <div class="feature-icon" style="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.25);">
+              <img src="https://cademeubau.vercel.app/localizacao.png" alt="Modo Viagem" />
+            </div>
+            <div class="feature-title" style="font-size:26px;">Modo Viagem com GPS</div>
+            <p class="feature-desc">Ative o Modo Viagem em qualquer linha e acompanhe tudo em tempo real: sua posição no mapa, a rota até o ponto, o ônibus se movendo e um contador regressivo. O app avisa se você precisa correr.</p>
+          </div>
+          <div class="highlight-preview">
+            <div style="text-align:center;margin-bottom:8px;">
+              <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);border-radius:100px;padding:3px 9px;">
+                <span style="width:4px;height:4px;background:#fbbf24;border-radius:50%;display:inline-block;"></span>
+                <span style="font-size:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#fbbf24;">Modo Viagem</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:7px;">
+              <div style="flex:1;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:7px 5px;text-align:center;">
+                <div style="font-size:5px;font-weight:700;text-transform:uppercase;color:#3b82f6;letter-spacing:0.1em;">A pé</div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#3b82f6;line-height:1;">5 min</div>
+                <div style="font-size:5px;color:#3b82f6;opacity:0.55;">320m</div>
+              </div>
+              <div style="flex:1;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);border-radius:10px;padding:7px 5px;text-align:center;">
+                <div style="font-size:5px;font-weight:700;text-transform:uppercase;color:#fbbf24;letter-spacing:0.1em;">Ônibus</div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fbbf24;line-height:1;">7 min</div>
+                <div style="font-size:5px;color:#fbbf24;opacity:0.55;">Linha 327</div>
+              </div>
+            </div>
+            <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:7px;text-align:center;">
+              <div style="font-size:8px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:0.1em;">✓ Dá pra ir</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon">⚡</span>
+        <div class="feature-icon">⚡</div>
         <div class="feature-title">Tempo Real</div>
         <p class="feature-desc">Dados atualizados a cada 20 segundos automaticamente. Sem precisar ficar recarregando a página.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon"><img src="https://cademeubau.vercel.app/salvos.png" alt="Favoritos" /></span>
+        <div class="feature-icon"><img src="https://cademeubau.vercel.app/salvos.png" alt="Favoritos" /></div>
         <div class="feature-title">Favoritos</div>
-        <p class="feature-desc">Salve suas linhas favoritas e veja todas de uma vez na aba "Favoritos" com agrupamento por ponto.</p>
+        <p class="feature-desc">Salve suas linhas e veja todas de uma vez com agrupamento por ponto. Dê apelidos às linhas mais usadas.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon"><img src="https://cademeubau.vercel.app/alert_on.png" alt="Alerta de Chegada" /></span>
+        <div class="feature-icon"><img src="https://cademeubau.vercel.app/alert_on.png" alt="Alerta" /></div>
         <div class="feature-title">Alertas de Chegada</div>
-        <p class="feature-desc">Configure para ser notificado quando o ônibus estiver a 2, 5, 10 ou 15 minutos do seu ponto.</p>
+        <p class="feature-desc">Configure para ser notificado quando o ônibus estiver a 2, 5, 10 ou 15 minutos — mesmo com o app fechado.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon"><img src="https://cademeubau.vercel.app/onibus_realtime.png" alt="Rastreamento ao vivo" /></span>
+        <div class="feature-icon"><img src="https://cademeubau.vercel.app/onibus_realtime.png" alt="Rastreamento" /></div>
         <div class="feature-title">Rastreamento ao Vivo</div>
-        <p class="feature-desc">Veja a posição em tempo real dos ônibus no mapa. Acompanhe a chegada do baú com o ônibus se movendo na tela.</p>
+        <p class="feature-desc">Veja a posição dos ônibus no mapa em tempo real. Acompanhe o baú chegando com o ícone se movendo.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_trabalhador.png" alt="Cartão Trabalhador" /></span>
-        <div class="feature-title">Cartão Trabalhador PLT</div>
-        <p class="feature-desc">Consulte o saldo do seu Passe Livre do Trabalhador direto no app pelo CPF, sem precisar acessar outro site.</p>
+        <div class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_trabalhador.png" alt="PLT" /></div>
+        <div class="feature-title">Passe Livre Trabalhador</div>
+        <p class="feature-desc">Consulte o saldo do PLT direto no app pelo CPF, sem precisar acessar outro site.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_estudante.png" alt="Cartão Estudante" /></span>
+        <div class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_estudante.png" alt="Estudante" /></div>
         <div class="feature-title">Passe Livre Estudantil</div>
-        <p class="feature-desc">Veja quantas viagens restam no seu cartão estudantil com aviso automático quando estiver acabando.</p>
+        <p class="feature-desc">Veja quantas viagens restam com aviso automático quando estiver acabando.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon"><img src="https://cademeubau.vercel.app/sitpass.png" alt="SitPass" /></span>
+        <div class="feature-icon"><img src="https://cademeubau.vercel.app/sitpass.png" alt="SitPass" /></div>
         <div class="feature-title">Consulta SitPass</div>
-        <p class="feature-desc">Consulte o saldo do seu Bilhete Único direto no app pelo CPF. Aviso automático quando o saldo estiver abaixo do valor da passagem.</p>
+        <p class="feature-desc">Consulte o saldo do Bilhete Único pelo CPF. Aviso quando o saldo estiver abaixo do valor da passagem.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon">📲</span>
+        <div class="feature-icon">📲</div>
         <div class="feature-title">Instala como App</div>
-        <p class="feature-desc">Funciona como um aplicativo nativo no seu celular, com atualizações automáticas. Sem precisar baixar nada na Play Store.</p>
+        <p class="feature-desc">Funciona como aplicativo nativo no celular. Sem precisar baixar nada na Play Store ou App Store.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon"><img src="https://cademeubau.vercel.app/share.png" alt="Share" /></span>
+        <div class="feature-icon"><img src="https://cademeubau.vercel.app/share.png" alt="Compartilhar" /></div>
         <div class="feature-title">Compartilhe Linhas</div>
-        <p class="feature-desc">Mande o horário de uma linha direto no WhatsApp para alguém. Um toque, link gerado na hora.</p>
+        <p class="feature-desc">Mande o horário de uma linha no WhatsApp em um toque. Link gerado na hora.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon">☀️</span>
+        <div class="feature-icon">☀️</div>
         <div class="feature-title">Tema Claro e Escuro</div>
         <p class="feature-desc">Alterne entre os temas para usar no sol ou à noite sem cansar os olhos.</p>
       </div>
+
       <div class="feature-card reveal">
-        <span class="feature-icon">💬</span>
+        <div class="feature-icon">💬</div>
         <div class="feature-title">Canal de Feedback</div>
-        <p class="feature-desc">Encontrou algum erro ou quer sugerir algo? Tem um botão de feedback direto no app para me avisar na hora.</p>
+        <p class="feature-desc">Encontrou algum erro ou quer sugerir algo? Botão de feedback direto no app para me avisar na hora.</p>
       </div>
+
     </div>
   </section>
 
@@ -746,41 +622,47 @@
       <div class="section-label">Como usar</div>
       <h2 class="section-title">Simples assim</h2>
     </div>
-
     <div class="steps">
       <div class="step reveal">
         <div class="step-num">01</div>
         <div class="step-content">
           <div class="step-title">Encontre o número do ponto</div>
-          <p class="step-desc">O número está na plaquinha fixada no poste do ponto de ônibus. Geralmente tem 5 dígitos, como 31700 ou 42150.</p>
+          <p class="step-desc">O número está na plaquinha no poste. Geralmente tem 5 dígitos, como 31700. Você também pode buscar pelo nome da rua ou bairro no app.</p>
         </div>
       </div>
       <div class="step reveal">
         <div class="step-num">02</div>
         <div class="step-content">
-          <div class="step-title">Digite no app</div>
-          <p class="step-desc">Abra o app, coloque o número do ponto no campo de busca e toque em "Localizar Baú". Pode filtrar também pelo número da linha se quiser.</p>
+          <div class="step-title">Digite no app e busque</div>
+          <p class="step-desc">Abra o app, coloque o número do ponto e toque em "Localizar Baú". Pode filtrar pelo número da linha se quiser.</p>
         </div>
       </div>
       <div class="step reveal">
         <div class="step-num">03</div>
         <div class="step-content">
           <div class="step-title">Veja quando chega</div>
-          <p class="step-desc">Em segundos aparecem todos os ônibus que passam naquele ponto, com o tempo de chegada do próximo e do seguinte.</p>
+          <p class="step-desc">Em segundos aparecem todos os ônibus que passam naquele ponto com o tempo do próximo e do seguinte. Os dados atualizam sozinhos.</p>
         </div>
       </div>
       <div class="step reveal">
         <div class="step-num">04</div>
         <div class="step-content">
-          <div class="step-title">Salve seus favoritos</div>
-          <p class="step-desc">Toque na estrela ★ para salvar a linha. Na próxima vez que abrir o app, seus baús favoritos já aparecem atualizados automaticamente.</p>
+          <div class="step-title">Ative o Modo Viagem</div>
+          <p class="step-desc">Toque no ícone de localização em qualquer linha para entrar no Modo Viagem. Veja no mapa a rota até o ponto, sua posição GPS e o ônibus em tempo real. O app avisa se você precisa correr.</p>
         </div>
       </div>
       <div class="step reveal">
         <div class="step-num">05</div>
         <div class="step-content">
+          <div class="step-title">Salve seus favoritos</div>
+          <p class="step-desc">Toque na estrela ★ para salvar. Na próxima vez que abrir o app, seus baús já aparecem atualizados automaticamente.</p>
+        </div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">06</div>
+        <div class="step-content">
           <div class="step-title">Consulte seu saldo SitPass</div>
-          <p class="step-desc">Na aba SitPass, digite seu CPF para ver o saldo do Bilhete Único, Passe Livre do Trabalhador ou Passe Livre Estudantil. O app avisa automaticamente quando o saldo ou as viagens estiverem acabando.</p>
+          <p class="step-desc">Na aba SitPass, digite seu CPF para ver o saldo do Bilhete Único, PLT ou Passe Livre Estudantil. Aviso automático quando estiver acabando.</p>
         </div>
       </div>
     </div>
@@ -791,12 +673,12 @@
     <h2 class="cta-title reveal">
       Chega de<br><em>perder o baú.</em>
     </h2>
-    <div class="reveal" style="transition-delay: 0.1s;">
-      <a href="https://cademeubau.vercel.app" class="btn-primary" style="font-size:16px; padding:20px 48px;">
+    <div class="reveal" style="transition-delay:0.1s;">
+      <a href="https://cademeubau.vercel.app" class="btn-primary" style="font-size:15px;padding:20px 52px;" id="ctaBtn">
         🚍 Abrir o App agora
       </a>
     </div>
-    <p class="reveal" style="margin-top:20px; font-size:12px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; transition-delay: 0.2s;">
+    <p class="reveal" style="margin-top:20px;font-size:11px;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;transition-delay:0.2s;">
       Gratuito · Sem cadastro · Funciona no celular
     </p>
   </section>
@@ -813,23 +695,68 @@
       <a href="https://www.rmtcgoiania.com.br" target="_blank">RMTC</a>
       <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank">Feedback</a>
     </div>
-    <p style="margin-top:24px; font-size:11px; color:#333;">
-      Feito com ❤️ em Senador Canedo · Não é afiliado à RMTC, EIXO ou SitPass
-    </p>
+    <p class="footer-made">Feito com ❤️ em Senador Canedo · Não é afiliado à RMTC, EIXO ou SitPass</p>
   </footer>
 
+  <!-- PWA INSTALL BANNER -->
+  <div id="pwaBanner" class="hidden">
+    <div class="pwa-icon">
+      <img src="https://cademeubau.vercel.app/logo.png" alt="Cadê meu Baú?" />
+    </div>
+    <div class="pwa-text">
+      <div class="pwa-title">Instalar o app</div>
+      <div class="pwa-sub">Acesso rápido direto da tela inicial</div>
+    </div>
+    <div class="pwa-actions">
+      <button class="pwa-install" id="pwaInstallBtn">Instalar</button>
+      <button class="pwa-dismiss" id="pwaDismissBtn">×</button>
+    </div>
+  </div>
+
   <script>
+    // Scroll reveal
     const reveals = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry, i) => {
         if (entry.isIntersecting) {
-          setTimeout(() => entry.target.classList.add('visible'), i * 80);
+          setTimeout(() => entry.target.classList.add('visible'), i * 55);
           observer.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.1 });
+    }, { threshold: 0.08 });
     reveals.forEach(el => observer.observe(el));
-  </script>
 
+    // PWA Install
+    let deferredPrompt = null;
+    const banner = document.getElementById('pwaBanner');
+    const dismissed = localStorage.getItem('landing_pwa_dismissed');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!dismissed) setTimeout(() => banner.classList.remove('hidden'), 3500);
+    });
+
+    window.addEventListener('appinstalled', () => {
+      banner.classList.add('hidden');
+      deferredPrompt = null;
+    });
+
+    document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') banner.classList.add('hidden');
+        deferredPrompt = null;
+      } else {
+        window.location.href = 'https://cademeubau.vercel.app';
+      }
+    });
+
+    document.getElementById('pwaDismissBtn')?.addEventListener('click', () => {
+      banner.classList.add('hidden');
+      localStorage.setItem('landing_pwa_dismissed', 'true');
+    });
+  </script>
 </body>
 </html>
