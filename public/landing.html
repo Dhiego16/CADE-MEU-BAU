@@ -99,7 +99,7 @@
       border: 1px solid var(--border-y); background: rgba(251,191,36,0.06);
       color: var(--yellow); font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
       padding: 8px 18px; border-radius: 100px; margin-bottom: 36px;
-      animation: fadeDown 0.6s ease both;
+      animation: fadeDown 0.6s ease forwards;
     }
     .badge-dot { width: 6px; height: 6px; background: var(--yellow); border-radius: 50%; animation: pulse 2s infinite; }
 
@@ -107,17 +107,17 @@
       font-family: 'Bebas Neue', sans-serif;
       font-size: clamp(80px, 16vw, 180px);
       line-height: 0.88; letter-spacing: -0.02em;
-      animation: fadeDown 0.6s 0.1s ease both;
+      animation: fadeDown 0.6s 0.1s ease forwards;
     }
     .hero-title em { color: var(--yellow); font-style: normal; display: block; }
 
     .hero-sub {
       font-size: clamp(15px, 2.5vw, 19px); color: var(--muted2); font-weight: 500;
       max-width: 460px; line-height: 1.65; margin: 28px auto 52px;
-      animation: fadeDown 0.6s 0.2s ease both;
+      animation: fadeDown 0.6s 0.2s ease forwards;
     }
 
-    .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; animation: fadeDown 0.6s 0.3s ease both; }
+    .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; animation: fadeDown 0.6s 0.3s ease forwards; }
 
     .btn-primary {
       display: inline-flex; align-items: center; gap: 10px;
@@ -142,7 +142,7 @@
     .mockup-wrap {
       margin-top: 80px;
       display: flex; align-items: flex-start; justify-content: center; gap: 20px;
-      animation: fadeUp 0.8s 0.4s ease both, float 7s 1.5s ease-in-out infinite;
+      animation: fadeUp 0.8s 0.4s ease forwards, float 7s 1.5s ease-in-out infinite;
     }
 
     .mockup-phone {
@@ -330,6 +330,9 @@
     @keyframes ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
     @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
     @keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(16px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+
+    /* Garante que elementos com delay não fiquem visíveis antes da animação */
+    .hero-badge, .hero-title, .hero-sub, .hero-cta, .mockup-wrap { opacity: 0; }
 
     @media (max-width: 640px) {
       nav { padding: 14px 20px; }
@@ -716,6 +719,12 @@
   </div>
 
   <script>
+    // Fallback: garante que o hero aparece mesmo se a fonte não carregar
+    const heroEls = document.querySelectorAll('.hero-badge, .hero-title, .hero-sub, .hero-cta, .mockup-wrap');
+    const showHero = () => heroEls.forEach(el => { el.style.opacity = ''; });
+    document.fonts.ready.then(showHero);
+    setTimeout(showHero, 1500); // fallback máximo de 1.5s
+
     // Scroll reveal
     const reveals = document.querySelectorAll('.reveal');
     const observer = new IntersectionObserver((entries) => {
