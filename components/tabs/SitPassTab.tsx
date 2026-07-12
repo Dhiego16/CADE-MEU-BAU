@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ThemeTokens } from '../../types';
 import { haptic } from '../../utils';
 import { ICONS } from '../../utils/icons';
