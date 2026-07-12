@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { BusLine } from '../types';
 import { haptic } from '../utils';
 
-const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjhmNjlhZmYwMzIyYzRmYjg5YzdkNGNhY2M4NjA5N2I0IiwiaCI6Im11cm11cjY0In0=';
-
 export interface TripTarget {
   stopId: string;
   stopNome: string;
@@ -60,7 +58,7 @@ const calcDistM = (lat1: number, lng1: number, lat2: number, lng2: number): numb
 async function fetchRoute(userLat: number, userLng: number, stopLat: number, stopLng: number): Promise<RouteInfo | null> {
   try {
     const res = await fetch(
-      `https://api.openrouteservice.org/v2/directions/foot-walking?api_key=${ORS_API_KEY}&start=${userLng},${userLat}&end=${stopLng},${stopLat}`
+      `/api/route?startLng=${userLng}&startLat=${userLat}&endLng=${stopLng}&endLat=${stopLat}`
     );
     if (!res.ok) return null;
     const data = await res.json();
