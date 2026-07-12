@@ -98,6 +98,18 @@ export interface SearchResult {
 
 export type ActiveTab = 'search' | 'favs' | 'sitpass' | 'map';
 
+// ── Meu Trajeto (rotinas fixas) ───────────────────────────────────────────
+export interface RoutineItem {
+  id: string;
+  label: string;          // ex: "Casa → Trabalho"
+  stopId: string;
+  lineNumber: string;
+  destination: string;
+  days: number[];         // 0=domingo ... 6=sábado
+  startTime: string;      // "06:30"
+  endTime: string;        // "07:30"
+}
+
 export interface LiveTrackingLine {
   lineNumber: string;
   stopId: string;
