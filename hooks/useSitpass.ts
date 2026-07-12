@@ -19,6 +19,8 @@ export function useSitpass() {
   const [cartoes, setCartoes] = useState<CartaoInfo[]>([]);
   const [cartoesLoading, setCartoesLoading] = useState(false);
   const [cartoesErro, setCartoesErro] = useState<string | null>(null);
+  // true quando o CPF consultado só retornou 1 cartão (pula direto pro saldo)
+  const [cartaoUnico, setCartaoUnico] = useState(false);
 
   // Etapa 2 — saldo do cartão escolhido
   const [saldoData, setSaldoData] = useState<SaldoData | null>(null);
@@ -29,30 +31,15 @@ export function useSitpass() {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_saldo_historico') || 'null'); } catch { return null; }
   });
 
-  const handleCpfChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCpf(e.target.value);
-    setCpfSitpass(formatted);
-    setCpfError(null);
-    // limpa resultados anteriores ao editar CPF
-    setCartoes([]);
-    setSaldoData(null);
-    setSaldoErro(null);
-    setCartoesErro(null);
-  }, []);
-
-  // ── Etapa 1: busca lista de cartões ──────────────────────────────────────
-  const consultarCartoes = useCallback(async () => {
-    const cpfLimpo = cpfSitpass.replace(/\D/g, '');
-    if (!cpfLimpo) { setCpfError('Digite seu CPF.'); return; }
-    if (cpfLimpo.length !== 11) { setCpfError('CPF incompleto.'); return; }
-    if (!isValidCpf(cpfLimpo)) { setCpfError('CPF inválido. Verifique os dígitos.'); return; }
-
+  // ── Etapa 1: busca lista de cartões (função interna, recebe CPF já limpo) ──
+  const _consultarCartoesComCpf = useCallback(async (cpfLimpo: string) => {
     setCartoesLoading(true);
     setCartoesErro(null);
     setCartoes([]);
     setSaldoData(null);
     setSaldoErro(null);
     setCpfError(null);
+    setCartaoUnico(false);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
@@ -67,8 +54,10 @@ export function useSitpass() {
         return;
       }
 
-      // Se só tem 1 cartão, já pula direto para o saldo
+      // Se só tem 1 cartão, já pula direto para o saldo e marca como único
+      // (não faz sentido mostrar depois um botão de "consultar de novo")
       if (data.total === 1) {
+        setCartaoUnico(true);
         await _buscarSaldo(cpfLimpo, 0);
       } else {
         setCartoes(data.cartoes);
@@ -80,7 +69,38 @@ export function useSitpass() {
     } finally {
       setCartoesLoading(false);
     }
-  }, [cpfSitpass]); // eslint-disable-line
+  }, []); // eslint-disable-line
+
+  const handleCpfChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCpf(e.target.value);
+    setCpfSitpass(formatted);
+    setCpfError(null);
+    // limpa resultados anteriores ao editar CPF
+    setCartoes([]);
+    setSaldoData(null);
+    setSaldoErro(null);
+    setCartoesErro(null);
+    setCartaoUnico(false);
+
+    const cpfLimpo = formatted.replace(/\D/g, '');
+    // Assim que o CPF estiver completo (11 dígitos), valida e já dispara a busca
+    if (cpfLimpo.length === 11) {
+      if (isValidCpf(cpfLimpo)) {
+        _consultarCartoesComCpf(cpfLimpo);
+      } else {
+        setCpfError('CPF inválido. Verifique os dígitos.');
+      }
+    }
+  }, [_consultarCartoesComCpf]);
+
+  // Mantido como fallback manual (botão "Consultar Saldo" / tecla Enter)
+  const consultarCartoes = useCallback(() => {
+    const cpfLimpo = cpfSitpass.replace(/\D/g, '');
+    if (!cpfLimpo) { setCpfError('Digite seu CPF.'); return; }
+    if (cpfLimpo.length !== 11) { setCpfError('CPF incompleto.'); return; }
+    if (!isValidCpf(cpfLimpo)) { setCpfError('CPF inválido. Verifique os dígitos.'); return; }
+    _consultarCartoesComCpf(cpfLimpo);
+  }, [cpfSitpass, _consultarCartoesComCpf]);
 
   // ── Etapa 2: busca saldo do cartão escolhido ─────────────────────────────
   const _buscarSaldo = useCallback(async (cpfLimpo: string, cartaoIndex: number) => {
@@ -137,6 +157,7 @@ export function useSitpass() {
     cartoes,
     cartoesLoading,
     cartoesErro,
+    cartaoUnico,
     consultarSaldo: consultarCartoes, // mantém mesmo nome para o botão não mudar
     // etapa 2
     saldoData,
