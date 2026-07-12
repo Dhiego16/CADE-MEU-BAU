@@ -1,11 +1,16 @@
 import React from 'react';
-import { BusLine, FavoriteItem, ThemeTokens } from '../../types';
+import { BusLine, FavoriteItem, RoutineItem, ThemeTokens } from '../../types';
 import { haptic } from '../../utils';
 import BusLineCard from '../BusLineCard';
 import SkeletonCard from '../SkeletonCard';
 import { BusLineCardProps } from '../BusLineCard';
+import RoutineManager from '../RoutineManager';
 
 interface FavsTabProps {
+  routines: RoutineItem[];
+  onAddRoutine: (routine: Omit<RoutineItem, 'id'>) => void;
+  onUpdateRoutine: (id: string, patch: Partial<Omit<RoutineItem, 'id'>>) => void;
+  onRemoveRoutine: (id: string) => void;
   favorites: FavoriteItem[];
   favoriteBusLines: BusLine[];
   displayedFavLines: BusLine[];
@@ -24,6 +29,7 @@ interface FavsTabProps {
 }
 
 const FavsTab: React.FC<FavsTabProps> = ({
+  routines, onAddRoutine, onUpdateRoutine, onRemoveRoutine,
   favorites, favoriteBusLines, displayedFavLines, groupedFavLines,
   isFavoritesLoading, destFilter, stopId, removingFavKey,
   lightTheme, theme, cardProps, parseTime,
@@ -43,6 +49,16 @@ const FavsTab: React.FC<FavsTabProps> = ({
         </button>
       )}
     </div>
+
+    <RoutineManager
+      routines={routines}
+      favorites={favorites}
+      theme={theme}
+      lightTheme={lightTheme}
+      onAdd={onAddRoutine}
+      onUpdate={onUpdateRoutine}
+      onRemove={onRemoveRoutine}
+    />
 
     {favoriteBusLines.length > 0 && (
       <div className="relative px-1">
