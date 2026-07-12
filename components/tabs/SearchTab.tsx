@@ -1,5 +1,5 @@
 import React from 'react';
-import { BusLine, ThemeTokens } from '../../types';
+import { BusLine, RoutineItem, ThemeTokens } from '../../types';
 import { haptic } from '../../utils';
 import BusLineCard from '../BusLineCard';
 import SkeletonCard from '../SkeletonCard';
@@ -7,6 +7,8 @@ import MiniMap from '../MiniMap';
 import { BusLineCardProps } from '../BusLineCard';
 import { NearbyStop } from '../../hooks/useNearbyStops';
 import StopSearchAutocomplete from '../StopSearchAutocomplete';
+import RoutineCard from '../RoutineCard';
+import { DepartureStatus } from '../../hooks/useRoutineTracking';
 
 interface MiniMapConfig {
   key: string;
@@ -17,7 +19,21 @@ interface MiniMapConfig {
   destination: string;
 }
 
+interface RoutineTrackingProps {
+  nextArrival?: string;
+  subsequentArrival?: string;
+  destination?: string;
+  isLoading: boolean;
+  walkingMinutes: number | null;
+  departureStatus: DepartureStatus;
+  locationDenied: boolean;
+  refreshWalking: () => void;
+}
+
 interface SearchTabProps {
+  activeRoutine: RoutineItem | null;
+  routineTracking: RoutineTrackingProps;
+  onStartRoutineTrip: (line: BusLine) => void;
   stopId: string;
   lineFilter: string;
   destFilter: string;
@@ -85,6 +101,7 @@ const NearbyStopCard: React.FC<{
 );
 
 const SearchTab: React.FC<SearchTabProps> = ({
+  activeRoutine, routineTracking, onStartRoutineTrip,
   stopId, lineFilter, destFilter,
   busLines, displayedBusLines, isLoading, errorMsg,
   searchHistory, liveLineMap, activeMiniMap, miniMapRefreshKey,
@@ -107,6 +124,24 @@ const SearchTab: React.FC<SearchTabProps> = ({
 
   return (
     <div className="page-enter space-y-5">
+      {/* ── Trajeto ativo ──────────────────────────────────────────────────── */}
+      {activeRoutine && (
+        <RoutineCard
+          routine={activeRoutine}
+          theme={theme}
+          lightTheme={lightTheme}
+          nextArrival={routineTracking.nextArrival}
+          subsequentArrival={routineTracking.subsequentArrival}
+          destination={routineTracking.destination}
+          isLoading={routineTracking.isLoading}
+          walkingMinutes={routineTracking.walkingMinutes}
+          departureStatus={routineTracking.departureStatus}
+          locationDenied={routineTracking.locationDenied}
+          onRefreshWalking={routineTracking.refreshWalking}
+          onStartTrip={onStartRoutineTrip}
+        />
+      )}
+
       {/* Search form */}
       <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
   <div className="flex gap-2">
