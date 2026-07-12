@@ -32,6 +32,32 @@ interface SitpassHook {
   consultarSaldo: () => void;
   selecionarCartao: (index: number) => void;
   handleCpfChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  // favorito (cartão salvo para uso pessoal — sempre atualiza sozinho)
+  favorito: {
+    cpf: string;
+    cartaoIndex: number;
+    cartaoNumero: string;
+    cartaoDescricao: string;
+    tipoParceria: string;
+  } | null;
+  favoritoSaldo: {
+    cpf: string;
+    tipoParceria: string;
+    cartaoNumero: string;
+    cartaoDescricao: string;
+    tipo_saldo: 'monetario' | 'viagens';
+    saldo?: string;
+    saldo_formatado: string;
+    viagens_usadas?: number;
+    viagens_total?: number;
+    viagens_restantes?: number;
+  } | null;
+  favoritoLoading: boolean;
+  favoritoErro: string | null;
+  favoritoAtualizadoAs: string | null;
+  salvarComoFavorito: () => void;
+  removerFavorito: () => void;
+  atualizarFavorito: () => void;
 }
 
 interface SitPassTabProps {
@@ -131,6 +157,84 @@ const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) =
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="page-enter space-y-5">
+
+      {/* ── Cartão favorito (uso pessoal) — sempre atualiza sozinho ao abrir ── */}
+      {sitpass.favorito ? (
+        <div className={`${theme.card} border rounded-[2.5rem] p-6 space-y-4`} style={{ animation: 'slideUp 0.3s ease-out' }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <img src={ICONS.favorito} alt="" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0 }} />
+              <p className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext} opacity-60 truncate`}>Seu cartão</p>
+            </div>
+            <div className="flex items-center gap-4 shrink-0">
+              <button
+                onClick={() => sitpass.atualizarFavorito()}
+                disabled={sitpass.favoritoLoading}
+                className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext} opacity-60 active:opacity-100 disabled:opacity-30 transition-opacity`}
+              >
+                {sitpass.favoritoLoading ? 'Atualizando...' : '↻ Atualizar'}
+              </button>
+              <button
+                onClick={() => { haptic(20); sitpass.removerFavorito(); }}
+                className="text-[9px] font-black uppercase tracking-widest text-red-400/70 active:text-red-400 transition-colors"
+              >
+                Remover
+              </button>
+            </div>
+          </div>
+
+          {sitpass.favoritoLoading && !sitpass.favoritoSaldo && (
+            <div className="flex items-center justify-center gap-3 py-6">
+              <div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+              <p className={`text-[10px] font-black uppercase tracking-widest ${theme.subtext}`}>Atualizando...</p>
+            </div>
+          )}
+
+          {sitpass.favoritoErro && !sitpass.favoritoSaldo && (
+            <div className="border border-red-500/30 bg-red-500/10 text-red-400 p-4 rounded-2xl flex items-start gap-3">
+              <img src="/alerta.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0 }} />
+              <p className="text-[9px] font-bold opacity-80">{sitpass.favoritoErro}</p>
+            </div>
+          )}
+
+          {sitpass.favoritoSaldo && (
+            <>
+              <div className="flex items-center gap-3">
+                <img src={iconePorTipo(sitpass.favoritoSaldo.tipoParceria)} alt="" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
+                <div className="flex-1 min-w-0">
+                  <p className={`font-black text-sm uppercase ${theme.saldoText} truncate`}>
+                    {formatarDescricaoCartao(sitpass.favoritoSaldo.cartaoDescricao, sitpass.favoritoSaldo.tipoParceria)}
+                  </p>
+                  <p className={`text-[9px] font-bold ${theme.subtext}`}>Nº {sitpass.favoritoSaldo.cartaoNumero}</p>
+                </div>
+                {sitpass.favoritoSaldo.tipo_saldo === 'viagens' ? (
+                  <span className="text-2xl font-black text-yellow-400 shrink-0 text-right">
+                    {sitpass.favoritoSaldo.viagens_restantes}
+                    <span className={`text-xs font-black ${theme.subtext} opacity-50`}>/{sitpass.favoritoSaldo.viagens_total}</span>
+                  </span>
+                ) : (
+                  <span className="text-2xl font-black text-yellow-400 shrink-0">{sitpass.favoritoSaldo.saldo_formatado}</span>
+                )}
+              </div>
+              {sitpass.favoritoAtualizadoAs && (
+                <p className={`text-[8px] font-black uppercase tracking-widest ${theme.subtext} opacity-40`}>
+                  Atualizado às {sitpass.favoritoAtualizadoAs}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <div className={`border border-dashed ${lightTheme ? 'border-gray-300 bg-gray-50' : 'border-white/15 bg-white/5'} rounded-[2rem] p-5 flex items-start gap-3`}>
+          <img src={ICONS.favorito} alt="" style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0, opacity: 0.6, marginTop: 2 }} />
+          <div>
+            <p className={`font-black text-[10px] uppercase tracking-widest ${theme.text}`}>Cadastre seu cartão</p>
+            <p className={`text-[9px] font-bold leading-relaxed ${theme.subtext} mt-1`}>
+              Digite seu CPF abaixo e, depois de ver o saldo, toque em "Definir como favorito". Assim ele atualiza sozinho toda vez que você abrir o app.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── CPF input ──────────────────────────────────────────────────────── */}
       <div className={`${theme.inputWrap} border p-5 rounded-[2.5rem] shadow-2xl space-y-4`}>
@@ -323,6 +427,32 @@ const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) =
               )}
             </div>
           </div>
+
+          {/* ── Favoritar este cartão (uso pessoal) ────────────────────────── */}
+          {(() => {
+            const cpfLimpo = sitpass.cpfSitpass.replace(/\D/g, '');
+            const jaEhFavorito = !!sitpass.favorito
+              && sitpass.favorito.cpf === cpfLimpo
+              && sitpass.favorito.cartaoNumero === sitpass.saldoData!.cartaoNumero;
+
+            if (jaEhFavorito) {
+              return (
+                <div className="flex items-center justify-center gap-2 py-1">
+                  <img src={ICONS.favorito} alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} />
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${theme.subtext} opacity-50`}>Este é o seu cartão favorito</p>
+                </div>
+              );
+            }
+            return (
+              <button
+                onClick={() => { haptic(30); sitpass.salvarComoFavorito(); }}
+                className="w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-yellow-400/40 text-yellow-400 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <img src={ICONS.noFavorito} alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} />
+                Definir como cartão favorito
+              </button>
+            );
+          })()}
 
           {/* Botão voltar — só faz sentido quando o CPF tem mais de 1 cartão.
               Se só existe 1, recarregaria a mesma consulta à toa, então não exibe. */}
