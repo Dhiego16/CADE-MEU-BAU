@@ -14,6 +14,7 @@ interface SitpassHook {
   cartoes: Array<{ index: number; tipoParceria: string; cartaoDescricao: string; cartaoNumero: string }>;
   cartoesLoading: boolean;
   cartoesErro: string | null;
+  cartaoUnico: boolean;
   saldoData: {
     cpf: string;
     tipoParceria: string;
@@ -72,26 +73,36 @@ const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) =
 
   // ── Wrappers com side-effects locais ────────────────────────────────────────
 
-  const handleConsultar = useCallback(() => {
-    if (sitpass.cpfError || sitpass.cpfSitpass.length < 14) return;
-    sitpass.consultarSaldo();
-    setConsultadoAs(agora());
+  // Atualiza o timestamp "Consultado às" sempre que um saldo novo chega —
+  // cobre tanto o clique manual quanto a busca automática ao completar o CPF.
+  useEffect(() => {
+    if (sitpass.saldoData) setConsultadoAs(agora());
+  }, [sitpass.saldoData]);
 
-    // Salva CPF no histórico (máx 3, sem duplicatas)
+  // Salva o CPF no histórico assim que uma consulta é concluída com sucesso
+  useEffect(() => {
+    if (!sitpass.saldoData) return;
     const cpf = sitpass.cpfSitpass;
+    if (!cpf) return;
     setCpfsSalvos(prev => {
+      if (prev[0] === cpf) return prev;
       const sem = prev.filter(c => c !== cpf);
       const novo = [cpf, ...sem].slice(0, 3);
       try { localStorage.setItem('sitpass_cpfs_salvos', JSON.stringify(novo)); } catch { /* */ }
       return novo;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sitpass.saldoData]);
+
+  const handleConsultar = useCallback(() => {
+    if (sitpass.cpfError || sitpass.cpfSitpass.length < 14) return;
+    sitpass.consultarSaldo();
   }, [sitpass]);
 
   const handleVoltarParaCartoes = useCallback(() => {
     // Reseta apenas saldoData via consultarSaldo sem recarregar cartões —
     // se o hook não expõe reset direto, re-consulta é o caminho mais seguro.
     sitpass.consultarSaldo();
-    setConsultadoAs(agora());
   }, [sitpass]);
 
   const handleCpfSalvo = useCallback((cpf: string) => {
@@ -190,7 +201,7 @@ const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) =
           {sitpass.cartoes.map(cartao => (
             <button
               key={cartao.index}
-              onClick={() => { sitpass.selecionarCartao(cartao.index); setConsultadoAs(agora()); }}
+              onClick={() => sitpass.selecionarCartao(cartao.index)}
               disabled={sitpass.saldoLoading}
               className={`w-full ${theme.card} border rounded-[2rem] p-5 flex items-center gap-4 active:scale-95 transition-all hover:border-yellow-400/50 disabled:opacity-50`}
             >
@@ -313,14 +324,17 @@ const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) =
             </div>
           </div>
 
-          {/* Botão voltar — semântica clara: volta para re-seleção sem nova requisição de rede se houver múltiplos cartões, caso contrário re-consulta */}
-          <button
-            onClick={handleVoltarParaCartoes}
-            disabled={isLoading}
-            className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border ${lightTheme ? 'border-gray-300 text-gray-500' : 'border-white/10 text-slate-500'} active:scale-95 transition-all disabled:opacity-50`}
-          >
-            ← {sitpass.cartoes.length > 1 ? 'Escolher outro cartão' : 'Consultar novamente'}
-          </button>
+          {/* Botão voltar — só faz sentido quando o CPF tem mais de 1 cartão.
+              Se só existe 1, recarregaria a mesma consulta à toa, então não exibe. */}
+          {!sitpass.cartaoUnico && (
+            <button
+              onClick={handleVoltarParaCartoes}
+              disabled={isLoading}
+              className={`w-full py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border ${lightTheme ? 'border-gray-300 text-gray-500' : 'border-white/10 text-slate-500'} active:scale-95 transition-all disabled:opacity-50`}
+            >
+              ← Escolher outro cartão
+            </button>
+          )}
         </div>
       )}
 
