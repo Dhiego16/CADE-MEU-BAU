@@ -9,6 +9,7 @@ import { NearbyStop } from '../../hooks/useNearbyStops';
 import StopSearchAutocomplete from '../StopSearchAutocomplete';
 import RoutineCard from '../RoutineCard';
 import { DepartureStatus } from '../../hooks/useRoutineTracking';
+import SaldoBaixoAviso from '../SaldoBaixoAviso';
 
 interface MiniMapConfig {
   key: string;
@@ -53,6 +54,12 @@ interface SearchTabProps {
   selectedStop: { id: string; nome: string } | null;
   nearbyStops: NearbyStop[];
   locationStatus: 'idle' | 'loading' | 'granted' | 'denied' | 'unavailable';
+  favoritoSaldo: {
+    tipo_saldo: 'monetario' | 'viagens';
+    saldo?: string;
+    saldo_formatado: string;
+    viagens_restantes?: number;
+  } | null;
   onStopIdChange: (val: string) => void;
   onLineFilterChange: (val: string) => void;
   onDestFilterChange: (val: string) => void;
@@ -106,7 +113,7 @@ const SearchTab: React.FC<SearchTabProps> = ({
   busLines, displayedBusLines, isLoading, errorMsg,
   searchHistory, liveLineMap, activeMiniMap, miniMapRefreshKey,
   lightTheme, theme, cardProps, parseTime, getStopCoords, selectedStop,
-  nearbyStops, locationStatus,
+  nearbyStops, locationStatus, favoritoSaldo,
   onStopIdChange, onLineFilterChange, onDestFilterChange,
   onSearch, onHistorySearch, onNearbyStopSearch, onRequestLocation,
   onToggleMiniMap, onCloseMiniMap,
@@ -114,6 +121,10 @@ const SearchTab: React.FC<SearchTabProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') onSearch(); };
 
   const showNearbySection = busLines.length === 0 && !isLoading && !errorMsg;
+
+  // Aviso de saldo baixo: aparece ao abrir direto num trajeto favorito ou
+  // assim que uma busca de horário traz resultados.
+  const mostrarAvisoSaldo = !!activeRoutine || (!isLoading && displayedBusLines.length > 0);
 
   const errors: Record<string, { icon: string; title: string; desc: string; color: string }> = {
     offline:      { icon: '/informacao.png', title: 'Sem conexão',         desc: 'Verifique sua internet e tente novamente.',               color: 'border-slate-500/30 text-slate-400 bg-slate-500/10' },
@@ -124,6 +135,9 @@ const SearchTab: React.FC<SearchTabProps> = ({
 
   return (
     <div className="page-enter space-y-5">
+      {/* ── Aviso de saldo baixo (cartão SitPass favorito) ────────────────── */}
+      {mostrarAvisoSaldo && <SaldoBaixoAviso favoritoSaldo={favoritoSaldo} theme={theme} />}
+
       {/* ── Trajeto ativo ──────────────────────────────────────────────────── */}
       {activeRoutine && (
         <RoutineCard
