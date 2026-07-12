@@ -2,10 +2,9 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ThemeTokens } from '../../types';
 import { haptic } from '../../utils';
 import { ICONS } from '../../utils/icons';
+import { TARIFA_INTEIRA, parseSaldoMonetario } from '../../utils/sitpass';
 
-// ── Tarifa RMTC — atualizar manualmente quando mudar ──────────────────────────
-const TARIFA_INTEIRA = 4.30;
-const TARIFA_MINIMA  = TARIFA_INTEIRA / 2; // meia-passagem
+const TARIFA_MINIMA = TARIFA_INTEIRA / 2; // meia-passagem
 
 // Re-use the hook's return shape via duck-typing to avoid circular imports
 interface SitpassHook {
@@ -75,12 +74,6 @@ const iconePorTipo = (tipoParceria: string) => {
   if (tipoParceria === 'ESTUDANTE') return ICONS.cartaoEstudante;
   if (tipoParceria === 'PLT')       return ICONS.cartaoTrabalhador;
   return ICONS.sitpass;
-};
-
-/** Parse seguro do saldo monetário brasileiro (ex: "1.234,56" → 1234.56) */
-const parseSaldo = (raw: string | undefined): number => {
-  if (!raw) return 0;
-  return parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0;
 };
 
 /** Timestamp legível da última consulta */
@@ -391,7 +384,7 @@ const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) =
                 <span className="text-4xl font-black text-yellow-400">{sitpass.saldoData.saldo_formatado}</span>
               </div>
               {(() => {
-                const n = parseSaldo(sitpass.saldoData.saldo);
+                const n = parseSaldoMonetario(sitpass.saldoData.saldo);
                 if (n < TARIFA_MINIMA) return (
                   <div className="border border-red-500/30 bg-red-500/10 rounded-2xl px-4 py-3 flex items-start gap-2">
                     <img src="/alerta.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginTop: 2 }} />
