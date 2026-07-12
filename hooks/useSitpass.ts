@@ -1,14 +1,25 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { SaldoData, SaldoHistorico } from '../types';
 import { formatCpf, isValidCpf } from '../utils';
 
 const API_URL = 'https://sitpass.cj22233333.workers.dev';
+const FAVORITO_KEY = 'cade_meu_bau_sitpass_favorito';
 
 export interface CartaoInfo {
   index: number;
   tipoParceria: string;
   cartaoDescricao: string;
   cartaoNumero: string;
+}
+
+// Cartão SitPass salvo para uso pessoal — igual a uma "linha favorita",
+// sempre atualiza sozinho quando a aba abre, sem precisar digitar o CPF de novo.
+export interface CartaoFavorito {
+  cpf: string; // somente dígitos
+  cartaoIndex: number;
+  cartaoNumero: string;
+  cartaoDescricao: string;
+  tipoParceria: string;
 }
 
 export function useSitpass() {
@@ -26,10 +37,21 @@ export function useSitpass() {
   const [saldoData, setSaldoData] = useState<SaldoData | null>(null);
   const [saldoLoading, setSaldoLoading] = useState(false);
   const [saldoErro, setSaldoErro] = useState<string | null>(null);
+  // guarda o índice do último cartão consultado, pra poder favoritar depois
+  const ultimoIndexRef = useRef<number>(0);
 
   const [saldoHistorico, setSaldoHistorico] = useState<SaldoHistorico | null>(() => {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_saldo_historico') || 'null'); } catch { return null; }
   });
+
+  // ── Cartão favorito (uso pessoal, persistente) ───────────────────────────
+  const [favorito, setFavorito] = useState<CartaoFavorito | null>(() => {
+    try { return JSON.parse(localStorage.getItem(FAVORITO_KEY) || 'null'); } catch { return null; }
+  });
+  const [favoritoSaldo, setFavoritoSaldo] = useState<SaldoData | null>(null);
+  const [favoritoLoading, setFavoritoLoading] = useState(false);
+  const [favoritoErro, setFavoritoErro] = useState<string | null>(null);
+  const [favoritoAtualizadoAs, setFavoritoAtualizadoAs] = useState<string | null>(null);
 
   // ── Etapa 1: busca lista de cartões (função interna, recebe CPF já limpo) ──
   const _consultarCartoesComCpf = useCallback(async (cpfLimpo: string) => {
@@ -104,6 +126,7 @@ export function useSitpass() {
 
   // ── Etapa 2: busca saldo do cartão escolhido ─────────────────────────────
   const _buscarSaldo = useCallback(async (cpfLimpo: string, cartaoIndex: number) => {
+    ultimoIndexRef.current = cartaoIndex;
     setSaldoLoading(true);
     setSaldoErro(null);
     setSaldoData(null);
@@ -148,6 +171,72 @@ export function useSitpass() {
     _buscarSaldo(cpfLimpo, index);
   }, [cpfSitpass, _buscarSaldo]);
 
+  // ── Favorito: salvar / remover / atualizar ───────────────────────────────
+
+  // Marca o cartão consultado agora (saldoData atual) como favorito
+  const salvarComoFavorito = useCallback(() => {
+    if (!saldoData) return;
+    const cpfLimpo = cpfSitpass.replace(/\D/g, '');
+    const novo: CartaoFavorito = {
+      cpf: cpfLimpo,
+      cartaoIndex: ultimoIndexRef.current,
+      cartaoNumero: saldoData.cartaoNumero,
+      cartaoDescricao: saldoData.cartaoDescricao,
+      tipoParceria: saldoData.tipoParceria,
+    };
+    try { localStorage.setItem(FAVORITO_KEY, JSON.stringify(novo)); } catch { /* */ }
+    setFavorito(novo);
+    setFavoritoSaldo(saldoData);
+    setFavoritoErro(null);
+    setFavoritoAtualizadoAs(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+  }, [saldoData, cpfSitpass]);
+
+  const removerFavorito = useCallback(() => {
+    try { localStorage.removeItem(FAVORITO_KEY); } catch { /* */ }
+    setFavorito(null);
+    setFavoritoSaldo(null);
+    setFavoritoErro(null);
+    setFavoritoAtualizadoAs(null);
+  }, []);
+
+  // Busca o saldo atualizado do cartão favorito salvo
+  const atualizarFavorito = useCallback(async (fav?: CartaoFavorito) => {
+    const alvo = fav ?? favorito;
+    if (!alvo) return;
+
+    setFavoritoLoading(true);
+    setFavoritoErro(null);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const res = await fetch(`${API_URL}/saldo?cpf=${alvo.cpf}&cartaoIndex=${alvo.cartaoIndex}`, { signal: controller.signal });
+      clearTimeout(timeout);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setFavoritoErro(data.erro ?? 'Erro ao atualizar cartão favorito.');
+        return;
+      }
+
+      setFavoritoSaldo(data);
+      setFavoritoAtualizadoAs(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    } catch (err: unknown) {
+      clearTimeout(timeout);
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      setFavoritoErro(isAbort ? 'Tempo esgotado. Tente novamente.' : 'Sem conexão. Tente novamente.');
+    } finally {
+      setFavoritoLoading(false);
+    }
+  }, [favorito]);
+
+  // Assim que a aba/app abre, se já existe cartão favorito salvo, atualiza sozinho
+  useEffect(() => {
+    if (favorito) atualizarFavorito(favorito);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return {
     cpfSitpass,
     setCpfSitpass,
@@ -165,5 +254,14 @@ export function useSitpass() {
     saldoErro,
     selecionarCartao,
     handleCpfChange,
+    // favorito
+    favorito,
+    favoritoSaldo,
+    favoritoLoading,
+    favoritoErro,
+    favoritoAtualizadoAs,
+    salvarComoFavorito,
+    removerFavorito,
+    atualizarFavorito,
   };
 }
