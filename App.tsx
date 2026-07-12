@@ -568,6 +568,7 @@ const App: React.FC = () => {
             onCloseMiniMap={() => setActiveMiniMap(null)}
             nearbyStops={nearbyStops}
             locationStatus={locationStatus}
+            favoritoSaldo={sitpass.favoritoSaldo}
             onRequestLocation={requestLocation}
             onNearbyStopSearch={(id) => {
               setStopId(id);
@@ -597,6 +598,7 @@ const App: React.FC = () => {
             theme={theme}
             cardProps={cardProps}
             parseTime={parseTime}
+            favoritoSaldo={sitpass.favoritoSaldo}
             onDestFilterChange={setDestFilter}
             onRefresh={loadFavoritesWithCurrentFavs}
             onShareStop={shareStop}
