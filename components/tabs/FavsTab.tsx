@@ -5,6 +5,7 @@ import BusLineCard from '../BusLineCard';
 import SkeletonCard from '../SkeletonCard';
 import { BusLineCardProps } from '../BusLineCard';
 import RoutineManager from '../RoutineManager';
+import SaldoBaixoAviso from '../SaldoBaixoAviso';
 
 interface FavsTabProps {
   routines: RoutineItem[];
@@ -23,6 +24,12 @@ interface FavsTabProps {
   theme: ThemeTokens;
   cardProps: Omit<BusLineCardProps, 'line' | 'staggerIndex'>;
   parseTime: (t?: string) => number;
+  favoritoSaldo: {
+    tipo_saldo: 'monetario' | 'viagens';
+    saldo?: string;
+    saldo_formatado: string;
+    viagens_restantes?: number;
+  } | null;
   onDestFilterChange: (val: string) => void;
   onRefresh: () => void;
   onShareStop: (pontoId: string, nomePonto: string) => void;
@@ -32,10 +39,13 @@ const FavsTab: React.FC<FavsTabProps> = ({
   routines, onAddRoutine, onUpdateRoutine, onRemoveRoutine,
   favorites, favoriteBusLines, displayedFavLines, groupedFavLines,
   isFavoritesLoading, destFilter, stopId, removingFavKey,
-  lightTheme, theme, cardProps, parseTime,
+  lightTheme, theme, cardProps, parseTime, favoritoSaldo,
   onDestFilterChange, onRefresh, onShareStop,
 }) => (
   <div className="page-enter space-y-4">
+    {/* ── Aviso de saldo baixo (cartão SitPass favorito) ──────────────────── */}
+    {favoriteBusLines.length > 0 && <SaldoBaixoAviso favoritoSaldo={favoritoSaldo} theme={theme} />}
+
     <div className="flex items-center justify-between px-2 mb-2">
       <h2 className={`text-[10px] font-black uppercase tracking-[0.5em] ${theme.subtext} flex items-center gap-2`}>
         <img src="/favorito.png" alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} /> Minha Garagem
