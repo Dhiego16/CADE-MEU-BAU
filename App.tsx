@@ -10,6 +10,8 @@ import { usePWA } from './hooks/usePWA';
 import { usePullToRefresh } from './hooks/usePullToRefresh';
 import { useNearbyStops } from './hooks/useNearbyStops';
 import { useTripMode } from './hooks/useTripMode';
+import { useRoutines } from './hooks/useRoutines';
+import { useRoutineTracking } from './hooks/useRoutineTracking';
 
 // Components
 import SplashScreen from './components/SplashScreen';
@@ -17,6 +19,8 @@ import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 import PWABanners from './components/PWABanners';
 import TripModeOverlay from './components/TripModeOverlay';
+import RoutineCard from './components/RoutineCard';
+import RoutineManager from './components/RoutineManager';
 
 // Modals
 import OnboardingModal from './components/modals/OnboardingModal';
@@ -107,7 +111,11 @@ const App: React.FC = () => {
     mergeLines,
     handleSearch,
     loadFavoritesSchedules,
+    performSearch,
   } = useBusSearch();
+
+  // ── Meu Trajeto ────────────────────────────────────────────────────────────
+  const routinesHook = useRoutines();
 
   const favoritesHook = useFavorites(stopId);
   const {
@@ -181,6 +189,8 @@ const App: React.FC = () => {
     if (fromJson) return { ...fromJson, marker: null as unknown as LeafletMarker };
     return { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
   }, []);
+
+  const routineTracking = useRoutineTracking(routinesHook.activeRoutine, performSearch, getStopCoords);
 
   const toggleMiniMap = useCallback((config: MiniMapConfig) => {
     setActiveMiniMap(prev => prev?.key === config.key ? null : { ...config });
@@ -529,6 +539,9 @@ const App: React.FC = () => {
 
         {activeTab === 'search' && (
           <SearchTab
+            activeRoutine={routinesHook.activeRoutine}
+            routineTracking={routineTracking}
+            onStartRoutineTrip={cardProps.onStartTrip}
             stopId={stopId}
             lineFilter={lineFilter}
             destFilter={destFilter}
@@ -568,6 +581,10 @@ const App: React.FC = () => {
 
         {activeTab === 'favs' && (
           <FavsTab
+            routines={routinesHook.routines}
+            onAddRoutine={routinesHook.addRoutine}
+            onUpdateRoutine={routinesHook.updateRoutine}
+            onRemoveRoutine={routinesHook.removeRoutine}
             favorites={favorites}
             favoriteBusLines={favoriteBusLines}
             displayedFavLines={displayedFavLines}
