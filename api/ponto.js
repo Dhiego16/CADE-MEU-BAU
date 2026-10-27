@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 // Cache simples
 const cache = new Map();
 const CACHE_DURATION = 30 * 1000;
+const CACHE_MAX_ENTRIES = 200;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
     });
   }
 
-  if (isNaN(ponto)) {
+  if (!/^\d{1,6}$/.test(String(ponto))) {
     return res.status(400).json({ erro: 'Ponto inválido. Use apenas números.' });
   }
 
@@ -42,7 +43,9 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString(),
       horarios,
     };
+    if (cache.size >= CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value);
     cache.set(cacheKey, { timestamp: Date.now(), data: resultado });
+    res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
     res.json(resultado);
   } catch (err) {
     console.error('Erro:', err);

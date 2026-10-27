@@ -72,9 +72,8 @@ export function useBusSearch() {
         };
       }
       return { lines: [], error: 'not_found' };
-    } catch (err: unknown) {
-      const isAbort = err instanceof Error && err.name === 'AbortError';
-      return { lines: [], error: isAbort ? 'offline' : 'offline' };
+    } catch {
+      return { lines: [], error: 'offline' };
     }
   }, []);
 

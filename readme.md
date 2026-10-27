@@ -43,8 +43,8 @@ O mapa cobre **147 pontos** de ônibus em Senador Canedo, incluindo:
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/Dhiego16/CAD-MEU-BA-
-cd CAD-MEU-BA-
+git clone https://github.com/Dhiego16/CADE-MEU-BAU
+cd CADE-MEU-BAU
 
 # 2. Instale as dependências
 npm install
@@ -74,21 +74,16 @@ O deploy é automático via **Vercel** a cada push na branch `main`.
 ## 📁 Estrutura do projeto
 
 ```
-├── src/
-│   ├── App.tsx          # Componente principal
-│   ├── index.tsx        # Entry point React
-│   └── types.ts         # Tipos TypeScript
-├── public/
-│   ├── logo.png         # Logo do app
-│   ├── manifest.json    # Manifesto PWA
-│   ├── landing.html     # Página /sobre
-│   ├── 404.html         # Página de erro customizada
-│   ├── service-worker.js# Service Worker PWA
-│   ├── icons/           # Ícones PWA (72px a 512px)
-│   └── screenshots/     # Screenshots para install dialog
-├── index.html           # HTML base
-└── vercel.json          # Configuração de rotas Vercel
-```
+├── api/                 # Funções serverless (Vercel): ponto, realtimebus, route
+├── components/          # Componentes, abas (tabs/) e modais (modals/)
+├── hooks/               # Hooks de busca, favoritos, alertas, SitPass, PWA...
+├── utils/               # Helpers (CPF, tempo, tema, ícones)
+├── public/              # Logo, ícones PWA, landing.html, service-worker.js
+├── App.tsx              # Componente principal
+├── index.tsx            # Entry point React
+├── pontos.json          # Pontos de Senador Canedo (mapa)
+├── manifest.json        # Manifesto PWA
+└── vercel.json          # Rotas Vercel
 
 ---
 
@@ -99,7 +94,7 @@ O deploy é automático via **Vercel** a cada push na branch `main`.
 - **Vite** — bundler
 - **Leaflet.js** — mapa interativo de pontos
 - **PWA** — Service Worker + Web App Manifest + `skipWaiting` auto-update
-- **API de horários** — [bot-onibus.vercel.app](https://bot-onibus.vercel.app) (dados RMTC/EIXO Goiânia)
+- **API de horários** — rotas `/api/ponto` e `/api/realtimebus` (Vercel Functions, dados RMTC/EIXO Goiânia)
 - **API de saldo** — Cloudflare Workers (`sitpass.cj22233333.workers.dev`) para consulta SitPass
 
 ---

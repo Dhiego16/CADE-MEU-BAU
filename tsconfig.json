@@ -20,12 +20,12 @@
   "include": [
     "types.ts",
     "constants.ts",
-    "services",
     "components",
     "hooks",
     "utils",
     "App.tsx",
     "index.tsx",
+    "vite.config.ts",
     "pontos.json"
   ]
 }
