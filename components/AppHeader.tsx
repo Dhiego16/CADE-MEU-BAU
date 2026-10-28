@@ -51,14 +51,63 @@ const AppHeader: React.FC<AppHeaderProps> = ({
     (activeTab === 'search' && busLinesCount > 0 && !isLoading) ||
     (activeTab === 'favs' && favoriteLinesCount > 0 && !isFavoritesLoading);
 
+  const glass = lightTheme ? 'lg-glass lg-light' : 'lg-glass lg-dark';
+  const logoColor = lightTheme ? 'text-amber-600' : 'text-yellow-400';
+  const textColor = lightTheme ? 'text-gray-800' : 'text-white';
+
   return (
-    <>
-      {/* Banner de offline fixo abaixo do header */}
+    <header
+      className="pointer-events-none fixed inset-x-0 top-0 z-50 px-4"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
+    >
+      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-2">
+        {/* Botão flutuante: logo */}
+        <div className={`${glass} pointer-events-auto rounded-full px-4 py-2.5`}>
+          <div className={`font-black italic ${logoColor} text-base tracking-tighter skew-x-[-10deg] whitespace-nowrap`}>
+            CADÊ MEU BAÚ?
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Botão flutuante: contador (aparece/some com animação) */}
+          <div
+            className={`${glass} pointer-events-auto flex items-center gap-1.5 overflow-hidden rounded-full transition-all duration-300 ease-out ${
+              showCountdown ? 'max-w-[90px] px-3 py-2.5 opacity-100' : 'max-w-0 border-transparent px-0 py-2.5 opacity-0'
+            }`}
+            aria-hidden={!showCountdown}
+          >
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full animate-pulse ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className={`text-sm font-black tabular-nums leading-none whitespace-nowrap ${lightTheme ? 'text-amber-700' : 'text-yellow-300'}`}>
+              {countdown}s
+            </span>
+          </div>
+
+          {(isLoading || isFavoritesLoading) && (
+            <div className={`${glass} pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full`}>
+              <div className="h-5 w-5 rounded-full border-2 border-yellow-400 border-t-transparent animate-spin" />
+            </div>
+          )}
+
+          {/* Botão flutuante: tema */}
+          <button
+            onClick={() => { onToggleTheme(); haptic(30); }}
+            className={`${glass} pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full text-lg transition-transform active:scale-90 ${textColor}`}
+            aria-label="Alternar tema"
+          >
+            {lightTheme ? '🌙' : '☀️'}
+          </button>
+        </div>
+      </div>
+
+      {/* Aviso de offline: pílula de vidro vermelha logo abaixo */}
       {(!isOnline || showOfflineBanner || staleData) && (
         <div
-          className="w-full z-[60] flex items-center justify-center gap-2 py-2 px-4"
+          className="pointer-events-none mx-auto mt-2 flex max-w-md items-center justify-center rounded-full px-4 py-2"
           style={{
-            background: 'linear-gradient(90deg, #7f1d1d, #991b1b)',
+            background: 'linear-gradient(90deg, rgba(127,29,29,0.88), rgba(153,27,27,0.88))',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            border: '1px solid rgba(255,255,255,0.18)',
             animation: 'slideUp 0.3s ease-out',
           }}
         >
@@ -69,40 +118,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
           </span>
         </div>
       )}
-
-      <header
-        className={`pt-[env(safe-area-inset-top)] ${theme.header} border-b p-4 flex justify-between items-center shrink-0 z-50`}
-      >
-        <div className="font-black italic text-yellow-400 text-xl tracking-tighter skew-x-[-10deg]">
-          CADÊ MEU BAÚ?
-        </div>
-        <div className="flex items-center gap-3">
-          {showCountdown && (
-            <div className="text-right flex flex-col items-end">
-              <span className={`text-[7px] font-black ${theme.subtext} uppercase leading-none mb-0.5`}>
-                Auto-Refresh
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                <span className="text-sm font-black text-yellow-400 tabular-nums leading-none">
-                  {countdown}s
-                </span>
-              </div>
-            </div>
-          )}
-          {(isLoading || isFavoritesLoading) && (
-            <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-          )}
-          <button
-            onClick={() => { onToggleTheme(); haptic(30); }}
-            className={`text-xl p-1.5 transition-all active:scale-110 ${theme.subtext}`}
-            aria-label="Alternar tema"
-          >
-            {lightTheme ? '🌙' : '☀️'}
-          </button>
-        </div>
-      </header>
-    </>
+    </header>
   );
 };
 

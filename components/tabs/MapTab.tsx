@@ -234,7 +234,7 @@ const MapTab: React.FC<MapTabProps> = ({
   };
 
   return (
-    <div style={{ position: 'fixed', top: '64px', left: 0, right: 0, bottom: '90px', zIndex: 40, display: activeTab === 'map' ? 'block' : 'none' }}>
+    <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 68px)', left: 0, right: 0, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)', zIndex: 40, display: activeTab === 'map' ? 'block' : 'none' }}>
       
       {/* Mapa real */}
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />

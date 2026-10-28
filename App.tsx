@@ -440,6 +440,45 @@ const App: React.FC = () => {
     .urgent-card { animation: urgencyPulse 1.5s ease-in-out infinite; border-color: rgba(239,68,68,0.5) !important; }
     ::-webkit-scrollbar { display: none; }
     .app-container { -webkit-overflow-scrolling: touch; }
+
+    /* ── Liquid Glass ─────────────────────────────────────────────── */
+    .lg-glass {
+      position: relative;
+      -webkit-backdrop-filter: blur(22px) saturate(180%);
+      backdrop-filter: blur(22px) saturate(180%);
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .lg-glass::before {
+      content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: radial-gradient(130% 150% at 12% 0%, rgba(255,255,255,0.38), rgba(255,255,255,0) 42%);
+    }
+    .lg-dark {
+      background: linear-gradient(135deg, rgba(255,255,255,0.20), rgba(255,255,255,0.06));
+      border: 1px solid rgba(255,255,255,0.22);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(255,255,255,0.06),
+                  inset 0 0 22px rgba(255,255,255,0.05), 0 12px 32px rgba(0,0,0,0.45);
+    }
+    .lg-light {
+      background: linear-gradient(135deg, rgba(255,255,255,0.72), rgba(255,255,255,0.38));
+      border: 1px solid rgba(255,255,255,0.85);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(0,0,0,0.04),
+                  0 10px 28px rgba(0,0,0,0.14);
+    }
+    .lg-lens { border: 1px solid rgba(255,255,255,0.4); }
+    .lg-lens-dark {
+      background: linear-gradient(160deg, rgba(255,255,255,0.30), rgba(250,204,21,0.14));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), inset 0 -6px 12px rgba(255,255,255,0.05), 0 4px 14px rgba(0,0,0,0.35);
+    }
+    .lg-lens-light {
+      background: linear-gradient(160deg, rgba(255,255,255,0.95), rgba(253,224,71,0.30));
+      border-color: rgba(255,255,255,0.95);
+      box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(0,0,0,0.12);
+    }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .lg-dark { background: rgba(30,41,59,0.92); }
+      .lg-light { background: rgba(255,255,255,0.95); }
+    }
+    @media (prefers-reduced-motion: reduce) { .lg-lens { transition: none !important; } }
   `;
 
   return (
@@ -534,7 +573,10 @@ const App: React.FC = () => {
       )}
 
       {/* ── Main scrollable container ────────────────────────────────────────── */}
-      <div className="flex-grow overflow-y-auto app-container px-4 pt-2 pb-32">
+      <div
+        className="flex-grow overflow-y-auto app-container px-4 pb-36"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 72px)' }}
+      >
         <PWABanners pwa={pwa} />
 
         {activeTab === 'search' && (
@@ -658,6 +700,7 @@ const App: React.FC = () => {
         activeTab={activeTab}
         favCount={favorites.length}
         theme={theme}
+        lightTheme={lightTheme}
         onTabChange={(tab) => { setActiveTab(tab); setDestFilter(''); }}
       />
     </div>
