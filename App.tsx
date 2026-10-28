@@ -137,6 +137,15 @@ const App: React.FC = () => {
 
   const theme = useMemo(() => buildTheme(lightTheme), [lightTheme]);
 
+  // Troca de tema instantânea: desliga as transições por um instante pra não
+  // animar centenas de elementos (e o blur do vidro) ao mesmo tempo.
+  const toggleTheme = useCallback(() => {
+    const root = document.documentElement;
+    root.classList.add('theme-switching');
+    setLightTheme(p => !p);
+    window.setTimeout(() => root.classList.remove('theme-switching'), 200);
+  }, []);
+
   // ── Trip Mode ──────────────────────────────────────────────────────────────
   const tripMode = useTripMode(notifications.sendNotification);
 
@@ -446,7 +455,6 @@ const App: React.FC = () => {
       position: relative;
       -webkit-backdrop-filter: blur(22px) saturate(180%);
       backdrop-filter: blur(22px) saturate(180%);
-      transition: background 0.3s, border-color 0.3s;
     }
     .lg-glass::before {
       content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
@@ -464,6 +472,7 @@ const App: React.FC = () => {
       box-shadow: inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(0,0,0,0.04),
                   0 10px 28px rgba(0,0,0,0.14);
     }
+    .theme-switching, .theme-switching *, .theme-switching *::before, .theme-switching *::after { transition: none !important; }
     .lg-lens { border: 1px solid rgba(255,255,255,0.4); }
     .lg-lens-dark {
       background: linear-gradient(160deg, rgba(255,255,255,0.30), rgba(250,204,21,0.14));
@@ -556,7 +565,7 @@ const App: React.FC = () => {
         isLoading={isLoading}
         isFavoritesLoading={isFavoritesLoading}
         countdown={countdown}
-        onToggleTheme={() => setLightTheme(p => !p)}
+        onToggleTheme={toggleTheme}
       />
 
       {/* ── Pull-to-refresh indicator ───────────────────────────────────────── */}
