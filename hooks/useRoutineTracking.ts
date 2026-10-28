@@ -64,6 +64,7 @@ export function useRoutineTracking(
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const { latitude, longitude } = pos.coords;
+        setLocationDenied(false);
         const coords = getStopCoords(routine.stopId);
         try {
           const res = await fetch(
@@ -85,6 +86,19 @@ export function useRoutineTracking(
     );
   }, [routine, getStopCoords]);
 
+  // Ao abrir o app, só pega a localização sozinho se a permissão já foi dada.
+  // Senão mostra o botão "Tentar" (pedido por toque do usuário). Evita o aviso
+  // de localização toda vez que o PWA abre no iPhone, que esquece a permissão.
+  const fetchWalkingTimeIfAllowed = useCallback(async () => {
+    try {
+      if ('permissions' in navigator) {
+        const status = await navigator.permissions.query({ name: 'geolocation' });
+        if (status.state === 'granted') { fetchWalkingTime(); return; }
+      }
+    } catch { /* cai no botão abaixo */ }
+    setLocationDenied(true);
+  }, [fetchWalkingTime]);
+
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
 
@@ -100,7 +114,7 @@ export function useRoutineTracking(
     // Só re-busca localização quando o trajeto ativo mudou (evita pedir GPS toda hora)
     if (routineIdRef.current !== routine.id) {
       routineIdRef.current = routine.id;
-      fetchWalkingTime();
+      fetchWalkingTimeIfAllowed();
     }
 
     fetchSchedule();
