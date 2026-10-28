@@ -74,6 +74,47 @@
       "purpose": "maskable"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "Buscar",
+      "short_name": "Buscar",
+      "description": "Buscar ônibus por ponto",
+      "url": "/?tab=search",
+      "icons": [
+        {
+          "src": "/icons/shortcut-buscar.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Favoritos",
+      "short_name": "Favoritos",
+      "description": "Ver suas linhas favoritas",
+      "url": "/?tab=favs",
+      "icons": [
+        {
+          "src": "/icons/shortcut-favoritos.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "SitPass",
+      "short_name": "SitPass",
+      "description": "Consultar saldo do SitPass",
+      "url": "/?tab=sitpass",
+      "icons": [
+        {
+          "src": "/icons/shortcut-sitpass.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
   "screenshots": [
     {
       "src": "/screenshots/screenshot-mobile.png",

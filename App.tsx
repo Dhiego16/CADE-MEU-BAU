@@ -47,7 +47,14 @@ interface MiniMapConfig {
 
 const App: React.FC = () => {
   // ── Theme & tab ────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<ActiveTab>('search');
+  // Atalhos do ícone do PWA abrem com ?tab=search|favs|sitpass
+  const initialTabParam = useRef<ActiveTab | null>((() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get('tab');
+      return t === 'search' || t === 'favs' || t === 'sitpass' ? t : null;
+    } catch { return null; }
+  })());
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTabParam.current ?? 'search');
   const [isSplash, setIsSplash] = useState(true);
   const [lightTheme, setLightTheme] = useState(() => {
     try { return localStorage.getItem('cade_meu_bau_theme') === 'light'; } catch { return false; }
@@ -324,6 +331,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const t = setTimeout(() => {
       setIsSplash(false);
+      if (initialTabParam.current) return; // veio de um atalho do ícone: respeita a aba pedida
       if (favorites.length > 0) setActiveTab('favs');
       else if (!localStorage.getItem('cade_meu_bau_onboarding_done')) setShowOnboarding(true);
     }, SPLASH_DURATION);

@@ -22,6 +22,8 @@ Monitor de ônibus em tempo real para Goiânia e Senador Canedo. Consulte horár
 - ☀️ **Tema claro/escuro** — alternável pelo botão no header
 - 📡 **Feedback de erro inteligente** — distingue ponto não encontrado, linha inativa, sem conexão
 - 💬 **Botão de feedback** — link direto para formulário de sugestões/erros
+- 📈 **Previsão com histórico** — compara o que a RMTC previu com a chegada real e mostra "costuma atrasar ~X min" e a confiança no card (aprende no próprio aparelho)
+- ⚡ **Atalhos no ícone do PWA** — segure o ícone para abrir direto em Buscar, Favoritos ou SitPass
 
 ---
 

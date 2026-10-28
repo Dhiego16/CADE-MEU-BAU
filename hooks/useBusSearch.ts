@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { BusLine, FavoriteItem, SearchResult } from '../types';
 import { normalizeTime, REFRESH_INTERVAL, MAX_HISTORY, BASE_URL } from '../utils';
+import { recordStopObservations } from '../utils/predictionHistory';
 
 export function useBusSearch() {
   const [busLines, setBusLines] = useState<BusLine[]>([]);
@@ -51,8 +52,7 @@ export function useBusSearch() {
 
       if (data?.horarios && Array.isArray(data.horarios)) {
         if (data.horarios.length === 0) return { lines: [], error: lFilter ? 'no_lines' : 'not_found' };
-        return {
-          lines: data.horarios.map((item: Record<string, unknown>, index: number) => {
+        const parsedLines: BusLine[] = data.horarios.map((item: Record<string, unknown>, index: number) => {
             const rawLinha = String(item.linha ?? '').trim();
             const formattedLinha = rawLinha.length === 1 ? `NS${rawLinha}` : rawLinha;
             return {
@@ -68,8 +68,10 @@ export function useBusSearch() {
               subsequentArrival: normalizeTime(item.seguinte),
               stopSource: sId.padStart(5, '0'),
             };
-          })
-        };
+          });
+        // Alimenta o histórico de previsão (aprende com cada leitura)
+        try { recordStopObservations(sId.padStart(5, '0'), parsedLines); } catch { /* nunca quebra a busca */ }
+        return { lines: parsedLines };
       }
       return { lines: [], error: 'not_found' };
     } catch {

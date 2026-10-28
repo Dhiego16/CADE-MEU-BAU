@@ -1,7 +1,41 @@
-import React, { memo } from 'react';
+import React, { memo, useSyncExternalStore } from 'react';
 import { BusLine, FavoriteItem, ThemeTokens } from '../types';
 import { haptic } from '../utils';
 import TimeDisplay from './TimeDisplay';
+import {
+  getPredictionInsight, getPredictionVersion, subscribePredictions, PredictionInsight,
+} from '../utils/predictionHistory';
+
+const CONF_LABEL = { alta: 'alta', media: 'média', baixa: 'baixa' } as const;
+const CONF_DOTS = { alta: 3, media: 2, baixa: 1 } as const;
+const TONE_CLASS = {
+  late: 'text-yellow-400',
+  early: 'text-sky-400',
+  ok: 'text-emerald-400',
+  learning: '',
+} as const;
+
+const PredictionBadge: React.FC<{ insight: PredictionInsight; subtextClass: string }> = ({ insight, subtextClass }) => {
+  if (insight.tone === 'learning') {
+    return (
+      <div className={`text-[8px] font-bold uppercase tracking-widest text-center ${subtextClass} opacity-70`}>
+        Aprendendo esta linha… {insight.samples}/{insight.needed} chegadas medidas
+      </div>
+    );
+  }
+  const dots = CONF_DOTS[insight.confidence];
+  return (
+    <div
+      className={`text-[9px] font-black uppercase tracking-widest text-center flex items-center justify-center gap-1.5 flex-wrap ${TONE_CLASS[insight.tone]}`}
+      title={`Baseado em ${insight.samples} chegadas medidas neste aparelho`}
+    >
+      <span>{insight.label}</span>
+      <span className={`${subtextClass} font-bold`}>
+        · confiança {CONF_LABEL[insight.confidence]} {'●'.repeat(dots)}{'○'.repeat(3 - dots)}
+      </span>
+    </div>
+  );
+};
 
 export interface BusLineCardProps {
   line: BusLine;
@@ -31,6 +65,8 @@ const BusLineCard = memo(({
   const key = `${sId}::${line.number}`;
   const isFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
   const favItem = favorites.find(f => f.stopId === sId && f.lineNumber === line.number);
+  useSyncExternalStore(subscribePredictions, getPredictionVersion);
+  const insight = getPredictionInsight(key);
 
   return (
     <div
@@ -128,6 +164,7 @@ const BusLineCard = memo(({
           <TimeDisplay timeStr={line.subsequentArrival ?? 'SEM PREVISÃO'} isNext={false} />
         </div>
       </div>
+      {insight && <PredictionBadge insight={insight} subtextClass={theme.subtext} />}
     </div>
   );
 });
