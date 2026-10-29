@@ -12,6 +12,17 @@ service cloud.firestore {
         && request.resource.data.routines.size() <= 50;
     }
 
+    // Cofre do SitPass: somente texto cifrado (a criptografia é feita no aparelho)
+    match /users/{uid}/private/{docId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid && docId == 'sitpass';
+      allow create, update: if request.auth != null && request.auth.uid == uid && docId == 'sitpass'
+        && request.resource.data.keys().hasOnly(['v', 'salt', 'iv', 'ct', 'updatedAt'])
+        && request.resource.data.v == 1
+        && request.resource.data.salt is string && request.resource.data.salt.size() <= 64
+        && request.resource.data.iv is string && request.resource.data.iv.size() <= 64
+        && request.resource.data.ct is string && request.resource.data.ct.size() <= 20000;
+    }
+
     // Histórico coletivo de previsões: só a API do servidor (Admin SDK) acessa
     match /predicoes/{id} {
       allow read, write: if false;

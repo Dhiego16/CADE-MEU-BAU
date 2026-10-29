@@ -3,6 +3,7 @@
 // Sem as variáveis VITE_FIREBASE_* o recurso fica desligado e o app segue igual.
 
 import type { FavoriteItem, RoutineItem } from '../types';
+import type { VaultBlob } from './vault';
 
 const env = import.meta.env;
 
@@ -129,4 +130,36 @@ export function mergeData(local: CloudData, remote: CloudData | null): CloudData
   for (const r of remote.routines) routines.set(r.id, r);
   for (const r of local.routines) if (!routines.has(r.id)) routines.set(r.id, r);
   return { favorites: [...favs.values()], routines: [...routines.values()] };
+}
+
+// ── Cofre do SitPass: users/{uid}/private/sitpass (só texto cifrado) ─────────
+const vaultRef = (b: FirebaseBundle, uid: string) => b.f.doc(b.db, 'users', uid, 'private', 'sitpass');
+
+const toBlob = (d: Record<string, unknown> | undefined): VaultBlob | null =>
+  d && typeof d.salt === 'string' && typeof d.iv === 'string' && typeof d.ct === 'string'
+    ? { v: 1, salt: d.salt, iv: d.iv, ct: d.ct }
+    : null;
+
+export async function readVaultDoc(uid: string): Promise<VaultBlob | null> {
+  const b = await getBundle();
+  const snap = await b.f.getDoc(vaultRef(b, uid));
+  return snap.exists() ? toBlob(snap.data()) : null;
+}
+
+export async function writeVaultDoc(uid: string, blob: VaultBlob): Promise<void> {
+  const b = await getBundle();
+  await b.f.setDoc(vaultRef(b, uid), { ...blob, updatedAt: b.f.serverTimestamp() });
+}
+
+export async function deleteVaultDoc(uid: string): Promise<void> {
+  const b = await getBundle();
+  await b.f.deleteDoc(vaultRef(b, uid));
+}
+
+export async function watchVaultDoc(uid: string, cb: (blob: VaultBlob | null) => void): Promise<() => void> {
+  const b = await getBundle();
+  return b.f.onSnapshot(vaultRef(b, uid), snap => {
+    if (snap.metadata.hasPendingWrites) return;
+    cb(snap.exists() ? toBlob(snap.data()) : null);
+  });
 }

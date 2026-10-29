@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { SaldoData, SaldoHistorico } from '../types';
 import { formatCpf, isValidCpf } from '../utils';
+import { VAULT_RESTORED_EVENT } from '../utils/vault';
 
 const API_URL = 'https://sitpass.cj22233333.workers.dev';
 const FAVORITO_KEY = 'cade_meu_bau_sitpass_favorito';
@@ -236,6 +237,20 @@ export function useSitpass() {
     if (favorito) atualizarFavorito(favorito);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // O cofre na nuvem restaurou dados neste aparelho: relê favorito e último saldo
+  useEffect(() => {
+    const reload = () => {
+      try { setSaldoHistorico(JSON.parse(localStorage.getItem('cade_meu_bau_saldo_historico') || 'null')); } catch { setSaldoHistorico(null); }
+      let fav: CartaoFavorito | null = null;
+      try { fav = JSON.parse(localStorage.getItem(FAVORITO_KEY) || 'null'); } catch { fav = null; }
+      setFavorito(fav);
+      if (fav) void atualizarFavorito(fav);
+      else { setFavoritoSaldo(null); setFavoritoErro(null); setFavoritoAtualizadoAs(null); }
+    };
+    window.addEventListener(VAULT_RESTORED_EVENT, reload);
+    return () => window.removeEventListener(VAULT_RESTORED_EVENT, reload);
+  }, [atualizarFavorito]);
 
   return {
     cpfSitpass,

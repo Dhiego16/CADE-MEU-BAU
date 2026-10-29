@@ -3,6 +3,10 @@ import { ThemeTokens } from '../../types';
 import { haptic } from '../../utils';
 import { ICONS } from '../../utils/icons';
 import { TARIFA_INTEIRA, parseSaldoMonetario } from '../../utils/sitpass';
+import { VAULT_RESTORED_EVENT } from '../../utils/vault';
+import SitpassVaultCard from '../SitpassVaultCard';
+import { CloudSync } from '../../hooks/useCloudSync';
+import { SitpassVault } from '../../hooks/useSitpassVault';
 
 const TARIFA_MINIMA = TARIFA_INTEIRA / 2; // meia-passagem
 
@@ -61,6 +65,8 @@ interface SitpassHook {
 
 interface SitPassTabProps {
   sitpass: SitpassHook;
+  vault: SitpassVault;
+  cloud: CloudSync;
   lightTheme: boolean;
   theme: ThemeTokens;
 }
@@ -84,11 +90,20 @@ const agora = (): string => {
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
-const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) => {
+const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, vault, cloud, lightTheme, theme }) => {
   const [consultadoAs, setConsultadoAs] = useState<string | null>(null);
   const [cpfsSalvos, setCpfsSalvos] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('sitpass_cpfs_salvos') || '[]'); } catch { return []; }
   });
+
+  // Cofre na nuvem restaurou os dados neste aparelho: recarrega a lista de CPFs
+  useEffect(() => {
+    const reload = () => {
+      try { setCpfsSalvos(JSON.parse(localStorage.getItem('sitpass_cpfs_salvos') || '[]')); } catch { setCpfsSalvos([]); }
+    };
+    window.addEventListener(VAULT_RESTORED_EVENT, reload);
+    return () => window.removeEventListener(VAULT_RESTORED_EVENT, reload);
+  }, []);
 
   // ── Wrappers com side-effects locais ────────────────────────────────────────
 
@@ -150,6 +165,8 @@ const SitPassTab: React.FC<SitPassTabProps> = ({ sitpass, lightTheme, theme }) =
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="page-enter space-y-5">
+
+      <SitpassVaultCard vault={vault} cloud={cloud} theme={theme} lightTheme={lightTheme} />
 
       {/* ── Cartão favorito (uso pessoal) — sempre atualiza sozinho ao abrir ── */}
       {sitpass.favorito ? (

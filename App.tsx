@@ -12,6 +12,7 @@ import { useNearbyStops } from './hooks/useNearbyStops';
 import { useTripMode } from './hooks/useTripMode';
 import { useRoutines } from './hooks/useRoutines';
 import { useCloudSync } from './hooks/useCloudSync';
+import { useSitpassVault } from './hooks/useSitpassVault';
 import { useRoutineTracking } from './hooks/useRoutineTracking';
 
 // Components
@@ -131,6 +132,7 @@ const App: React.FC = () => {
     favoritesHook.favorites, favoritesHook.setFavorites,
     routinesHook.routines, routinesHook.replaceRoutines,
   );
+  const vault = useSitpassVault(cloud);
   const {
     favorites, setFavorites,
     removingFavKey,
@@ -677,6 +679,8 @@ const App: React.FC = () => {
         {activeTab === 'sitpass' && (
           <SitPassTab
             sitpass={sitpass}
+            vault={vault}
+            cloud={cloud}
             lightTheme={lightTheme}
             theme={theme}
           />
