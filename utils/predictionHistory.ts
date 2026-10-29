@@ -5,6 +5,8 @@
 //
 // Tudo roda no aparelho (localStorage): só aprende enquanto o app está aberto.
 
+import { Bucket, GlobalItems, reportArrival, fetchGlobalHistory } from './historyApi';
+
 export type Confidence = 'alta' | 'media' | 'baixa';
 
 export interface PredictionInsight {
@@ -18,6 +20,8 @@ export interface PredictionInsight {
   /** texto pronto pra exibir; null enquanto ainda está aprendendo */
   label: string | null;
   tone: 'late' | 'early' | 'ok' | 'learning';
+  /** de onde vêm as medições: de todos os aparelhos ou só deste */
+  scope: 'global' | 'local';
 }
 
 interface Sample { ts: number; eta: number }
@@ -120,6 +124,17 @@ function prune(s: Store, now: number) {
   }
 }
 
+/** Faixa de horário: picos em dias úteis (6h–9h e 16h–19h) ou o resto. */
+export function bucketFor(ts = Date.now()): Bucket {
+  const d = new Date(ts);
+  const day = d.getDay();
+  const h = d.getHours();
+  if (day === 0 || day === 6) return 'fora';
+  if (h >= 6 && h < 9) return 'pico_manha';
+  if (h >= 16 && h < 19) return 'pico_tarde';
+  return 'fora';
+}
+
 // ── Núcleo: registra uma leitura da previsão ─────────────────────────────────
 function median(xs: number[]): number {
   const a = [...xs].sort((x, y) => x - y);
@@ -167,6 +182,7 @@ export function recordObservation(key: string, etaText: string | undefined | nul
             list.push(err);
             if (list.length > MAX_ERRORS_PER_KEY) list.splice(0, list.length - MAX_ERRORS_PER_KEY);
             changed = true;
+            reportArrival(key, err, bucketFor(arrivedAt)); // alimenta o histórico coletivo
           }
         }
         delete s.tracks[key];
@@ -201,32 +217,72 @@ export function recordStopObservations(
   for (const l of lines) recordObservation(`${stopSource}::${l.number}`, l.nextArrival, now);
 }
 
+// ── Histórico coletivo (vindo da API) ────────────────────────────────────────
+const globalItems = new Map<string, GlobalItems>();
+
+/** Busca o histórico coletivo das linhas visíveis e atualiza os cards. */
+export async function refreshGlobalInsights(keys: string[]): Promise<void> {
+  const data = await fetchGlobalHistory(keys);
+  if (!data) return;
+  let changed = false;
+  for (const [k, items] of Object.entries(data)) {
+    if (!Array.isArray(items)) continue;
+    const clean = items.filter(it => Array.isArray(it) && typeof it[0] === 'number') as GlobalItems;
+    globalItems.set(k, clean);
+    insightCache.delete(k);
+    changed = true;
+  }
+  if (changed) emit();
+}
+
 // ── Leitura: resumo para o card ──────────────────────────────────────────────
+const BUCKET_PREFIX: Record<Bucket, string> = {
+  pico_manha: 'no pico da manhã, ',
+  pico_tarde: 'no pico da tarde, ',
+  fora: '',
+};
+const BUCKET_MIN_SAMPLES = 5;
+
+function summarize(errs: number[], scope: 'global' | 'local', prefix = ''): PredictionInsight {
+  const n = errs.length;
+  if (n < MIN_SAMPLES) {
+    return { samples: n, needed: MIN_SAMPLES, medianErrorMin: 0, confidence: 'baixa', label: null, tone: 'learning', scope };
+  }
+  const med = median(errs);
+  const mad = median(errs.map(e => Math.abs(e - med))); // dispersão robusta a outliers
+  const confidence: Confidence = n >= 5 && mad <= 1 ? 'alta' : mad <= 2.5 ? 'media' : 'baixa';
+  const rounded = Math.round(Math.abs(med));
+  let tone: PredictionInsight['tone'] = 'ok';
+  let label = 'previsão costuma bater';
+  if (med >= 1.5) { tone = 'late'; label = `costuma atrasar ~${rounded} min`; }
+  else if (med <= -1.5) { tone = 'early'; label = `costuma chegar ~${rounded} min antes`; }
+  return { samples: n, needed: MIN_SAMPLES, medianErrorMin: med, confidence, label: prefix + label, tone, scope };
+}
+
 export function getPredictionInsight(key: string): PredictionInsight | null {
   const cached = insightCache.get(key);
   if (cached && cached.v === version) return cached.insight;
 
-  const errs = load().errors[key];
   let insight: PredictionInsight | null = null;
 
-  if (errs && errs.length > 0) {
-    const n = errs.length;
-    if (n < MIN_SAMPLES) {
-      insight = {
-        samples: n, needed: MIN_SAMPLES, medianErrorMin: 0,
-        confidence: 'baixa', label: null, tone: 'learning',
-      };
-    } else {
-      const med = median(errs);
-      const mad = median(errs.map(e => Math.abs(e - med))); // dispersão robusta a outliers
-      const confidence: Confidence =
-        n >= 5 && mad <= 1 ? 'alta' : mad <= 2.5 ? 'media' : 'baixa';
-      const rounded = Math.round(Math.abs(med));
-      let tone: PredictionInsight['tone'] = 'ok';
-      let label = 'previsão costuma bater';
-      if (med >= 1.5) { tone = 'late'; label = `costuma atrasar ~${rounded} min`; }
-      else if (med <= -1.5) { tone = 'early'; label = `costuma chegar ~${rounded} min antes`; }
-      insight = { samples: n, needed: MIN_SAMPLES, medianErrorMin: med, confidence, label, tone };
+  // 1) Coletivo: de preferência na faixa de horário atual; senão, todas as medições
+  const g = globalItems.get(key);
+  if (g && g.length >= MIN_SAMPLES) {
+    const b = bucketFor();
+    const inBucket = g.filter(it => it[1] === b).map(it => it[0]);
+    insight = inBucket.length >= BUCKET_MIN_SAMPLES && b !== 'fora'
+      ? summarize(inBucket, 'global', BUCKET_PREFIX[b])
+      : summarize(g.map(it => it[0]), 'global');
+  }
+
+  // 2) Local: o que este aparelho mediu (ou "aprendendo", se ainda for pouco)
+  if (!insight) {
+    const errs = load().errors[key];
+    const localCount = errs?.length ?? 0;
+    const globalCount = g?.length ?? 0;
+    if (localCount >= MIN_SAMPLES) insight = summarize(errs, 'local');
+    else if (Math.max(localCount, globalCount) > 0) {
+      insight = summarize(globalCount >= localCount ? g!.map(it => it[0]) : errs, globalCount >= localCount ? 'global' : 'local');
     }
   }
 
@@ -237,6 +293,7 @@ export function getPredictionInsight(key: string): PredictionInsight | null {
 /** Só para testes. */
 export function __resetPredictionStore() {
   store = emptyStore();
+  globalItems.clear();
   insightCache.clear();
   version++;
 }

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { BusLine, FavoriteItem, SearchResult } from '../types';
 import { normalizeTime, REFRESH_INTERVAL, MAX_HISTORY, BASE_URL } from '../utils';
-import { recordStopObservations } from '../utils/predictionHistory';
+import { recordStopObservations, refreshGlobalInsights } from '../utils/predictionHistory';
 
 export function useBusSearch() {
   const [busLines, setBusLines] = useState<BusLine[]>([]);
@@ -74,7 +74,10 @@ export function useBusSearch() {
             };
           });
         // Alimenta o histórico de previsão (aprende com cada leitura)
-        try { recordStopObservations(sId.padStart(5, '0'), parsedLines); } catch { /* nunca quebra a busca */ }
+        try {
+          recordStopObservations(sId.padStart(5, '0'), parsedLines);
+          void refreshGlobalInsights(parsedLines.map(l => `${l.stopSource}::${l.number}`));
+        } catch { /* nunca quebra a busca */ }
         return { lines: parsedLines };
       }
       return { lines: [], error: 'not_found' };

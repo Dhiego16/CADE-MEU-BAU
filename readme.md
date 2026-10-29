@@ -23,6 +23,7 @@ Monitor de ônibus em tempo real para Goiânia e Senador Canedo. Consulte horár
 - 📡 **Feedback de erro inteligente** — distingue ponto não encontrado, linha inativa, sem conexão
 - 💬 **Botão de feedback** — link direto para formulário de sugestões/erros
 - 📈 **Previsão com histórico** — compara o que a RMTC previu com a chegada real e mostra "costuma atrasar ~X min" e a confiança no card (aprende no próprio aparelho)
+- 🌐 **Histórico coletivo** — as chegadas medidas por todos os aparelhos alimentam o "costuma atrasar ~X min", com faixa de horário (pico da manhã/tarde); precisa de `FIREBASE_SERVICE_ACCOUNT` na Vercel
 - ☁️ **Login com Google e sincronização** — favoritos e trajetos seguem a conta em qualquer aparelho (liga sozinho quando as variáveis `VITE_FIREBASE_*` existem; veja `.env.example` e `firestore.rules`)
 - ⚡ **Atalhos no ícone do PWA** — segure o ícone para abrir direto em Buscar, Favoritos ou SitPass
 

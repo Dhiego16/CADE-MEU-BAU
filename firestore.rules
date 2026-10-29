@@ -11,5 +11,10 @@ service cloud.firestore {
         && request.resource.data.favorites.size() <= 200
         && request.resource.data.routines.size() <= 50;
     }
+
+    // Histórico coletivo de previsões: só a API do servidor (Admin SDK) acessa
+    match /predicoes/{id} {
+      allow read, write: if false;
+    }
   }
 }

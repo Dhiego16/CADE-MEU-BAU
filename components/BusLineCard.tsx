@@ -27,7 +27,9 @@ const PredictionBadge: React.FC<{ insight: PredictionInsight; subtextClass: stri
   return (
     <div
       className={`text-[9px] font-black uppercase tracking-widest text-center flex items-center justify-center gap-1.5 flex-wrap ${TONE_CLASS[insight.tone]}`}
-      title={`Baseado em ${insight.samples} chegadas medidas neste aparelho`}
+      title={insight.scope === 'global'
+        ? `Baseado em ${insight.samples} chegadas medidas por usuários do app`
+        : `Baseado em ${insight.samples} chegadas medidas neste aparelho`}
     >
       <span>{insight.label}</span>
       <span className={`${subtextClass} font-bold`}>
