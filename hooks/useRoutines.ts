@@ -61,5 +61,8 @@ export function useRoutines() {
     );
   }, [routines, now]);
 
-  return { routines, activeRoutine, addRoutine, updateRoutine, removeRoutine };
+  // Usado pela sincronização: substitui a lista inteira (a persistência fica por conta de quem chama)
+  const replaceRoutines = useCallback((next: RoutineItem[]) => setRoutines(next), []);
+
+  return { routines, activeRoutine, addRoutine, updateRoutine, removeRoutine, replaceRoutines };
 }

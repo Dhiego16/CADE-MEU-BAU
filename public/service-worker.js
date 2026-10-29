@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const CACHE_NAME = `cade-meu-bau-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
@@ -37,8 +37,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Login com Google + Firestore: nunca passa pelo cache do service worker
+const isCloudRequest = (rawUrl) => {
+  try {
+    const u = new URL(rawUrl);
+    if (u.origin === self.location.origin) return u.pathname.startsWith('/__/'); // proxy do auth
+    return /(^|\.)(firestore|identitytoolkit|securetoken|firebaseinstallations)\.googleapis\.com$/.test(u.hostname)
+      || u.hostname === 'apis.google.com'
+      || u.hostname === 'accounts.google.com'
+      || u.hostname.endsWith('.firebaseapp.com')
+      || u.hostname.endsWith('.firebaseio.com');
+  } catch { return false; }
+};
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (isCloudRequest(event.request.url)) return;
 
   const url = event.request.url;
 

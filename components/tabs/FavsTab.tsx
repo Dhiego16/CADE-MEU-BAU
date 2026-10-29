@@ -7,6 +7,8 @@ import { BusLineCardProps } from '../BusLineCard';
 import RoutineManager from '../RoutineManager';
 import SaldoBaixoAviso from '../SaldoBaixoAviso';
 import UpdatedAgo from '../UpdatedAgo';
+import CloudSyncCard from '../CloudSyncCard';
+import { CloudSync } from '../../hooks/useCloudSync';
 
 interface FavsTabProps {
   routines: RoutineItem[];
@@ -20,6 +22,7 @@ interface FavsTabProps {
   isFavoritesLoading: boolean;
   updatedAt: number | null;
   staleData: boolean;
+  cloud: CloudSync;
   destFilter: string;
   stopId: string;
   removingFavKey: string | null;
@@ -41,13 +44,15 @@ interface FavsTabProps {
 const FavsTab: React.FC<FavsTabProps> = ({
   routines, onAddRoutine, onUpdateRoutine, onRemoveRoutine,
   favorites, favoriteBusLines, displayedFavLines, groupedFavLines,
-  isFavoritesLoading, updatedAt, staleData, destFilter, stopId, removingFavKey,
+  isFavoritesLoading, updatedAt, staleData, cloud, destFilter, stopId, removingFavKey,
   lightTheme, theme, cardProps, parseTime, favoritoSaldo,
   onDestFilterChange, onRefresh, onShareStop,
 }) => (
   <div className="page-enter space-y-4">
     {/* ── Aviso de saldo baixo (cartão SitPass favorito) ──────────────────── */}
     {favoriteBusLines.length > 0 && <SaldoBaixoAviso favoritoSaldo={favoritoSaldo} theme={theme} />}
+
+    <CloudSyncCard cloud={cloud} theme={theme} lightTheme={lightTheme} />
 
     <div className="flex items-center justify-between px-2 mb-2">
       <h2 className={`text-[10px] font-black uppercase tracking-[0.5em] ${theme.subtext} flex items-center gap-2`}>

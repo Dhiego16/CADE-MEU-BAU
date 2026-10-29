@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cada pessoa lê e grava somente o próprio documento
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['favorites', 'routines', 'updatedAt'])
+        && request.resource.data.favorites is list
+        && request.resource.data.routines is list
+        && request.resource.data.favorites.size() <= 200
+        && request.resource.data.routines.size() <= 50;
+    }
+  }
+}

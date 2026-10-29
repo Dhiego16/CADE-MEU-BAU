@@ -11,6 +11,7 @@ import { usePullToRefresh } from './hooks/usePullToRefresh';
 import { useNearbyStops } from './hooks/useNearbyStops';
 import { useTripMode } from './hooks/useTripMode';
 import { useRoutines } from './hooks/useRoutines';
+import { useCloudSync } from './hooks/useCloudSync';
 import { useRoutineTracking } from './hooks/useRoutineTracking';
 
 // Components
@@ -126,6 +127,10 @@ const App: React.FC = () => {
   const routinesHook = useRoutines();
 
   const favoritesHook = useFavorites(stopId);
+  const cloud = useCloudSync(
+    favoritesHook.favorites, favoritesHook.setFavorites,
+    routinesHook.routines, routinesHook.replaceRoutines,
+  );
   const {
     favorites, setFavorites,
     removingFavKey,
@@ -654,6 +659,7 @@ const App: React.FC = () => {
             isFavoritesLoading={isFavoritesLoading}
             updatedAt={favsUpdatedAt}
             staleData={staleData}
+            cloud={cloud}
             destFilter={destFilter}
             stopId={stopId}
             removingFavKey={removingFavKey}
