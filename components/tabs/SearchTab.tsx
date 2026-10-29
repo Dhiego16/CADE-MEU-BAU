@@ -10,6 +10,7 @@ import StopSearchAutocomplete from '../StopSearchAutocomplete';
 import RoutineCard from '../RoutineCard';
 import { DepartureStatus } from '../../hooks/useRoutineTracking';
 import SaldoBaixoAviso from '../SaldoBaixoAviso';
+import UpdatedAgo from '../UpdatedAgo';
 
 interface MiniMapConfig {
   key: string;
@@ -42,6 +43,7 @@ interface SearchTabProps {
   displayedBusLines: BusLine[];
   isLoading: boolean;
   errorMsg: string | null;
+  updatedAt: number | null;
   searchHistory: string[];
   liveLineMap: Record<string, boolean>;
   activeMiniMap: MiniMapConfig | null;
@@ -110,7 +112,7 @@ const NearbyStopCard: React.FC<{
 const SearchTab: React.FC<SearchTabProps> = ({
   activeRoutine, routineTracking, onStartRoutineTrip,
   stopId, lineFilter, destFilter,
-  busLines, displayedBusLines, isLoading, errorMsg,
+  busLines, displayedBusLines, isLoading, errorMsg, updatedAt,
   searchHistory, liveLineMap, activeMiniMap, miniMapRefreshKey,
   lightTheme, theme, cardProps, parseTime, getStopCoords, selectedStop,
   nearbyStops, locationStatus, favoritoSaldo,
@@ -380,6 +382,10 @@ const SearchTab: React.FC<SearchTabProps> = ({
           <SkeletonCard light={lightTheme} />
         </div>
       ))}
+
+      {!isLoading && busLines.length > 0 && (
+        <UpdatedAgo updatedAt={updatedAt} theme={theme} failing={errorMsg === 'offline'} />
+      )}
 
       {/* Lines */}
       {!isLoading && (

@@ -13,6 +13,9 @@ export function useBusSearch() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [staleData, setStaleData] = useState(false);
+  // Momento (ms) da última leitura bem-sucedida: alimenta o "atualizado há X s"
+  const [searchUpdatedAt, setSearchUpdatedAt] = useState<number | null>(null);
+  const [favsUpdatedAt, setFavsUpdatedAt] = useState<number | null>(null);
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('cade_meu_bau_search_history') || '[]'); } catch { return []; }
   });
@@ -21,6 +24,7 @@ export function useBusSearch() {
 
   const isSearchingRef = useRef(false);
   const isFavSearchingRef = useRef(false);
+  const lastQueryRef = useRef('');
 
   // ─── AbortController para cancelar fetches de realtime stale ─────────────
   // Mantemos uma ref com o controller da última rodada de buscas de realtime.
@@ -126,6 +130,12 @@ export function useBusSearch() {
     const realtimeController = new AbortController();
     realtimeAbortRef.current = realtimeController;
 
+    // Mesma consulta da anterior? Então, se a RMTC falhar, dá pra manter o último resultado.
+    const queryKey = `${idToSearch.trim()}|${(forcedFilter ?? lineFilter).trim()}`;
+    const sameQuery = lastQueryRef.current === queryKey;
+    lastQueryRef.current = queryKey;
+    if (!sameQuery) setSearchUpdatedAt(null);
+
     setBusLines(prev => { if (prev.length === 0) setIsLoading(true); return prev; });
     setErrorMsg(null);
     setStaleData(false);
@@ -139,7 +149,13 @@ export function useBusSearch() {
       // Se uma busca mais nova já começou, descarta este resultado
       if (currentGeneration !== searchGenerationRef.current) return;
 
-      setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
+      if (error === 'offline' && sameQuery) {
+        // RMTC/internet falhou: mantém na tela o último resultado (com o aviso de defasagem)
+        setBusLines(prev => prev);
+      } else {
+        setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
+      }
+      if (!error && lines.length > 0) setSearchUpdatedAt(Date.now());
       if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
       else if (error === 'not_found') setErrorMsg('not_found');
       else if (error === 'no_lines') setErrorMsg('no_lines');
@@ -207,8 +223,18 @@ export function useBusSearch() {
         }
       });
       setInactiveStops(newInactive);
-      setFavoriteBusLines(prev => prev.length === 0 ? allLines : mergeLines(prev, allLines));
+      setFavoriteBusLines(prev => {
+        // Favoritos cuja consulta falhou continuam na tela com o último valor conhecido
+        const kept = prev.filter(l => favs.some((fav, i) =>
+          results[i].error === 'offline' &&
+          l.stopSource === fav.stopId.padStart(5, '0') &&
+          l.number === fav.lineNumber,
+        ));
+        const combined = kept.length > 0 ? [...allLines, ...kept] : allLines;
+        return prev.length === 0 ? combined : mergeLines(prev, combined);
+      });
       if (hasOffline) setStaleData(true);
+      else setFavsUpdatedAt(Date.now());
     } catch { setStaleData(true); }
     finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); isFavSearchingRef.current = false; }
   }, [performSearch, mergeLines]);
@@ -230,6 +256,8 @@ export function useBusSearch() {
     setCountdown,
     staleData,
     setStaleData,
+    searchUpdatedAt,
+    favsUpdatedAt,
     searchHistory,
     liveLineMap,
     setLiveLineMap,

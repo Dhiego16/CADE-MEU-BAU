@@ -114,7 +114,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
           <span className="text-[10px] font-black uppercase tracking-widest text-white animate-pulse">
             {!isOnline
               ? '📡 Sem conexão — os dados podem estar desatualizados'
-              : '⚠️ Dados desatualizados — verifique sua internet'}
+              : '⚠️ Previsões indisponíveis agora — mostrando o último resultado'}
           </span>
         </div>
       )}

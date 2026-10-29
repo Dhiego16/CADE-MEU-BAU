@@ -6,6 +6,7 @@ import SkeletonCard from '../SkeletonCard';
 import { BusLineCardProps } from '../BusLineCard';
 import RoutineManager from '../RoutineManager';
 import SaldoBaixoAviso from '../SaldoBaixoAviso';
+import UpdatedAgo from '../UpdatedAgo';
 
 interface FavsTabProps {
   routines: RoutineItem[];
@@ -17,6 +18,8 @@ interface FavsTabProps {
   displayedFavLines: BusLine[];
   groupedFavLines: Record<string, BusLine[]>;
   isFavoritesLoading: boolean;
+  updatedAt: number | null;
+  staleData: boolean;
   destFilter: string;
   stopId: string;
   removingFavKey: string | null;
@@ -38,7 +41,7 @@ interface FavsTabProps {
 const FavsTab: React.FC<FavsTabProps> = ({
   routines, onAddRoutine, onUpdateRoutine, onRemoveRoutine,
   favorites, favoriteBusLines, displayedFavLines, groupedFavLines,
-  isFavoritesLoading, destFilter, stopId, removingFavKey,
+  isFavoritesLoading, updatedAt, staleData, destFilter, stopId, removingFavKey,
   lightTheme, theme, cardProps, parseTime, favoritoSaldo,
   onDestFilterChange, onRefresh, onShareStop,
 }) => (
@@ -83,6 +86,10 @@ const FavsTab: React.FC<FavsTabProps> = ({
           <button onClick={() => onDestFilterChange('')} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 text-lg">×</button>
         )}
       </div>
+    )}
+
+    {favorites.length > 0 && !isFavoritesLoading && favoriteBusLines.length > 0 && (
+      <UpdatedAgo updatedAt={updatedAt} theme={theme} failing={staleData} />
     )}
 
     {favorites.length > 0 && !isFavoritesLoading && (

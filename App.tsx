@@ -113,6 +113,7 @@ const App: React.FC = () => {
     errorMsg, setErrorMsg,
     countdown, setCountdown,
     staleData,
+    searchUpdatedAt, favsUpdatedAt,
     searchHistory,
     liveLineMap,
     mergeLines,
@@ -608,6 +609,7 @@ const App: React.FC = () => {
             displayedBusLines={displayedBusLines}
             isLoading={isLoading}
             errorMsg={errorMsg}
+            updatedAt={searchUpdatedAt}
             searchHistory={searchHistory}
             liveLineMap={liveLineMap}
             activeMiniMap={activeMiniMap}
@@ -650,6 +652,8 @@ const App: React.FC = () => {
             displayedFavLines={displayedFavLines}
             groupedFavLines={groupedFavLines}
             isFavoritesLoading={isFavoritesLoading}
+            updatedAt={favsUpdatedAt}
+            staleData={staleData}
             destFilter={destFilter}
             stopId={stopId}
             removingFavKey={removingFavKey}
