@@ -6,6 +6,7 @@ import SkeletonCard from '../SkeletonCard';
 import { BusLineCardProps } from '../BusLineCard';
 import RoutineManager from '../RoutineManager';
 import SaldoBaixoAviso from '../SaldoBaixoAviso';
+import { normalizeStop } from '../../utils/usage';
 import UpdatedAgo from '../UpdatedAgo';
 import CloudSyncCard from '../CloudSyncCard';
 import { CloudSync } from '../../hooks/useCloudSync';
@@ -19,6 +20,8 @@ interface FavsTabProps {
   favoriteBusLines: BusLine[];
   displayedFavLines: BusLine[];
   groupedFavLines: Record<string, BusLine[]>;
+  /** Ponto sugerido pro horário: o grupo dele aparece primeiro. */
+  priorityStop?: string | null;
   isFavoritesLoading: boolean;
   updatedAt: number | null;
   staleData: boolean;
@@ -41,9 +44,16 @@ interface FavsTabProps {
   onShareStop: (pontoId: string, nomePonto: string) => void;
 }
 
+// Object.entries ordena chaves numéricas (ex.: "31700") do menor pro maior, então a ordem
+// de prioridade é aplicada aqui, na hora de desenhar.
+const sortByPriority = (entries: Array<[string, BusLine[]]>, priority?: string | null) =>
+  priority
+    ? [...entries].sort((a, b) => Number(normalizeStop(b[0]) === priority) - Number(normalizeStop(a[0]) === priority))
+    : entries;
+
 const FavsTab: React.FC<FavsTabProps> = ({
   routines, onAddRoutine, onUpdateRoutine, onRemoveRoutine,
-  favorites, favoriteBusLines, displayedFavLines, groupedFavLines,
+  favorites, favoriteBusLines, displayedFavLines, groupedFavLines, priorityStop,
   isFavoritesLoading, updatedAt, staleData, cloud, destFilter, stopId, removingFavKey,
   lightTheme, theme, cardProps, parseTime, favoritoSaldo,
   onDestFilterChange, onRefresh, onShareStop,
@@ -109,7 +119,7 @@ const FavsTab: React.FC<FavsTabProps> = ({
       </div>
     ))}
 
-    {!isFavoritesLoading && Object.entries(groupedFavLines).map(([pontoId, lines]) => (
+    {!isFavoritesLoading && sortByPriority(Object.entries(groupedFavLines), priorityStop).map(([pontoId, lines]) => (
       <div key={pontoId} className="space-y-3">
         <div className="flex items-center gap-2 px-1 pt-2">
           📍

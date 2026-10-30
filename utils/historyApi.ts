@@ -11,7 +11,7 @@ const FETCH_TTL_MS = 5 * 60_000;
 const MAX_KEYS_PER_REQUEST = 20;
 
 /** Id aleatório e anônimo do aparelho: serve só para limitar medições repetidas. */
-function clientId(): string {
+export function clientId(): string {
   try {
     let id = localStorage.getItem(CLIENT_ID_KEY);
     if (!id || !/^[0-9A-Za-z\-]{8,64}$/.test(id)) {

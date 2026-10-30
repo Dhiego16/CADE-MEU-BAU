@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from 'react';
 import { BusLine, FavoriteItem, SearchResult } from '../types';
 import { normalizeTime, REFRESH_INTERVAL, MAX_HISTORY, BASE_URL } from '../utils';
 import { recordStopObservations, refreshGlobalInsights } from '../utils/predictionHistory';
+import { recordUsage, normalizeLine, normalizeStop } from '../utils/usage';
+import { trackEvent, consumeSearchSource } from '../utils/analytics';
 
 export function useBusSearch() {
   const [busLines, setBusLines] = useState<BusLine[]>([]);
@@ -124,6 +126,7 @@ export function useBusSearch() {
     const idToSearch = forcedId ?? stopId;
     if (!idToSearch || isSearchingRef.current) return;
     isSearchingRef.current = true;
+    const searchSource = consumeSearchSource();
 
     // ── Incrementa geração e aborta fetches de realtime anteriores ──────────
     const currentGeneration = ++searchGenerationRef.current;
@@ -166,6 +169,17 @@ export function useBusSearch() {
 
       if (lines.length > 0) {
         addToHistory(idToSearch);
+        // Hábito de uso (sugestão por horário) e contagem de buscas: só quando a consulta muda,
+        // pra a atualização automática a cada 30s não contar como busca nova.
+        if (!sameQuery) {
+          const lineUsed = (forcedFilter ?? lineFilter).trim();
+          recordUsage(idToSearch, lineUsed);
+          trackEvent('search', {
+            stop: normalizeStop(idToSearch) ?? undefined,
+            line: normalizeLine(lineUsed) ?? undefined,
+            src: searchSource,
+          });
+        }
 
         // ── Fetches de realtime com AbortController compartilhado ───────────
         const linhasUnicas = [...new Set(lines.map(l => l.number))];

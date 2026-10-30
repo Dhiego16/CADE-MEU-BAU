@@ -23,6 +23,7 @@ import PWABanners from './components/PWABanners';
 import TripModeOverlay from './components/TripModeOverlay';
 import RoutineCard from './components/RoutineCard';
 import RoutineManager from './components/RoutineManager';
+import SuggestionCard from './components/SuggestionCard';
 
 // Modals
 import OnboardingModal from './components/modals/OnboardingModal';
@@ -35,6 +36,9 @@ import SearchTab from './components/tabs/SearchTab';
 import FavsTab from './components/tabs/FavsTab';
 import SitPassTab from './components/tabs/SitPassTab';
 import MapTab from './components/tabs/MapTab';
+
+import { trackEvent, markSearchSource } from './utils/analytics';
+import { Suggestion, suggestNow, recordUsage, normalizeStop } from './utils/usage';
 
 import PONTOS_DATA from './pontos.json';
 
@@ -143,8 +147,11 @@ const App: React.FC = () => {
   } = favoritesHook;
 
   const toggleFavorite = useCallback((line: BusLine) => {
+    const sId = line.stopSource ?? stopId;
+    const wasFav = favorites.some(f => f.stopId === sId && f.lineNumber === line.number);
+    trackEvent(wasFav ? 'favorite_remove' : 'favorite_add', { line: line.number, stop: sId });
     favoritesHook.toggleFavorite(line, setFavoriteBusLines);
-  }, [favoritesHook, setFavoriteBusLines]);
+  }, [favoritesHook, setFavoriteBusLines, favorites, stopId]);
 
   const loadFavoritesWithCurrentFavs = useCallback(() => {
     loadFavoritesSchedules(favorites);
@@ -159,7 +166,15 @@ const App: React.FC = () => {
     root.classList.add('theme-switching');
     setLightTheme(p => !p);
     window.setTimeout(() => root.classList.remove('theme-switching'), 200);
+    trackEvent('theme_toggle');
   }, []);
+
+  // ── Sugestão por horário + contagem de abas ────────────────────────────────
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  useEffect(() => {
+    if (activeTab === 'search' || activeTab === 'favs') setSuggestion(suggestNow());
+    trackEvent('tab_view', { tab: activeTab });
+  }, [activeTab]);
 
   // ── Trip Mode ──────────────────────────────────────────────────────────────
   const tripMode = useTripMode(notifications.sendNotification);
@@ -189,9 +204,14 @@ const App: React.FC = () => {
     onCancelLongPress: cancelLongPress,
     onRemoveAlert: notifications.removeAlert,
     onShowAlertModal: notifications.setShowAlertModal,
-    onShare: shareLine,
+    onShare: (sId: string, lineNumber: string) => {
+      trackEvent('share', { kind: 'line', line: lineNumber, stop: sId });
+      return shareLine(sId, lineNumber);
+    },
     onStartTrip: (line: BusLine) => {
       const sId = line.stopSource ?? stopId;
+      trackEvent('trip_start', { line: line.number, stop: sId });
+      recordUsage(sId, line.number);
       const coords = getStopCoords(sId);
       tripMode.startTrip(line, sId, coords.nome, coords.lat, coords.lng);
     },
@@ -203,6 +223,9 @@ const App: React.FC = () => {
     acc[key].push(line);
     return acc;
   }, {});
+
+  const suggestionIsFavorite = !!suggestion && favorites.some(f =>
+    normalizeStop(f.stopId) === suggestion.stopId && (!suggestion.line || f.lineNumber.toUpperCase() === suggestion.line));
 
   const getStopCoords = useCallback((stopSource: string) => {
     const normalizedId = stopSource.padStart(5, '0');
@@ -221,6 +244,7 @@ const App: React.FC = () => {
   }, []);
 
   const shareStop = useCallback(async (pontoId: string, nomePonto: string) => {
+    trackEvent('share', { kind: 'stop', stop: pontoId });
     const url = `${window.location.origin}?ponto=${pontoId}`;
     try {
       if (navigator.share) {
@@ -234,6 +258,7 @@ const App: React.FC = () => {
   }, []);
 
   const goToSearchWithStop = useCallback((pontoId: string) => {
+    markSearchSource('map');
     setStopId(pontoId);
     setLineFilter('');
     setDestFilter('');
@@ -241,6 +266,19 @@ const App: React.FC = () => {
     haptic(40);
     setTimeout(() => handleSearch(pontoId, ''), 120);
   }, [setStopId, setLineFilter, handleSearch]);
+
+  const openSuggestion = useCallback(() => {
+    if (!suggestion) return;
+    const line = suggestion.line ?? '';
+    trackEvent('suggestion_click');
+    markSearchSource('suggestion');
+    setStopId(suggestion.stopId);
+    setLineFilter(line);
+    setDestFilter('');
+    setActiveTab('search');
+    haptic(40);
+    setTimeout(() => handleSearch(suggestion.stopId, line), 120);
+  }, [suggestion, setStopId, setLineFilter, handleSearch]);
 
   // ── Map: buscar linhas do ponto ────────────────────────────────────────────
   const buscarLinhasPontoInterno = useCallback(async (pontoId: string) => {
@@ -522,7 +560,7 @@ const App: React.FC = () => {
           locationStatus={tripMode.locationStatus}
           theme={theme}
           lightTheme={lightTheme}
-          onCancel={tripMode.cancelTrip}
+          onCancel={() => { trackEvent('trip_cancel'); tripMode.cancelTrip(); }}
         />
       )}
 
@@ -545,7 +583,7 @@ const App: React.FC = () => {
           notifPermission={notifications.notifPermission}
           theme={theme}
           onClose={() => notifications.setShowAlertModal(null)}
-          onSetAlert={notifications.setAlert}
+          onSetAlert={(lineKey, minutes) => { trackEvent('alert_create'); return notifications.setAlert(lineKey, minutes); }}
         />
       )}
 
@@ -604,6 +642,21 @@ const App: React.FC = () => {
       >
         <PWABanners pwa={pwa} />
 
+        {suggestion && (
+          (activeTab === 'search' && busLines.length === 0 && !isLoading && !errorMsg && !routinesHook.activeRoutine) ||
+          (activeTab === 'favs' && !suggestionIsFavorite)
+        ) && (
+          <div className="mb-5">
+            <SuggestionCard
+              suggestion={suggestion}
+              stopName={getStopCoords(suggestion.stopId).nome}
+              theme={theme}
+              fetchPreview={performSearch}
+              onOpen={openSuggestion}
+            />
+          </div>
+        )}
+
         {activeTab === 'search' && (
           <SearchTab
             activeRoutine={routinesHook.activeRoutine}
@@ -630,8 +683,8 @@ const App: React.FC = () => {
             onStopIdChange={setStopId}
             onLineFilterChange={setLineFilter}
             onDestFilterChange={setDestFilter}
-            onSearch={() => handleSearch()}
-            onHistorySearch={(id) => { setStopId(id); handleSearch(id); }}
+            onSearch={() => { markSearchSource('manual'); handleSearch(); }}
+            onHistorySearch={(id) => { markSearchSource('history'); setStopId(id); handleSearch(id); }}
             onToggleMiniMap={toggleMiniMap}
             onCloseMiniMap={() => setActiveMiniMap(null)}
             nearbyStops={nearbyStops}
@@ -639,6 +692,7 @@ const App: React.FC = () => {
             favoritoSaldo={sitpass.favoritoSaldo}
             onRequestLocation={requestLocation}
             onNearbyStopSearch={(id) => {
+              markSearchSource('nearby');
               setStopId(id);
               setLineFilter('');
               setDestFilter('');
@@ -658,6 +712,7 @@ const App: React.FC = () => {
             favoriteBusLines={favoriteBusLines}
             displayedFavLines={displayedFavLines}
             groupedFavLines={groupedFavLines}
+            priorityStop={suggestion?.stopId ?? null}
             isFavoritesLoading={isFavoritesLoading}
             updatedAt={favsUpdatedAt}
             staleData={staleData}

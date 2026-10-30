@@ -27,5 +27,13 @@ service cloud.firestore {
     match /predicoes/{id} {
       allow read, write: if false;
     }
+
+    // Relatos de lotação e contagem de eventos: só o servidor (Admin SDK) lê e grava.
+    match /lotacao/{id} {
+      allow read, write: if false;
+    }
+    match /eventos/{id} {
+      allow read, write: if false;
+    }
   }
 }

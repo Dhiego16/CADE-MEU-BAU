@@ -24,6 +24,9 @@ Monitor de ônibus em tempo real para Goiânia e Senador Canedo. Consulte horár
 - 💬 **Botão de feedback** — link direto para formulário de sugestões/erros
 - 📈 **Previsão com histórico** — compara o que a RMTC previu com a chegada real e mostra "costuma atrasar ~X min" e a confiança no card (aprende no próprio aparelho)
 - 🔒 **Cofre do SitPass** — CPFs, cartão favorito e último saldo sincronizam entre aparelhos criptografados no próprio aparelho (AES-256-GCM, senha só do usuário); regras em `firestore.rules`
+- 🕒 **Sugestão pra agora** — o app aprende (só no aparelho) em que horário você costuma buscar cada ponto/linha e sugere o mais provável, com a previsão ao vivo
+- 👥 **Tá lotado?** — relatos de lotação (vazio/cheio/lotado) por linha e faixa de horário, só exibidos com relatos de aparelhos diferentes; usa `FIREBASE_SERVICE_ACCOUNT`
+- 📊 **Contador de eventos próprio** — só contagens por dia, sem dado pessoal (respeita "Não rastrear"); leia em `/api/eventos?dias=7&key=EVENTOS_KEY`
 - 🌐 **Histórico coletivo** — as chegadas medidas por todos os aparelhos alimentam o "costuma atrasar ~X min", com faixa de horário (pico da manhã/tarde); precisa de `FIREBASE_SERVICE_ACCOUNT` na Vercel
 - ☁️ **Login com Google e sincronização** — favoritos e trajetos seguem a conta em qualquer aparelho (liga sozinho quando as variáveis `VITE_FIREBASE_*` existem; veja `.env.example` e `firestore.rules`)
 - ⚡ **Atalhos no ícone do PWA** — segure o ícone para abrir direto em Buscar, Favoritos ou SitPass

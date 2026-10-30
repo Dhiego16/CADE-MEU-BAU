@@ -1,10 +1,15 @@
-import React, { memo, useSyncExternalStore } from 'react';
+import React, { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { BusLine, FavoriteItem, ThemeTokens } from '../types';
 import { haptic } from '../utils';
 import TimeDisplay from './TimeDisplay';
 import {
-  getPredictionInsight, getPredictionVersion, subscribePredictions, PredictionInsight,
+  getPredictionInsight, getPredictionVersion, subscribePredictions, PredictionInsight, bucketFor,
 } from '../utils/predictionHistory';
+import { reportCrowd, CrowdLevel } from '../utils/crowdApi';
+import {
+  subscribeCrowd, getCrowdVersion, getCrowd, ensureCrowd, crowdLabel, canReportCrowd, markReportedCrowd,
+} from '../utils/crowdStore';
+import { trackEvent } from '../utils/analytics';
 
 const CONF_LABEL = { alta: 'alta', media: 'média', baixa: 'baixa' } as const;
 const CONF_DOTS = { alta: 3, media: 2, baixa: 1 } as const;
@@ -35,6 +40,75 @@ const PredictionBadge: React.FC<{ insight: PredictionInsight; subtextClass: stri
       <span className={`${subtextClass} font-bold`}>
         · confiança {CONF_LABEL[insight.confidence]} {'●'.repeat(dots)}{'○'.repeat(3 - dots)}
       </span>
+    </div>
+  );
+};
+
+const CROWD_TEXT = {
+  vazio: { text: 'Costuma estar vazio nesse horário', cls: 'text-emerald-400' },
+  cheio: { text: 'Costuma estar cheio nesse horário', cls: 'text-yellow-400' },
+  lotado: { text: 'Costuma estar lotado nesse horário', cls: 'text-red-400' },
+} as const;
+
+const CROWD_OPTIONS: Array<{ level: CrowdLevel; label: string }> = [
+  { level: 1, label: '🟢 Vazio' },
+  { level: 2, label: '🟡 Cheio' },
+  { level: 3, label: '🔴 Lotado' },
+];
+
+// "Tá lotado?": mostra o que a comunidade costuma relatar e deixa você relatar em 2 toques.
+const CrowdRow: React.FC<{ cardKey: string; lineNumber: string; stopId: string; subtextClass: string }> = ({
+  cardKey, lineNumber, stopId, subtextClass,
+}) => {
+  useSyncExternalStore(subscribeCrowd, getCrowdVersion);
+  useEffect(() => { ensureCrowd(cardKey); }, [cardKey]);
+  const [open, setOpen] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const label = crowdLabel(getCrowd(cardKey));
+
+  const report = (level: CrowdLevel) => {
+    setOpen(false);
+    if (!canReportCrowd(cardKey)) { setMsg('Você já relatou há pouco. Obrigado!'); }
+    else {
+      markReportedCrowd(cardKey);
+      void reportCrowd(cardKey, level, bucketFor());
+      trackEvent('lotacao_report', { line: lineNumber, stop: stopId, nivel: level });
+      haptic(40);
+      setMsg('Obrigado pelo relato!');
+    }
+    setTimeout(() => setMsg(null), 4000);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      {label && (
+        <div className={`text-[9px] font-black uppercase tracking-widest text-center ${CROWD_TEXT[label.level].cls}`}>
+          👥 {CROWD_TEXT[label.level].text}
+          <span className={`${subtextClass} font-bold`}> · {label.reports} relatos</span>
+        </div>
+      )}
+      {msg && <div className="text-[9px] font-black uppercase tracking-widest text-emerald-400">{msg}</div>}
+      {!msg && !open && (
+        <button
+          onClick={e => { e.stopPropagation(); setOpen(true); haptic(20); }}
+          className={`text-[9px] font-black uppercase tracking-widest underline underline-offset-2 opacity-70 active:opacity-100 ${subtextClass}`}
+        >
+          Relatar lotação
+        </button>
+      )}
+      {open && (
+        <div className="flex items-center gap-2 flex-wrap justify-center">
+          {CROWD_OPTIONS.map(o => (
+            <button
+              key={o.level}
+              onClick={e => { e.stopPropagation(); report(o.level); }}
+              className="border border-white/15 bg-white/5 rounded-full px-3 py-1.5 text-[10px] font-black active:scale-95 transition-transform"
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -167,6 +241,7 @@ const BusLineCard = memo(({
         </div>
       </div>
       {insight && <PredictionBadge insight={insight} subtextClass={theme.subtext} />}
+      <CrowdRow cardKey={key} lineNumber={line.number} stopId={sId} subtextClass={theme.subtext} />
     </div>
   );
 });
