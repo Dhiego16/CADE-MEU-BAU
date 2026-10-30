@@ -417,7 +417,10 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
   return (
     <div
       className="fixed inset-0 z-[200] flex flex-col"
-      style={{ background: bgGradient, transition: 'background 1s ease' }}
+      // paddingTop: o mapa começa abaixo da barra de status/Dynamic Island. A faixa
+      // fica com a cor sólida do fundo, então o blur automático do iOS 26 não aparece
+      // e o aviso de status deixa de ficar escondido atrás do notch.
+      style={{ background: bgGradient, transition: 'background 1s ease', paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       <style>{`
         @keyframes tripPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.7;transform:scale(0.97)} }
