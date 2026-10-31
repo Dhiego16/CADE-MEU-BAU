@@ -2,767 +2,699 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cadê meu Baú? — Monitor de Ônibus em Goiânia</title>
-  <meta name="description" content="Descubra em segundos quando o seu ônibus chega. Tempo real, sem anúncios, sem cadastro. Para Goiânia e região metropolitana." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Cadê meu Baú? — Ônibus em tempo real em Goiânia</title>
+  <meta name="description" content="Veja quando o seu ônibus chega em Goiânia e região: tempo real, mapa ao vivo, alertas, lotação e saldo do SitPass. Grátis, sem anúncios e sem precisar de cadastro." />
+  <link rel="canonical" href="https://cademeubau.vercel.app/sobre" />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Cadê meu Baú?" />
-  <meta property="og:title" content="Cadê meu Baú? — Monitor de Ônibus em Goiânia" />
-  <meta property="og:description" content="Descubra em segundos quando o seu ônibus chega. Tempo real, sem anúncios, sem cadastro." />
+  <meta property="og:title" content="Cadê meu Baú? — Ônibus em tempo real em Goiânia" />
+  <meta property="og:description" content="Veja quando o seu ônibus chega: tempo real, mapa ao vivo, alertas e lotação. Grátis, sem anúncios e sem cadastro." />
   <meta property="og:image" content="https://cademeubau.vercel.app/logo.png" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="512" />
   <meta property="og:image:height" content="512" />
-  <meta property="og:image:alt" content="Cadê meu Baú? — Monitor de Ônibus em Goiânia" />
+  <meta property="og:image:alt" content="Logo do Cadê meu Baú?" />
   <meta property="og:url" content="https://cademeubau.vercel.app/sobre" />
   <meta property="og:locale" content="pt_BR" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Cadê meu Baú? — Monitor de Ônibus em Goiânia" />
-  <meta name="twitter:description" content="Descubra em segundos quando o seu ônibus chega. Tempo real, sem anúncios, sem cadastro." />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Cadê meu Baú? — Ônibus em tempo real em Goiânia" />
+  <meta name="twitter:description" content="Veja quando o seu ônibus chega: tempo real, mapa ao vivo, alertas e lotação. Grátis e sem anúncios." />
   <meta name="twitter:image" content="https://cademeubau.vercel.app/logo.png" />
 
   <link rel="icon" type="image/png" href="/logo.png" />
   <link rel="apple-touch-icon" href="/logo.png" />
   <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#fbbf24" />
+  <meta name="theme-color" content="#0a0a0c" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap&font-display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Cadê meu Baú?",
+    "url": "https://cademeubau.vercel.app",
+    "applicationCategory": "TravelApplication",
+    "operatingSystem": "Android, iOS (PWA)",
+    "inLanguage": "pt-BR",
+    "description": "Monitor de ônibus em tempo real para Goiânia e região metropolitana.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" }
+  }
+  </script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --yellow: #fbbf24;
-      --dark: #080808;
-      --card: #101010;
-      --card2: #161616;
-      --border: rgba(255,255,255,0.07);
-      --border-y: rgba(251,191,36,0.2);
-      --text: #fff;
-      --muted: #555;
-      --muted2: #888;
+      --y: #fbbf24;
+      --y2: #fde68a;
+      --bg: #0a0a0c;
+      --text: #f5f5f4;
+      --muted: #a8a29e;        /* contraste ~8:1 sobre o fundo */
+      --muted2: #78716c;
+      --line: rgba(255,255,255,0.10);
+      --blue: #60a5fa;
+      --green: #4ade80;
+      --red: #f87171;
+      --r-lg: 28px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    html { scroll-behavior: smooth; }
-
+    html { scroll-behavior: smooth; scroll-padding-top: 96px; }
     body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--dark);
+      font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: var(--bg);
       color: var(--text);
+      line-height: 1.6;
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
-
+    /* Fundo com manchas de cor: é o que o vidro "refrata" */
     body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: -1;
+      content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(60vmax 60vmax at 8% -5%, rgba(251,191,36,0.20), transparent 60%),
+        radial-gradient(55vmax 55vmax at 100% 30%, rgba(59,130,246,0.16), transparent 62%),
+        radial-gradient(50vmax 50vmax at 20% 105%, rgba(251,191,36,0.10), transparent 60%),
+        var(--bg);
+    }
+    img { max-width: 100%; display: block; }
+    a { color: inherit; }
+    .display { font-family: 'Bebas Neue', 'Arial Narrow', Impact, sans-serif; letter-spacing: 0.02em; font-weight: 400; }
+
+    :focus-visible { outline: 3px solid var(--y); outline-offset: 3px; border-radius: 10px; }
+    .skip { position: absolute; left: 12px; top: -60px; z-index: 300; background: var(--y); color: #000; font-weight: 700; padding: 10px 16px; border-radius: 12px; text-decoration: none; transition: top .2s; }
+    .skip:focus { top: calc(12px + var(--safe-top)); }
+
+    /* ───────── Liquid Glass ───────── */
+    .glass {
+      position: relative;
+      background: linear-gradient(135deg, rgba(255,255,255,0.11), rgba(255,255,255,0.035));
+      border: 1px solid rgba(255,255,255,0.16);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(255,255,255,0.05), 0 24px 60px rgba(0,0,0,0.45);
+      -webkit-backdrop-filter: blur(22px) saturate(170%);
+      backdrop-filter: blur(22px) saturate(170%);
+    }
+    .glass::before {
+      content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,0.22), rgba(255,255,255,0) 40%);
+    }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .glass { background: #17171b; }
     }
 
-    /* NAV */
-    nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      padding: 18px 32px;
-      display: flex; align-items: center; justify-content: space-between;
-      background: rgba(8,8,8,0.85);
-      backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
+    /* ───────── NAV ───────── */
+    .nav-wrap { position: fixed; top: calc(12px + var(--safe-top)); left: 0; right: 0; z-index: 100; padding: 0 16px; pointer-events: none; }
+    .nav {
+      pointer-events: auto; max-width: 880px; margin: 0 auto; border-radius: 999px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 8px 8px 8px 22px;
     }
-    .nav-logo { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--yellow); text-decoration: none; letter-spacing: 0.05em; }
-    .nav-links { display: flex; align-items: center; gap: 28px; }
-    .nav-links a { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted2); text-decoration: none; transition: color 0.2s; }
-    .nav-links a:hover { color: var(--yellow); }
-    .nav-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--yellow); color: #000; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; padding: 10px 20px; border-radius: 100px; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s; }
-    .nav-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(251,191,36,0.3); }
-
-    /* HERO */
-    .hero {
-      min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-      padding: 100px 24px 80px;
-      position: relative; text-align: center; overflow: hidden;
-      z-index: 1;
+    .nav-logo { font-size: 22px; color: var(--y); text-decoration: none; white-space: nowrap; }
+    .nav-links { display: flex; align-items: center; gap: 4px; }
+    .nav-links a {
+      font-size: 13px; font-weight: 700; color: var(--muted); text-decoration: none;
+      padding: 9px 14px; border-radius: 999px; transition: color .2s, background .2s;
     }
-    .hero-glow {
-      position: absolute !important; width: 700px; height: 700px;
-      background: radial-gradient(circle, rgba(251,191,36,0.09) 0%, transparent 65%);
-      top: 40%; left: 50%; transform: translate(-50%, -50%);
-      pointer-events: none; z-index: 0;
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      font: 700 14px/1 'DM Sans', sans-serif; text-decoration: none; cursor: pointer; border: 0;
+      padding: 16px 30px; border-radius: 999px; transition: transform .2s, box-shadow .2s, background .2s;
     }
-    .hero > *:not(.hero-glow) { position: relative; z-index: 1; }
+    .btn-y { background: var(--y); color: #111; box-shadow: 0 10px 34px rgba(251,191,36,0.28); }
+    .btn-y:hover { transform: translateY(-2px); box-shadow: 0 14px 44px rgba(251,191,36,0.42); }
+    .btn-g { color: var(--text); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); }
+    .btn-g:hover { background: rgba(255,255,255,0.14); transform: translateY(-2px); }
+    .btn-sm { padding: 11px 20px; font-size: 13px; }
 
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      border: 1px solid var(--border-y); background: rgba(251,191,36,0.06);
-      color: var(--yellow); font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
-      padding: 8px 18px; border-radius: 100px; margin-bottom: 36px;
-      animation: none;
+    /* ───────── HERO ───────── */
+    .hero { position: relative; padding: calc(120px + var(--safe-top)) 20px 70px; max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 10px; padding: 8px 16px; border-radius: 999px;
+      font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--y2);
+      background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.28);
     }
-    .badge-dot { width: 6px; height: 6px; background: var(--yellow); border-radius: 50%; animation: pulse 2s infinite; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block; animation: pulse 2s infinite; }
+    .hero h1 { font-size: clamp(52px, 8.4vw, 104px); line-height: .9; margin: 22px 0 22px; }
+    .hero h1 em { font-style: normal; color: var(--y); display: block; }
+    .hero p.lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 520px; }
+    .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
+    .trust { display: flex; gap: 18px 26px; flex-wrap: wrap; margin-top: 30px; color: var(--muted); font-size: 14px; font-weight: 500; }
+    .trust span::before { content: '✓'; color: var(--y); font-weight: 700; margin-right: 8px; }
 
-    .hero-title {
-      font-family: 'Bebas Neue', 'Arial Black', Impact, sans-serif;
-      font-size: clamp(48px, 8vw, 100px);
-      line-height: 0.88; letter-spacing: -0.02em;
-      animation: none;
+    /* Celulares do mockup */
+    .phones { position: relative; height: 560px; display: flex; justify-content: center; }
+    .phone {
+      position: absolute; width: 262px; border-radius: 40px; padding: 14px; overflow: hidden;
+      background: linear-gradient(160deg, rgba(20,20,26,0.92), rgba(10,10,14,0.96));
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 40px 90px rgba(0,0,0,0.65);
     }
-    .hero-title em { color: var(--yellow); font-style: normal; display: block; }
+    .phone.p1 { left: 50%; top: 0; transform: translateX(-84%) rotate(-3deg); z-index: 2; }
+    .phone.p2 { left: 50%; top: 56px; transform: translateX(-4%) rotate(3deg); width: 240px; }
+    .p-top { display: flex; align-items: center; justify-content: space-between; margin: 6px 4px 12px; }
+    .p-logo { font-family: 'Bebas Neue', sans-serif; color: var(--y); font-size: 16px; letter-spacing: .04em; font-style: italic; }
+    .p-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; color: var(--y2); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); padding: 5px 10px; border-radius: 999px; }
+    .p-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 22px; padding: 12px; margin-bottom: 8px; }
+    .p-line { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .p-num { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: var(--y); width: 48px; text-align: center; line-height: 1; }
+    .p-line small { display: block; font-size: 8px; font-weight: 700; color: var(--muted2); text-transform: uppercase; letter-spacing: .14em; }
+    .p-line strong { display: block; font-size: 11px; text-transform: uppercase; line-height: 1.2; }
+    .p-line em { font-style: normal; font-size: 8px; font-weight: 700; color: var(--green); text-transform: uppercase; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+    .p-line em .dot { width: 5px; height: 5px; }
+    .p-times { display: flex; gap: 6px; }
+    .p-t { flex: 1; border-radius: 14px; padding: 8px 6px; text-align: center; }
+    .p-t.g { background: #15803d; }
+    .p-t.a { background: #92400e; }
+    .p-t small { display: block; font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; opacity: .8; }
+    .p-t b { display: block; font-family: 'Bebas Neue', sans-serif; font-size: 26px; line-height: 1.05; font-weight: 400; }
+    .p-note { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-top: 8px; text-align: center; color: var(--y2); }
+    .p-note.c { color: var(--y); margin-top: 4px; }
+    .p-sug { display: flex; align-items: center; gap: 10px; border-color: rgba(251,191,36,0.35); }
+    .p-sug .ic { width: 34px; height: 34px; border-radius: 12px; background: rgba(251,191,36,0.15); display: grid; place-items: center; font-size: 16px; flex: none; }
+    .p-sug small { display: block; font-size: 7px; font-weight: 700; color: var(--y); text-transform: uppercase; letter-spacing: .14em; }
+    .p-sug strong { font-size: 10px; display: block; }
+    .p-sug .eta { margin-left: auto; text-align: right; font-family: 'Bebas Neue', sans-serif; color: var(--y); font-size: 20px; line-height: 1; }
+    .p-tabs { display: flex; margin-top: 10px; padding: 5px; border-radius: 999px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }
+    .p-tab { flex: 1; text-align: center; padding: 6px 0 5px; border-radius: 999px; font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .p-tab img { width: 17px; height: 17px; margin: 0 auto 2px; }
+    .p-tab.on { background: rgba(251,191,36,0.20); border: 1px solid rgba(251,191,36,0.35); color: var(--y2); }
 
-    .hero-sub {
-      font-size: clamp(15px, 2.5vw, 19px); color: var(--muted2); font-weight: 500;
-      max-width: 460px; line-height: 1.65; margin: 28px auto 52px;
-      animation: none;
-    }
+    .map { border-radius: 26px; overflow: hidden; position: relative; height: 250px; background: #1a1f2b; }
+    .map svg { width: 100%; height: 100%; display: block; }
+    .map .chip { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); white-space: nowrap; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--y); background: rgba(0,0,0,0.72); border: 1px solid rgba(251,191,36,0.35); padding: 6px 10px; border-radius: 999px; }
+    .map .pin { position: absolute; width: 28px; height: 28px; }
+    .t-panel { display: flex; align-items: center; gap: 10px; padding: 12px 4px 4px; }
+    .t-ring { position: relative; width: 66px; height: 66px; flex: none; }
+    .t-ring svg { transform: rotate(-90deg); }
+    .t-ring b { position: absolute; inset: 0; display: grid; place-items: center; font-family: 'Bebas Neue', sans-serif; font-weight: 400; font-size: 19px; color: #f87171; }
+    .t-info small { display: block; font-size: 7px; font-weight: 700; color: var(--muted2); text-transform: uppercase; letter-spacing: .14em; }
+    .t-info strong { font-size: 11px; text-transform: uppercase; display: block; line-height: 1.2; }
+    .t-info .m { display: flex; gap: 5px; margin-top: 6px; }
+    .t-info .m span { font-size: 8px; font-weight: 700; padding: 5px 7px; border-radius: 9px; }
+    .m .w { background: rgba(248,113,113,0.14); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+    .m .b { background: rgba(251,191,36,0.12); color: var(--y); border: 1px solid rgba(251,191,36,0.3); }
 
-    .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; animation: none; }
+    /* ───────── TICKER ───────── */
+    .ticker { overflow: hidden; border-block: 1px solid var(--line); background: rgba(255,255,255,0.02); padding: 14px 0; }
+    .ticker-track { display: flex; width: max-content; animation: ticker 40s linear infinite; }
+    .ticker:hover .ticker-track { animation-play-state: paused; }
+    .ticker-track span { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: .1em; color: var(--y); opacity: .55; padding: 0 22px; white-space: nowrap; }
+    .ticker-track span::after { content: '·'; margin-left: 44px; opacity: .5; }
 
-    .btn-primary {
-      display: inline-flex; align-items: center; gap: 10px;
-      background: var(--yellow); color: #000; font-weight: 700; font-size: 13px;
-      letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
-      padding: 18px 36px; border-radius: 100px; border: none; cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      box-shadow: 0 0 40px rgba(251,191,36,0.22);
-    }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 60px rgba(251,191,36,0.42); }
+    /* ───────── SECTIONS ───────── */
+    .section { max-width: 1180px; margin: 0 auto; padding: 100px 20px 0; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: var(--y); margin-bottom: 14px; }
+    .title { font-size: clamp(42px, 6.4vw, 76px); line-height: .94; margin-bottom: 14px; }
+    .sub { color: var(--muted); font-size: 18px; max-width: 620px; margin-bottom: 52px; }
 
-    .btn-secondary {
-      display: inline-flex; align-items: center; gap: 10px;
-      background: transparent; color: var(--muted2); font-weight: 700; font-size: 13px;
-      letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
-      padding: 18px 36px; border-radius: 100px; border: 1px solid var(--border);
-      transition: all 0.2s;
-    }
-    .btn-secondary:hover { border-color: var(--yellow); color: var(--yellow); }
+    /* Números */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 1180px; margin: 56px auto 0; padding: 0 20px; }
+    .stat { border-radius: var(--r-lg); padding: 28px 16px; text-align: center; }
+    .stat b { display: block; font-family: 'Bebas Neue', sans-serif; font-weight: 400; font-size: clamp(44px, 7vw, 80px); line-height: 1; color: var(--y); }
+    .stat span { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
 
-    /* MOCKUPS */
-    .mockup-wrap {
-      margin-top: 80px;
-      display: flex; align-items: flex-start; justify-content: center; gap: 20px;
-      animation: float 7s ease-in-out infinite;
-    }
+    /* Features em "bento" */
+    .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+    .card { border-radius: var(--r-lg); padding: 28px; transition: transform .3s, border-color .3s; }
+    .card:hover { transform: translateY(-4px); border-color: rgba(251,191,36,0.35); }
+    .c-6 { grid-column: span 6; } .c-4 { grid-column: span 4; } .c-3 { grid-column: span 3; } .c-2 { grid-column: span 2; }
+    .ic { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.28); font-size: 22px; margin-bottom: 18px; }
+    .ic img { width: 27px; height: 27px; object-fit: contain; }
+    .card h3 { font-family: 'Bebas Neue', sans-serif; font-weight: 400; font-size: 27px; letter-spacing: .03em; line-height: 1.05; margin-bottom: 8px; }
+    .card p { color: var(--muted); font-size: 15px; }
+    .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #111; background: var(--y); padding: 4px 10px; border-radius: 999px; margin-bottom: 14px; }
+    .card.hero-card { background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(255,255,255,0.03)); display: flex; gap: 28px; align-items: center; }
+    .card.hero-card .txt { flex: 1; }
+    .card.hero-card h3 { font-size: 38px; }
+    .mini-map { width: 240px; flex: none; border-radius: 22px; overflow: hidden; border: 1px solid rgba(255,255,255,0.14); position: relative; }
+    .mini-map svg { display: block; width: 100%; height: auto; }
 
-    .mockup-phone {
-      width: 255px; background: #0d0d0d;
-      border: 1.5px solid rgba(255,255,255,0.1); border-radius: 40px;
-      padding: 20px 14px 24px;
-      box-shadow: 0 48px 120px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.03), 0 0 80px rgba(251,191,36,0.05);
-    }
-    .mockup-phone.secondary { width: 215px; margin-top: 48px; opacity: 0.82; }
+    /* Como usar */
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; counter-reset: s; }
+    .step { border-radius: var(--r-lg); padding: 26px; counter-increment: s; }
+    .step::before { content: '0' counter(s); display: block; font-family: 'Bebas Neue', sans-serif; font-size: 52px; line-height: 1; color: var(--y); opacity: .9; margin-bottom: 10px; }
+    .step h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    .step p { color: var(--muted); font-size: 14.5px; }
 
-    .mockup-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-    .mockup-logo { font-family: 'Bebas Neue', sans-serif; font-size: 14px; color: var(--yellow); letter-spacing: 0.05em; }
-    .mockup-refresh { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--yellow); display: flex; align-items: center; gap: 4px; }
-    .refresh-dot { width: 5px; height: 5px; background: #22c55e; border-radius: 50%; animation: pulse 1.5s infinite; }
+    /* Privacidade */
+    .priv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 
-    .mockup-card { background: #1a1a1a; border: 1px solid rgba(255,255,255,0.05); border-radius: 20px; padding: 13px; margin-bottom: 8px; }
-    .mockup-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .mockup-num { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--yellow); width: 50px; text-align: center; line-height: 1; }
-    .mockup-dest { flex: 1; }
-    .mockup-dest-label { font-size: 7px; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.15em; }
-    .mockup-dest-name { font-size: 10px; font-weight: 700; color: #fff; text-transform: uppercase; margin-top: 2px; line-height: 1.2; }
-    .mockup-status { font-size: 7px; font-weight: 700; color: #22c55e; text-transform: uppercase; display: flex; align-items: center; gap: 3px; margin-top: 3px; }
-    .status-dot { width: 4px; height: 4px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
+    /* FAQ */
+    .faq { max-width: 820px; display: grid; gap: 10px; }
+    details { border-radius: 22px; padding: 0 22px; }
+    summary { cursor: pointer; list-style: none; padding: 20px 0; font-weight: 700; font-size: 16px; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: '+'; font-size: 24px; color: var(--y); line-height: 1; transition: transform .25s; }
+    details[open] summary::after { transform: rotate(45deg); }
+    details p { color: var(--muted); padding: 0 0 20px; font-size: 15px; }
 
-    .mockup-times { display: flex; gap: 6px; }
-    .time-box { flex: 1; border-radius: 14px; padding: 10px 6px; text-align: center; }
-    .time-box.g { background: #16a34a; }
-    .time-box.a { background: #b45309; }
-    .time-box.s { background: #1e293b; }
-    .time-label { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; margin-bottom: 3px; }
-    .time-val { font-family: 'Bebas Neue', sans-serif; font-size: 22px; line-height: 1; }
-    .time-unit { font-size: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.7; }
+    /* CTA final */
+    .final { max-width: 1000px; margin: 110px auto 0; padding: 0 20px; }
+    .final-box { border-radius: 40px; text-align: center; padding: clamp(44px, 8vw, 90px) 24px; background: linear-gradient(135deg, rgba(251,191,36,0.16), rgba(255,255,255,0.04)); }
+    .final-box h2 { font-size: clamp(52px, 10vw, 112px); line-height: .9; margin-bottom: 30px; }
+    .final-box h2 em { color: var(--y); font-style: normal; }
+    .final-box small { display: block; margin-top: 20px; color: var(--muted); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
 
-    /* Trip mode mockup */
-    .trip-screen { background: linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%); border-radius: 28px; padding: 14px 12px; text-align: center; }
-    .trip-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2); border-radius: 100px; padding: 4px 10px; margin-bottom: 12px; }
-    .trip-badge span { width: 5px; height: 5px; background: var(--yellow); border-radius: 50%; animation: pulse 1s infinite; }
-    .trip-badge p { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--yellow); }
-    .trip-ring { width: 78px; height: 78px; margin: 0 auto 12px; position: relative; }
-    .trip-ring svg { transform: rotate(-90deg); }
-    .trip-time-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
-    .trip-countdown { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--yellow); line-height: 1; }
-    .trip-countdown-label { font-size: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); margin-top: 2px; }
-    .trip-info { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 8px; margin-bottom: 8px; }
-    .trip-line-label { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); }
-    .trip-dest { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #fff; margin-top: 2px; }
-    .trip-metrics { display: flex; gap: 6px; }
-    .trip-metric { flex: 1; border-radius: 10px; padding: 7px 5px; text-align: center; }
-    .trip-metric.w { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.25); }
-    .trip-metric.b { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2); }
-    .trip-metric-label { font-size: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
-    .trip-metric.w .trip-metric-label { color: #3b82f6; }
-    .trip-metric.b .trip-metric-label { color: var(--yellow); }
-    .trip-metric-val { font-family: 'Bebas Neue', sans-serif; font-size: 17px; line-height: 1; margin-top: 2px; }
-    .trip-metric.w .trip-metric-val { color: #3b82f6; }
-    .trip-metric.b .trip-metric-val { color: var(--yellow); }
+    footer { text-align: center; padding: 70px 20px calc(60px + var(--safe-bottom)); color: var(--muted); font-size: 14px; }
+    footer .f-logo { font-size: 32px; color: var(--y); margin-bottom: 10px; }
+    footer p { max-width: 460px; margin: 0 auto; }
+    .f-links { display: flex; gap: 8px 24px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+    .f-links a { font-size: 13px; font-weight: 700; color: var(--muted); text-decoration: none; }
+    .f-links a:hover { color: var(--y); }
+    .f-note { margin-top: 26px; font-size: 12px; color: var(--muted2); }
 
-    /* TICKER */
-    .ticker-wrap {
-      overflow: hidden; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-      background: rgba(251,191,36,0.025); padding: 15px 0; position: relative; z-index: 1;
-    }
-    .ticker { display: flex; white-space: nowrap; animation: ticker 32s linear infinite; }
-    .ticker:hover { animation-play-state: paused; }
-    .ticker-item { font-family: 'Bebas Neue', sans-serif; font-size: 15px; letter-spacing: 0.12em; color: var(--yellow); opacity: 0.35; padding: 0 24px; transition: opacity 0.2s; cursor: default; }
-    .ticker-item:hover { opacity: 0.9; }
-    .ticker-sep { color: var(--muted); opacity: 0.3; margin: 0 2px; }
-
-    /* STATS */
-    .stats-bar { background: var(--card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 56px 24px; position: relative; z-index: 1; }
-    .stats-inner { max-width: 860px; margin: 0 auto; display: grid; grid-template-columns: repeat(3,1fr); gap: 40px; text-align: center; }
-    .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: clamp(48px,8vw,88px); color: var(--yellow); line-height: 1; letter-spacing: -0.02em; }
-    .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); margin-top: 8px; line-height: 1.4; }
-
-    /* SECTIONS */
-    .section { padding: 100px 24px; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
-    .section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--yellow); margin-bottom: 16px; }
-    .section-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(44px,7vw,80px); line-height: 0.92; letter-spacing: -0.01em; margin-bottom: 64px; }
-
-    /* FEATURES */
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(275px, 1fr)); gap: 16px; }
-
-    .feature-card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 28px; padding: 32px;
-      transition: border-color 0.3s, transform 0.3s, background 0.3s;
-      position: relative; overflow: hidden;
-    }
-    .feature-card::before {
-      content: ''; position: absolute; inset: 0;
-      background: radial-gradient(circle at 0% 0%, rgba(251,191,36,0.04) 0%, transparent 60%);
-      opacity: 0; transition: opacity 0.3s;
-    }
-    .feature-card:hover { border-color: var(--border-y); transform: translateY(-4px); background: var(--card2); }
-    .feature-card:hover::before { opacity: 1; }
-
-    .feature-icon {
-      width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
-      background: rgba(251,191,36,0.07); border: 1px solid var(--border-y);
-      border-radius: 14px; margin-bottom: 20px; font-size: 21px;
-    }
-    .feature-icon img { width: 25px; height: 25px; object-fit: contain; }
-    .feature-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.03em; margin-bottom: 10px; }
-    .feature-desc { font-size: 14px; color: var(--muted2); line-height: 1.65; }
-
-    /* Destaque Modo Viagem */
-    .feature-card.highlight {
-      background: linear-gradient(135deg, #0c1829 0%, #090912 100%);
-      border-color: rgba(59,130,246,0.2);
-      grid-column: span 2;
-    }
-    .feature-card.highlight:hover { border-color: rgba(59,130,246,0.45); }
-    @media (max-width: 680px) { .feature-card.highlight { grid-column: span 1; } }
-
-    .highlight-inner { display: flex; gap: 32px; align-items: center; }
-    @media (max-width: 680px) { .highlight-inner { flex-direction: column; } }
-    .highlight-content { flex: 1; }
-    .highlight-tag {
-      display: inline-block; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25);
-      color: #60a5fa; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em;
-      padding: 4px 10px; border-radius: 100px; margin-bottom: 14px;
-    }
-    .highlight-preview {
-      width: 175px; flex-shrink: 0;
-      background: linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%);
-      border: 1px solid rgba(59,130,246,0.13); border-radius: 20px; padding: 14px 11px;
-    }
-
-    /* STEPS */
-    .steps { display: flex; flex-direction: column; }
-    .step { display: flex; gap: 32px; align-items: flex-start; padding: 44px 0; border-bottom: 1px solid var(--border); }
-    .step:last-child { border-bottom: none; }
-    .step-num { font-family: 'Bebas Neue', sans-serif; font-size: 68px; line-height: 1; color: rgba(251,191,36,0.1); width: 90px; flex-shrink: 0; }
-    .step-content { flex: 1; padding-top: 10px; }
-    .step-title { font-family: 'Bebas Neue', sans-serif; font-size: 29px; color: var(--text); margin-bottom: 10px; letter-spacing: 0.02em; }
-    .step-desc { font-size: 15px; color: var(--muted2); line-height: 1.65; }
-
-    /* PWA BANNER */
+    /* Banner de instalação */
     #pwaBanner {
-      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      z-index: 200; background: #111; border: 1px solid var(--border-y); border-radius: 20px;
-      padding: 16px 20px; box-shadow: 0 24px 60px rgba(0,0,0,0.8), 0 0 40px rgba(251,191,36,0.08);
-      display: flex; align-items: center; gap: 16px;
-      min-width: 320px; max-width: 420px;
-      animation: slideUp 0.4s ease both;
+      position: fixed; left: 50%; bottom: calc(18px + var(--safe-bottom)); transform: translateX(-50%); z-index: 200;
+      width: min(92vw, 430px); border-radius: 26px; padding: 14px 16px; display: flex; align-items: center; gap: 14px;
+      animation: slideUp .4s ease both;
     }
     #pwaBanner.hidden { display: none; }
-    .pwa-icon { width: 44px; height: 44px; background: var(--yellow); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .pwa-icon img { width: 28px; height: 28px; object-fit: contain; }
-    .pwa-text { flex: 1; }
-    .pwa-title { font-size: 13px; font-weight: 700; color: #fff; }
-    .pwa-sub { font-size: 11px; color: var(--muted2); margin-top: 2px; }
-    .pwa-actions { display: flex; gap: 8px; flex-shrink: 0; }
-    .pwa-install { background: var(--yellow); color: #000; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 16px; border-radius: 100px; border: none; cursor: pointer; transition: transform 0.2s; }
-    .pwa-install:hover { transform: scale(1.05); }
-    .pwa-dismiss { background: transparent; color: var(--muted); font-size: 20px; border: none; cursor: pointer; padding: 2px 4px; line-height: 1; }
+    #pwaBanner img { width: 44px; height: 44px; border-radius: 12px; flex: none; }
+    #pwaBanner .t { flex: 1; min-width: 0; }
+    #pwaBanner .t b { display: block; font-size: 14px; }
+    #pwaBanner .t span { font-size: 12px; color: var(--muted); }
+    #pwaDismissBtn { background: none; border: 0; color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer; padding: 6px 8px; border-radius: 10px; }
 
-    /* CTA */
-    .cta-section { padding: 120px 24px; text-align: center; position: relative; overflow: hidden; z-index: 1; }
-    .cta-section::before {
-      content: ''; position: absolute; width: 900px; height: 500px;
-      background: radial-gradient(ellipse, rgba(251,191,36,0.07) 0%, transparent 70%);
-      top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none;
+    /* Revelar ao rolar */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+    @keyframes ticker { to { transform: translateX(-50%); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+    @keyframes ring { 0% { transform: scale(.5); opacity: .7; } 100% { transform: scale(2.2); opacity: 0; } }
+    .pulse-ring { transform-origin: center; transform-box: fill-box; animation: ring 2s ease-out infinite; }
+
+    /* ───────── Responsivo ───────── */
+    @media (max-width: 980px) {
+      .hero { grid-template-columns: 1fr; padding-top: calc(108px + var(--safe-top)); text-align: center; }
+      .hero p.lead { margin-inline: auto; }
+      .cta-row, .trust { justify-content: center; }
+      .phones { height: 540px; }
+      .c-4, .c-3 { grid-column: span 6; }
+      .c-2 { grid-column: span 3; }
+      .steps { grid-template-columns: repeat(2, 1fr); }
+      .priv { grid-template-columns: 1fr; }
     }
-    .cta-section > * { position: relative; z-index: 1; }
-    .cta-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(60px,12vw,130px); line-height: 0.88; letter-spacing: -0.02em; margin-bottom: 40px; }
-    .cta-title em { color: var(--yellow); font-style: normal; }
-
-    /* FOOTER */
-    footer { border-top: 1px solid var(--border); padding: 48px 24px; text-align: center; position: relative; z-index: 1; }
-    .footer-logo { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: var(--yellow); margin-bottom: 14px; letter-spacing: 0.05em; }
-    .footer-text { font-size: 13px; color: var(--muted); line-height: 1.7; max-width: 400px; margin: 0 auto; }
-    .footer-links { display: flex; gap: 28px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
-    .footer-links a { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: color 0.2s; }
-    .footer-links a:hover { color: var(--yellow); }
-    .footer-made { margin-top: 28px; font-size: 11px; color: #222; }
-
-    /* REVEAL */
-    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
-    .reveal.visible { opacity: 1; transform: translateY(0); }
-
-    /* KEYFRAMES */
-    @keyframes fadeDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(28px); } to { opacity:1; transform:translateY(0); } }
-    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-    @keyframes ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
-    @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
-    @keyframes slideUp { from { opacity:0; transform:translateX(-50%) translateY(16px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-
     @media (max-width: 640px) {
-      nav { padding: 14px 20px; }
       .nav-links { display: none; }
-      .stats-inner { gap: 16px; }
-      .stat-num { font-size: 36px; }
-      .stat-label { font-size: 9px; }
-      .step { flex-direction: column; gap: 4px; }
-      .step-num { font-size: 44px; width: auto; }
-      .hero-cta { flex-direction: column; align-items: center; }
-      .btn-primary, .btn-secondary { width: 100%; max-width: 300px; justify-content: center; }
-      .mockup-wrap { flex-direction: column; align-items: center; }
-      .mockup-phone.secondary { margin-top: 0; }
-      #pwaBanner { min-width: calc(100vw - 32px); bottom: 16px; }
+      .nav { padding-left: 18px; }
+      .phones { height: 520px; transform: scale(.9); transform-origin: top center; margin-bottom: -40px; }
+      .phone.p1 { transform: translateX(-92%) rotate(-3deg); }
+      .phone.p2 { transform: translateX(-12%) rotate(3deg); }
+      .stats { gap: 8px; padding: 0 12px; }
+      .stat { padding: 20px 6px; border-radius: 22px; }
+      .stat span { font-size: 9.5px; }
+      .section { padding-top: 76px; }
+      .c-2 { grid-column: span 6; }
+      .card.hero-card { flex-direction: column; align-items: stretch; }
+      .card.hero-card h3 { font-size: 32px; }
+      .mini-map { width: 100%; }
+      .steps { grid-template-columns: 1fr; }
+      .btn { width: 100%; max-width: 340px; }
+    }
+    @media (max-width: 380px) { .phone.p2 { display: none; } .phone.p1 { transform: translateX(-50%) rotate(0); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .reveal { opacity: 1; transform: none; transition: none; }
+      .ticker-track, .dot, .pulse-ring, #pwaBanner { animation: none; }
+      .card, .btn { transition: none; }
     }
   </style>
-    <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
-    <script defer src="/_vercel/insights/script.js"></script>
+  <noscript><style>.reveal { opacity: 1; transform: none; }</style></noscript>
 </head>
 <body>
+  <a class="skip" href="#conteudo">Pular para o conteúdo</a>
 
   <!-- NAV -->
-  <nav>
-    <a href="https://cademeubau.vercel.app/sobre" class="nav-logo">Cadê meu Baú?</a>
-    <div class="nav-links">
-      <a href="#funcionalidades">Funcionalidades</a>
-      <a href="#como-funciona">Como usar</a>
-      <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank">Feedback</a>
-    </div>
-    <a href="https://cademeubau.vercel.app" class="nav-btn">🚍 Abrir App</a>
-  </nav>
+  <div class="nav-wrap">
+    <nav class="nav glass" aria-label="Principal">
+      <a class="nav-logo display" href="/sobre" aria-label="Cadê meu Baú? — início da página">Cadê meu Baú?</a>
+      <div class="nav-links">
+        <a href="#funcionalidades">Funcionalidades</a>
+        <a href="#como-funciona">Como usar</a>
+        <a href="#privacidade">Privacidade</a>
+        <a href="#duvidas">Dúvidas</a>
+      </div>
+      <a class="btn btn-y btn-sm" href="/">Abrir o app</a>
+    </nav>
+  </div>
 
-  <!-- HERO -->
-  <section class="hero">
-    <div class="hero-glow"></div>
-
-    <div class="hero-badge">
-      <span class="badge-dot"></span>
-      Tempo real · Goiânia e região
-    </div>
-
-    <h1 class="hero-title">
-      Cadê<br><em>meu Baú?</em>
-    </h1>
-
-    <p class="hero-sub">
-      Descubra em segundos quando o seu ônibus chega.<br>
-      Sem anúncios, sem cadastro, sem enrolação.
-    </p>
-
-    <div class="hero-cta">
-      <a href="https://cademeubau.vercel.app" class="btn-primary" id="heroBtn">
-        🚍 Abrir o App
-      </a>
-      <a href="#como-funciona" class="btn-secondary">
-        Como funciona ↓
-      </a>
-    </div>
-
-    <div class="mockup-wrap">
-      <!-- Tela principal: busca -->
-      <div class="mockup-phone">
-        <div class="mockup-header">
-          <div class="mockup-logo">CADÊ MEU BAÚ?</div>
-          <div class="mockup-refresh"><span class="refresh-dot"></span> 18s</div>
+  <main id="conteudo">
+    <!-- HERO -->
+    <header class="hero">
+      <div>
+        <span class="badge"><i class="dot" aria-hidden="true"></i> Goiânia e região metropolitana</span>
+        <h1 class="display">Saiba quando<em>o baú chega.</em></h1>
+        <p class="lead">Previsão ao vivo, mapa com o ônibus se movendo, alerta no celular e até se está lotado. Tudo grátis, sem anúncio e sem precisar criar conta.</p>
+        <div class="cta-row">
+          <a class="btn btn-y" href="/" id="heroCta">🚍 Abrir o app</a>
+          <a class="btn btn-g" href="#como-funciona">Ver como funciona</a>
         </div>
-        <div class="mockup-card">
-          <div class="mockup-card-top">
-            <div class="mockup-num">327</div>
-            <div class="mockup-dest">
-              <div class="mockup-dest-label">Indo para:</div>
-              <div class="mockup-dest-name">Aracy Amaral</div>
-              <div class="mockup-status"><span class="status-dot"></span> Online agora</div>
-            </div>
-            <div style="font-size:17px;color:#fbbf24;">★</div>
-          </div>
-          <div class="mockup-times">
-            <div class="time-box g"><div class="time-label">Chega em</div><div class="time-val">4</div><div class="time-unit">minutos</div></div>
-            <div class="time-box a"><div class="time-label">Próximo</div><div class="time-val">22</div><div class="time-unit">minutos</div></div>
-          </div>
-        </div>
-        <div class="mockup-card" style="opacity:0.5;">
-          <div class="mockup-card-top">
-            <div class="mockup-num">283</div>
-            <div class="mockup-dest">
-              <div class="mockup-dest-label">Indo para:</div>
-              <div class="mockup-dest-name">T. Praça da Bíblia</div>
-              <div class="mockup-status"><span class="status-dot"></span> Online agora</div>
-            </div>
-          </div>
-          <div class="mockup-times">
-            <div class="time-box g" style="background:#15803d;"><div class="time-label">Chega em</div><div class="time-val">11</div><div class="time-unit">minutos</div></div>
-            <div class="time-box s"><div class="time-label">Próximo</div><div class="time-val" style="font-size:8px;padding-top:5px;color:#475569;font-family:'DM Sans',sans-serif;font-weight:700;">SEM<br>PREV.</div></div>
-          </div>
+        <div class="trust">
+          <span>Atualiza a cada 20 s</span>
+          <span>Sem anúncios</span>
+          <span>Instala na tela inicial</span>
         </div>
       </div>
 
-      <!-- Tela secundária: Modo Viagem -->
-      <div class="mockup-phone secondary">
-        <div class="trip-screen">
-          <div class="trip-badge"><span></span><p>Modo Viagem</p></div>
-          <div class="trip-ring">
-            <svg width="78" height="78" viewBox="0 0 78 78">
-              <circle cx="39" cy="39" r="31" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="6"/>
-              <circle cx="39" cy="39" r="31" fill="none" stroke="#fbbf24" stroke-width="6"
-                stroke-linecap="round" stroke-dasharray="195" stroke-dashoffset="55"/>
+      <div class="phones" aria-hidden="true">
+        <!-- Busca -->
+        <div class="phone p1">
+          <div class="p-top"><span class="p-logo">CADÊ MEU BAÚ?</span><span class="p-chip"><i class="dot"></i> 18s</span></div>
+          <div class="p-card">
+            <div class="p-line">
+              <div class="p-num">110</div>
+              <div><small>Indo para</small><strong>T. Pe. Pelágio</strong><em><i class="dot"></i> Ao vivo</em></div>
+            </div>
+            <div class="p-times">
+              <div class="p-t g"><small>Chega em</small><b>5</b><small>minutos</small></div>
+              <div class="p-t a"><small>Próximo</small><b>14</b><small>minutos</small></div>
+            </div>
+            <div class="p-note">⏱ Costuma atrasar ~2 min nesse horário</div>
+            <div class="p-note c">👥 Costuma estar cheio nesse horário</div>
+          </div>
+          <div class="p-card p-sug">
+            <div class="ic">🕒</div>
+            <div><small>Sugestão pra agora</small><strong>Ponto 09005</strong></div>
+            <div class="eta">5 MIN</div>
+          </div>
+          <div class="p-tabs">
+            <div class="p-tab on"><img src="/buscar.png" alt="" width="17" height="17" />Busca</div>
+            <div class="p-tab"><img src="/salvos.png" alt="" width="17" height="17" />Favoritos</div>
+            <div class="p-tab"><img src="/mapa.png" alt="" width="17" height="17" />Mapa</div>
+            <div class="p-tab"><img src="/sitpass.png" alt="" width="17" height="17" />SitPass</div>
+          </div>
+        </div>
+
+        <!-- Modo viagem -->
+        <div class="phone p2">
+          <div class="map">
+            <svg viewBox="0 0 220 250" preserveAspectRatio="xMidYMid slice">
+              <rect width="220" height="250" fill="#1a1f2b"/>
+              <g stroke="#2a3142" stroke-width="9" fill="none" stroke-linecap="round">
+                <path d="M-10 60 L230 30"/><path d="M-10 130 L230 110"/><path d="M-10 205 L230 190"/>
+                <path d="M40 -10 L55 260"/><path d="M120 -10 L135 260"/><path d="M190 -10 L200 260"/>
+              </g>
+              <path d="M-20 215 L240 40" stroke="#3a4258" stroke-width="15" fill="none" stroke-linecap="round"/>
+              <path d="M150 196 L128 160 L100 128 L70 92 L58 60" stroke="#fbbf24" stroke-width="3.5" stroke-dasharray="8 6" fill="none" stroke-linecap="round"/>
+              <circle cx="150" cy="196" r="14" fill="rgba(96,165,250,0.35)" class="pulse-ring"/>
+              <circle cx="150" cy="196" r="7" fill="#3b82f6" stroke="#fff" stroke-width="3"/>
             </svg>
-            <div class="trip-time-overlay">
-              <div class="trip-countdown">06:40</div>
-              <div class="trip-countdown-label">restante</div>
-            </div>
+            <span class="chip">🚍 a 920 m do ponto · há 6s</span>
+            <img class="pin" src="/ponto.png" alt="" width="28" height="28" style="left:44px;top:34px" />
+            <img class="pin" src="/onibus_realtime.png" alt="" width="28" height="28" style="left:98px;top:104px" />
           </div>
-          <div class="trip-info">
-            <div class="trip-line-label">Linha 327</div>
-            <div class="trip-dest">Aracy Amaral</div>
-          </div>
-          <div class="trip-metrics">
-            <div class="trip-metric w">
-              <div class="trip-metric-label">A pé</div>
-              <div class="trip-metric-val">5m</div>
+          <div class="t-panel">
+            <div class="t-ring">
+              <svg width="66" height="66" viewBox="0 0 66 66"><circle cx="33" cy="33" r="27" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="6"/><circle cx="33" cy="33" r="27" fill="none" stroke="#f87171" stroke-width="6" stroke-linecap="round" stroke-dasharray="170" stroke-dashoffset="40"/></svg>
+              <b>04:34</b>
             </div>
-            <div class="trip-metric b">
-              <div class="trip-metric-label">Ônibus</div>
-              <div class="trip-metric-val">7m</div>
+            <div class="t-info">
+              <small>Linha 110</small><strong>T. Pe. Pelágio</strong>
+              <div class="m"><span class="w">A pé 18 min</span><span class="b">Ônibus 5 min</span></div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </header>
 
-  <!-- TICKER -->
-  <div class="ticker-wrap">
+    <!-- CIDADES -->
     <div class="ticker" aria-hidden="true">
-      <span class="ticker-item">Terminal Isidória <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Cruzeiro do Sul <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Praça da Bíblia <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Shopping Flamboyant <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Terminal Padre Pelágio <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Praça A <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Setor Bueno <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Terminal Osvaldo Augustinho <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Aracy Amaral <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Novo Mundo <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Campus UFG <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Jardim Goiás <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Senador Canedo <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Recanto do Bosque <span class="ticker-sep">·</span></span>
-      <!-- Duplicado para loop -->
-      <span class="ticker-item">Terminal Isidória <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Cruzeiro do Sul <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Praça da Bíblia <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Shopping Flamboyant <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Terminal Padre Pelágio <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Praça A <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Setor Bueno <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Terminal Osvaldo Augustinho <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Aracy Amaral <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Novo Mundo <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Campus UFG <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Jardim Goiás <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">Senador Canedo <span class="ticker-sep">·</span></span>
-      <span class="ticker-item">T. Recanto do Bosque <span class="ticker-sep">·</span></span>
-    </div>
-  </div>
-
-  <!-- STATS -->
-  <div class="stats-bar reveal">
-    <div class="stats-inner">
-      <div><div class="stat-num">20s</div><div class="stat-label">Atualização automática</div></div>
-      <div><div class="stat-num">100%</div><div class="stat-label">Gratuito e sem anúncios</div></div>
-      <div><div class="stat-num">0</div><div class="stat-label">Cadastros necessários</div></div>
-    </div>
-  </div>
-
-  <!-- FEATURES -->
-  <section class="section" id="funcionalidades">
-    <div class="reveal">
-      <div class="section-label">Funcionalidades</div>
-      <h2 class="section-title">Tudo que você<br>precisa saber</h2>
+      <div class="ticker-track" id="tickerTrack">
+        <span>Terminal Isidória</span><span>T. Cruzeiro do Sul</span><span>T. Praça da Bíblia</span><span>Shopping Flamboyant</span><span>Terminal Padre Pelágio</span><span>T. Praça A</span><span>Setor Bueno</span><span>Terminal Osvaldo Augustinho</span><span>Aracy Amaral</span><span>T. Novo Mundo</span><span>Campus UFG</span><span>Jardim Goiás</span><span>Senador Canedo</span><span>T. Recanto do Bosque</span>
+      </div>
     </div>
 
-    <div class="features-grid">
+    <!-- NÚMEROS -->
+    <div class="stats reveal">
+      <div class="stat glass"><b>20s</b><span>Atualização automática</span></div>
+      <div class="stat glass"><b>0</b><span>Anúncios</span></div>
+      <div class="stat glass"><b>R$ 0</b><span>Pra usar</span></div>
+    </div>
 
-      <!-- DESTAQUE -->
-      <div class="feature-card highlight reveal">
-        <div class="highlight-inner">
-          <div class="highlight-content">
-            <span class="highlight-tag">Novo</span>
-            <div class="feature-icon" style="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.25);">
-              <img src="https://cademeubau.vercel.app/localizacao.png" alt="Modo Viagem" />
-            </div>
-            <div class="feature-title" style="font-size:26px;">Modo Viagem com GPS</div>
-            <p class="feature-desc">Ative o Modo Viagem em qualquer linha e acompanhe tudo em tempo real: sua posição no mapa, a rota até o ponto, o ônibus se movendo e um contador regressivo. O app avisa se você precisa correr.</p>
+    <!-- FUNCIONALIDADES -->
+    <section class="section" id="funcionalidades" aria-labelledby="t-func">
+      <div class="reveal">
+        <p class="eyebrow">Funcionalidades</p>
+        <h2 class="title display" id="t-func">Feito pra quem<br>vive de ônibus</h2>
+        <p class="sub">Do ponto de ônibus até o saldo do cartão, o app resolve o seu dia sem você abrir cinco sites.</p>
+      </div>
+
+      <div class="bento">
+        <article class="card glass hero-card c-6 reveal">
+          <div class="txt">
+            <span class="tag">Modo Viagem</span>
+            <h3>Você, o ponto e o ônibus no mesmo mapa</h3>
+            <p>Ative em qualquer linha e acompanhe em tempo real: sua posição, a rota a pé até o ponto, o ônibus se aproximando e quantos metros faltam. Um contador mostra se dá tempo de chegar.</p>
           </div>
-          <div class="highlight-preview">
-            <div style="text-align:center;margin-bottom:8px;">
-              <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);border-radius:100px;padding:3px 9px;">
-                <span style="width:4px;height:4px;background:#fbbf24;border-radius:50%;display:inline-block;"></span>
-                <span style="font-size:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#fbbf24;">Modo Viagem</span>
-              </div>
-            </div>
-            <div style="display:flex;gap:6px;margin-bottom:7px;">
-              <div style="flex:1;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:7px 5px;text-align:center;">
-                <div style="font-size:5px;font-weight:700;text-transform:uppercase;color:#3b82f6;letter-spacing:0.1em;">A pé</div>
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#3b82f6;line-height:1;">5 min</div>
-                <div style="font-size:5px;color:#3b82f6;opacity:0.55;">320m</div>
-              </div>
-              <div style="flex:1;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);border-radius:10px;padding:7px 5px;text-align:center;">
-                <div style="font-size:5px;font-weight:700;text-transform:uppercase;color:#fbbf24;letter-spacing:0.1em;">Ônibus</div>
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#fbbf24;line-height:1;">7 min</div>
-                <div style="font-size:5px;color:#fbbf24;opacity:0.55;">Linha 327</div>
-              </div>
-            </div>
-            <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:7px;text-align:center;">
-              <div style="font-size:8px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:0.1em;">✓ Dá pra ir</div>
-            </div>
+          <div class="mini-map" aria-hidden="true">
+            <svg viewBox="0 0 220 170">
+              <rect width="220" height="170" fill="#1a1f2b"/>
+              <g stroke="#2a3142" stroke-width="9" fill="none" stroke-linecap="round"><path d="M-10 40 L230 20"/><path d="M-10 110 L230 95"/><path d="M45 -10 L55 180"/><path d="M135 -10 L145 180"/></g>
+              <path d="M-20 150 L240 20" stroke="#3a4258" stroke-width="14" fill="none" stroke-linecap="round"/>
+              <path d="M170 128 L140 100 L96 74 L52 40" stroke="#fbbf24" stroke-width="3.5" stroke-dasharray="8 6" fill="none" stroke-linecap="round"/>
+              <circle cx="170" cy="128" r="14" fill="rgba(96,165,250,.35)" class="pulse-ring"/>
+              <circle cx="170" cy="128" r="7" fill="#3b82f6" stroke="#fff" stroke-width="3"/>
+              <circle cx="96" cy="74" r="13" fill="#fbbf24" stroke="#fff" stroke-width="2.5"/>
+              <text x="96" y="79" text-anchor="middle" font-size="14">🚍</text>
+              <circle cx="52" cy="40" r="11" fill="#ef4444" stroke="#fff" stroke-width="2.5"/>
+              <text x="52" y="45" text-anchor="middle" font-size="12">📍</text>
+            </svg>
           </div>
+        </article>
+
+        <article class="card glass c-3 reveal">
+          <div class="ic" aria-hidden="true">🕒</div>
+          <span class="tag">Novo</span>
+          <h3>Sugestão pra agora</h3>
+          <p>O app aprende em que horário você costuma pegar cada ônibus e, quando chega a hora, já mostra o seu ponto com a previsão. Aprende só no seu aparelho.</p>
+        </article>
+
+        <article class="card glass c-3 reveal">
+          <div class="ic" aria-hidden="true">👥</div>
+          <span class="tag">Novo</span>
+          <h3>Tá lotado?</h3>
+          <p>Relate em dois toques se o ônibus está vazio, cheio ou lotado. Com relatos de várias pessoas, o app avisa como ele costuma estar naquele horário.</p>
+        </article>
+
+        <article class="card glass c-2 reveal">
+          <div class="ic" aria-hidden="true">⏱</div>
+          <h3>Previsão com histórico</h3>
+          <p>O app compara o que foi previsto com a chegada real e mostra se aquela linha costuma atrasar.</p>
+        </article>
+
+        <article class="card glass c-2 reveal">
+          <div class="ic"><img src="/alert_on.png" alt="" width="27" height="27" loading="lazy" /></div>
+          <h3>Alertas de chegada</h3>
+          <p>Seja avisado quando o ônibus estiver a 2, 5, 10 ou 15 minutos, mesmo com o app fechado.</p>
+        </article>
+
+        <article class="card glass c-2 reveal">
+          <div class="ic"><img src="/salvos.png" alt="" width="27" height="27" loading="lazy" /></div>
+          <h3>Favoritos e trajetos</h3>
+          <p>Salve linhas, dê apelidos e veja tudo agrupado por ponto. Os trajetos de todo dia aparecem na hora certa.</p>
+        </article>
+
+        <article class="card glass c-4 reveal">
+          <div class="ic"><img src="/sitpass.png" alt="" width="27" height="27" loading="lazy" /></div>
+          <h3>SitPass, Passe Livre e PLT</h3>
+          <p>Consulte o saldo pelo CPF e receba aviso quando estiver abaixo do valor da passagem. Se quiser usar em mais de um aparelho, entre com o Google: seus dados são cifrados com uma senha que só você sabe antes de sair do celular.</p>
+        </article>
+
+        <article class="card glass c-2 reveal">
+          <div class="ic"><img src="/share.png" alt="" width="27" height="27" loading="lazy" /></div>
+          <h3>Compartilhe</h3>
+          <p>Mande a previsão de uma linha ou de um ponto no WhatsApp com um toque.</p>
+        </article>
+
+        <article class="card glass c-3 reveal">
+          <div class="ic" aria-hidden="true">📲</div>
+          <h3>Instala como app</h3>
+          <p>Sem Play Store nem App Store. Toque em instalar e o ícone vai pra sua tela inicial, com atalhos para Buscar, Favoritos e SitPass.</p>
+        </article>
+
+        <article class="card glass c-3 reveal">
+          <div class="ic" aria-hidden="true">🌗</div>
+          <h3>Claro, escuro e offline</h3>
+          <p>Troque o tema pra usar no sol ou à noite. Se o sinal cair, o app mantém a última previsão e mostra há quanto tempo ela foi atualizada.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- COMO USAR -->
+    <section class="section" id="como-funciona" aria-labelledby="t-como">
+      <div class="reveal">
+        <p class="eyebrow">Como usar</p>
+        <h2 class="title display" id="t-como">Em quatro toques</h2>
+        <p class="sub">Dá pra começar agora, sem cadastro e sem baixar nada.</p>
+      </div>
+      <div class="steps">
+        <div class="step glass reveal">
+          <h3>Ache o número do ponto</h3>
+          <p>Fica na plaquinha do poste, geralmente com 5 dígitos, como 31700. Também dá pra buscar pelo nome da rua ou do bairro.</p>
+        </div>
+        <div class="step glass reveal">
+          <h3>Busque no app</h3>
+          <p>Digite o número e toque em “Localizar Baú”. Se quiser, filtre por uma linha. A tela atualiza sozinha.</p>
+        </div>
+        <div class="step glass reveal">
+          <h3>Ative o Modo Viagem</h3>
+          <p>Toque no ícone de localização da linha e veja no mapa a rota até o ponto e o ônibus chegando.</p>
+        </div>
+        <div class="step glass reveal">
+          <h3>Salve com a ★</h3>
+          <p>Seus favoritos já abrem atualizados, e o app passa a sugerir o ponto certo na hora certa.</p>
         </div>
       </div>
+    </section>
 
-      <div class="feature-card reveal">
-        <div class="feature-icon">⚡</div>
-        <div class="feature-title">Tempo Real</div>
-        <p class="feature-desc">Dados atualizados a cada 20 segundos automaticamente. Sem precisar ficar recarregando a página.</p>
+    <!-- PRIVACIDADE -->
+    <section class="section" id="privacidade" aria-labelledby="t-priv">
+      <div class="reveal">
+        <p class="eyebrow">Privacidade</p>
+        <h2 class="title display" id="t-priv">Seus dados<br>ficam com você</h2>
+        <p class="sub">Sem anúncios e sem venda de dados. O que o app guarda, e onde, está explicado aqui.</p>
       </div>
+      <div class="priv">
+        <article class="card glass reveal">
+          <div class="ic" aria-hidden="true">🔒</div>
+          <h3>Saldo e CPF protegidos</h3>
+          <p>Ficam guardados no seu aparelho. Se você ativar a sincronização, eles são cifrados com uma senha só sua antes de irem para a nuvem, e ninguém consegue ler sem ela.</p>
+        </article>
+        <article class="card glass reveal">
+          <div class="ic" aria-hidden="true">🕵️</div>
+          <h3>Contagem sem rastro</h3>
+          <p>Medimos só totais por dia, como quantas buscas foram feitas. Não existe perfil de ninguém, e o app respeita o “Não rastrear” do navegador.</p>
+        </article>
+        <article class="card glass reveal">
+          <div class="ic" aria-hidden="true">🤝</div>
+          <h3>Colaboração anônima</h3>
+          <p>O histórico de atrasos e os relatos de lotação usam só um código aleatório do aparelho, sem nome, sem e-mail e sem conta.</p>
+        </article>
+      </div>
+    </section>
 
-      <div class="feature-card reveal">
-        <div class="feature-icon"><img src="https://cademeubau.vercel.app/salvos.png" alt="Favoritos" /></div>
-        <div class="feature-title">Favoritos</div>
-        <p class="feature-desc">Salve suas linhas e veja todas de uma vez com agrupamento por ponto. Dê apelidos às linhas mais usadas.</p>
+    <!-- DÚVIDAS -->
+    <section class="section" id="duvidas" aria-labelledby="t-faq">
+      <div class="reveal">
+        <p class="eyebrow">Dúvidas</p>
+        <h2 class="title display" id="t-faq">Perguntas comuns</h2>
       </div>
+      <div class="faq">
+        <details class="glass reveal">
+          <summary>Precisa instalar alguma coisa?</summary>
+          <p>Não. Abra o site e use. Se quiser o ícone na tela inicial, no Android toque em “Instalar”. No iPhone, abra no Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”.</p>
+        </details>
+        <details class="glass reveal">
+          <summary>De onde vêm os horários?</summary>
+          <p>Dos dados da RMTC, que gerencia o transporte coletivo da região metropolitana de Goiânia. O app apenas mostra essas informações de um jeito mais rápido e simples.</p>
+        </details>
+        <details class="glass reveal">
+          <summary>Por que o iPhone pede a localização toda vez?</summary>
+          <p>Em geral, o iPhone pergunta a localização de novo cada vez que um app instalado na tela inicial abre. Para reduzir isso, vá em Ajustes, Apps, Safari, Localização, e escolha “Permitir”. Mesmo sem isso, a localização só é usada quando você ativa o Modo Viagem ou pede os pontos próximos.</p>
+        </details>
+        <details class="glass reveal">
+          <summary>A previsão pode errar?</summary>
+          <p>Sim. Ela depende do sinal dos ônibus. Por isso o app mostra há quantos segundos a informação foi atualizada e, com o tempo, quanto cada linha costuma atrasar.</p>
+        </details>
+        <details class="glass reveal">
+          <summary>É de graça? Tem anúncio?</summary>
+          <p>É de graça e não tem anúncio. É um projeto independente, feito em Senador Canedo.</p>
+        </details>
+        <details class="glass reveal">
+          <summary>Achei um erro. Como aviso?</summary>
+          <p>Pelo botão de feedback dentro do app, ou pelo <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener">formulário</a>. Eu leio todos.</p>
+        </details>
+      </div>
+    </section>
 
-      <div class="feature-card reveal">
-        <div class="feature-icon"><img src="https://cademeubau.vercel.app/alert_on.png" alt="Alerta" /></div>
-        <div class="feature-title">Alertas de Chegada</div>
-        <p class="feature-desc">Configure para ser notificado quando o ônibus estiver a 2, 5, 10 ou 15 minutos — mesmo com o app fechado.</p>
+    <!-- CTA FINAL -->
+    <section class="final reveal" aria-labelledby="t-final">
+      <div class="final-box glass">
+        <h2 class="display" id="t-final">Chega de<br><em>perder o baú.</em></h2>
+        <a class="btn btn-y" href="/" id="ctaBtn" style="padding:20px 46px;font-size:15px">🚍 Abrir o app agora</a>
+        <small>Grátis · Sem cadastro · Funciona no celular</small>
       </div>
+    </section>
+  </main>
 
-      <div class="feature-card reveal">
-        <div class="feature-icon"><img src="https://cademeubau.vercel.app/onibus_realtime.png" alt="Rastreamento" /></div>
-        <div class="feature-title">Rastreamento ao Vivo</div>
-        <p class="feature-desc">Veja a posição dos ônibus no mapa em tempo real. Acompanhe o baú chegando com o ícone se movendo.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_trabalhador.png" alt="PLT" /></div>
-        <div class="feature-title">Passe Livre Trabalhador</div>
-        <p class="feature-desc">Consulte o saldo do PLT direto no app pelo CPF, sem precisar acessar outro site.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon"><img src="https://cademeubau.vercel.app/cartao_estudante.png" alt="Estudante" /></div>
-        <div class="feature-title">Passe Livre Estudantil</div>
-        <p class="feature-desc">Veja quantas viagens restam com aviso automático quando estiver acabando.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon"><img src="https://cademeubau.vercel.app/sitpass.png" alt="SitPass" /></div>
-        <div class="feature-title">Consulta SitPass</div>
-        <p class="feature-desc">Consulte o saldo do Bilhete Único pelo CPF. Aviso quando o saldo estiver abaixo do valor da passagem.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon">📲</div>
-        <div class="feature-title">Instala como App</div>
-        <p class="feature-desc">Funciona como aplicativo nativo no celular. Sem precisar baixar nada na Play Store ou App Store.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon"><img src="https://cademeubau.vercel.app/share.png" alt="Compartilhar" /></div>
-        <div class="feature-title">Compartilhe Linhas</div>
-        <p class="feature-desc">Mande o horário de uma linha no WhatsApp em um toque. Link gerado na hora.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon">☀️</div>
-        <div class="feature-title">Tema Claro e Escuro</div>
-        <p class="feature-desc">Alterne entre os temas para usar no sol ou à noite sem cansar os olhos.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon">💬</div>
-        <div class="feature-title">Canal de Feedback</div>
-        <p class="feature-desc">Encontrou algum erro ou quer sugerir algo? Botão de feedback direto no app para me avisar na hora.</p>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- HOW IT WORKS -->
-  <section class="section" id="como-funciona" style="padding-top:0;">
-    <div class="reveal">
-      <div class="section-label">Como usar</div>
-      <h2 class="section-title">Simples assim</h2>
-    </div>
-    <div class="steps">
-      <div class="step reveal">
-        <div class="step-num">01</div>
-        <div class="step-content">
-          <div class="step-title">Encontre o número do ponto</div>
-          <p class="step-desc">O número está na plaquinha no poste. Geralmente tem 5 dígitos, como 31700. Você também pode buscar pelo nome da rua ou bairro no app.</p>
-        </div>
-      </div>
-      <div class="step reveal">
-        <div class="step-num">02</div>
-        <div class="step-content">
-          <div class="step-title">Digite no app e busque</div>
-          <p class="step-desc">Abra o app, coloque o número do ponto e toque em "Localizar Baú". Pode filtrar pelo número da linha se quiser.</p>
-        </div>
-      </div>
-      <div class="step reveal">
-        <div class="step-num">03</div>
-        <div class="step-content">
-          <div class="step-title">Veja quando chega</div>
-          <p class="step-desc">Em segundos aparecem todos os ônibus que passam naquele ponto com o tempo do próximo e do seguinte. Os dados atualizam sozinhos.</p>
-        </div>
-      </div>
-      <div class="step reveal">
-        <div class="step-num">04</div>
-        <div class="step-content">
-          <div class="step-title">Ative o Modo Viagem</div>
-          <p class="step-desc">Toque no ícone de localização em qualquer linha para entrar no Modo Viagem. Veja no mapa a rota até o ponto, sua posição GPS e o ônibus em tempo real. O app avisa se você precisa correr.</p>
-        </div>
-      </div>
-      <div class="step reveal">
-        <div class="step-num">05</div>
-        <div class="step-content">
-          <div class="step-title">Salve seus favoritos</div>
-          <p class="step-desc">Toque na estrela ★ para salvar. Na próxima vez que abrir o app, seus baús já aparecem atualizados automaticamente.</p>
-        </div>
-      </div>
-      <div class="step reveal">
-        <div class="step-num">06</div>
-        <div class="step-content">
-          <div class="step-title">Consulte seu saldo SitPass</div>
-          <p class="step-desc">Na aba SitPass, digite seu CPF para ver o saldo do Bilhete Único, PLT ou Passe Livre Estudantil. Aviso automático quando estiver acabando.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA FINAL -->
-  <section class="cta-section">
-    <h2 class="cta-title reveal">
-      Chega de<br><em>perder o baú.</em>
-    </h2>
-    <div class="reveal" style="transition-delay:0.1s;">
-      <a href="https://cademeubau.vercel.app" class="btn-primary" style="font-size:15px;padding:20px 52px;" id="ctaBtn">
-        🚍 Abrir o App agora
-      </a>
-    </div>
-    <p class="reveal" style="margin-top:20px;font-size:11px;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;transition-delay:0.2s;">
-      Gratuito · Sem cadastro · Funciona no celular
-    </p>
-  </section>
-
-  <!-- FOOTER -->
   <footer>
-    <div class="footer-logo">Cadê meu Baú?</div>
-    <p class="footer-text">
-      Monitor de ônibus em tempo real para Goiânia e região metropolitana.<br>
-      Dados fornecidos pela RMTC. Consulta de saldo via SitPass.
-    </p>
-    <div class="footer-links">
-      <a href="https://cademeubau.vercel.app">Abrir App</a>
-      <a href="https://www.rmtcgoiania.com.br" target="_blank">RMTC</a>
-      <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank">Feedback</a>
+    <div class="f-logo display">Cadê meu Baú?</div>
+    <p>Monitor de ônibus em tempo real para Goiânia e região metropolitana. Dados da RMTC.</p>
+    <div class="f-links">
+      <a href="/">Abrir o app</a>
+      <a href="https://www.rmtcgoiania.com.br" target="_blank" rel="noopener">RMTC</a>
+      <a href="https://forms.gle/JwtHNRw7pjaZtfV19" target="_blank" rel="noopener">Feedback</a>
     </div>
-    <p class="footer-made">Feito com ❤️ em Senador Canedo · Não é afiliado à RMTC, EIXO ou SitPass</p>
+    <p class="f-note">Feito com ❤️ em Senador Canedo · Projeto independente, sem vínculo com a RMTC, a EIXO ou o SitPass</p>
   </footer>
 
-  <!-- PWA INSTALL BANNER -->
-  <div id="pwaBanner" class="hidden">
-    <div class="pwa-icon">
-      <img src="https://cademeubau.vercel.app/logo.png" alt="Cadê meu Baú?" />
-    </div>
-    <div class="pwa-text">
-      <div class="pwa-title">Instalar o app</div>
-      <div class="pwa-sub">Acesso rápido direto da tela inicial</div>
-    </div>
-    <div class="pwa-actions">
-      <button class="pwa-install" id="pwaInstallBtn">Instalar</button>
-      <button class="pwa-dismiss" id="pwaDismissBtn">×</button>
-    </div>
+  <!-- Instalar o app -->
+  <div id="pwaBanner" class="glass hidden" role="dialog" aria-label="Instalar o app">
+    <img src="/logo.png" alt="" width="44" height="44" />
+    <div class="t"><b>Instalar o app</b><span>Acesso rápido pela tela inicial</span></div>
+    <button class="btn btn-y btn-sm" id="pwaInstallBtn" type="button">Instalar</button>
+    <button id="pwaDismissBtn" type="button" aria-label="Dispensar">×</button>
   </div>
 
   <script>
-    // Scroll reveal
-    const reveals = document.querySelectorAll('.reveal');
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry, i) => {
-        if (entry.isIntersecting) {
-          setTimeout(() => entry.target.classList.add('visible'), i * 55);
-          observer.unobserve(entry.target);
-        }
+    // Ticker: duplica o conteúdo pra o loop ficar contínuo
+    (function () {
+      var t = document.getElementById('tickerTrack');
+      if (t) t.innerHTML += t.innerHTML;
+    })();
+
+    // Revelar ao rolar
+    (function () {
+      var els = document.querySelectorAll('.reveal');
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+        });
+      }, { threshold: 0.08 });
+      els.forEach(function (e) { io.observe(e); });
+    })();
+
+    // Instalação do PWA
+    (function () {
+      var deferred = null;
+      var banner = document.getElementById('pwaBanner');
+      var KEY = 'landing_pwa_dismissed';
+      var dismissed = false;
+      try { dismissed = !!localStorage.getItem(KEY); } catch (e) {}
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferred = e;
+        if (!dismissed) setTimeout(function () { banner.classList.remove('hidden'); }, 3500);
       });
-    }, { threshold: 0.08 });
-    reveals.forEach(el => observer.observe(el));
+      window.addEventListener('appinstalled', function () { banner.classList.add('hidden'); deferred = null; });
 
-    // PWA Install
-    let deferredPrompt = null;
-    const banner = document.getElementById('pwaBanner');
-    const dismissed = localStorage.getItem('landing_pwa_dismissed');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      if (!dismissed) setTimeout(() => banner.classList.remove('hidden'), 3500);
-    });
-
-    window.addEventListener('appinstalled', () => {
-      banner.classList.add('hidden');
-      deferredPrompt = null;
-    });
-
-    document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') banner.classList.add('hidden');
-        deferredPrompt = null;
-      } else {
-        window.location.href = 'https://cademeubau.vercel.app';
-      }
-    });
-
-    document.getElementById('pwaDismissBtn')?.addEventListener('click', () => {
-      banner.classList.add('hidden');
-      localStorage.setItem('landing_pwa_dismissed', 'true');
-    });
+      document.getElementById('pwaInstallBtn').addEventListener('click', function () {
+        if (!deferred) { window.location.href = '/'; return; }
+        deferred.prompt();
+        deferred.userChoice.then(function (r) { if (r.outcome === 'accepted') banner.classList.add('hidden'); deferred = null; });
+      });
+      document.getElementById('pwaDismissBtn').addEventListener('click', function () {
+        banner.classList.add('hidden');
+        try { localStorage.setItem(KEY, 'true'); } catch (e) {}
+      });
+    })();
   </script>
+
+  <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
