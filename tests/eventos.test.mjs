@@ -18,12 +18,13 @@ test('aggregate soma eventos válidos e descarta o resto', () => {
     { e: 'search', p: { line: '110', stop: '09005', src: 'manual' } },
     { e: 'tab_view', p: { tab: 'map' } },
     { e: 'lotacao_report', p: { line: '020', stop: '31700', nivel: 3 } },
+    { e: 'first_open' },
     { e: 'evento_inventado' },                                   // fora da lista
     { e: 'search', p: { line: '<script>', stop: 'abc', src: 'x' } }, // props inválidas: conta o evento, ignora as props
     null, 42,
   ]);
-  assert.equal(valid, 5);
-  assert.deepEqual(counts.eventos, { search: 3, tab_view: 1, lotacao_report: 1 });
+  assert.equal(valid, 6);
+  assert.deepEqual(counts.eventos, { search: 3, tab_view: 1, lotacao_report: 1, first_open: 1 });
   assert.deepEqual(counts.linhas, { '110': 2, '020': 1 });
   assert.deepEqual(counts.pontos, { '09005': 2, '31700': 1 }); // "9005" vira "09005"
   assert.deepEqual(counts.origens, { nearby: 1, manual: 1 });

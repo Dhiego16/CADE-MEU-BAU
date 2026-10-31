@@ -694,7 +694,25 @@
     })();
   </script>
 
-  <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+  <script>
+    // ?semcontar=1 neste aparelho: não conta as minhas visitas (?semcontar=0 volta ao normal)
+    (function () {
+      var KEY = 'cade_meu_bau_sem_contar';
+      try {
+        var u = new URL(location.href), v = u.searchParams.get('semcontar');
+        if (v !== null) {
+          if (v === '0') localStorage.removeItem(KEY); else localStorage.setItem(KEY, '1');
+          u.searchParams.delete('semcontar');
+          history.replaceState(null, '', u.pathname + u.search + u.hash);
+        }
+      } catch (e) {}
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      window.va('beforeSend', function (event) {
+        try { if (localStorage.getItem(KEY) === '1') return null; } catch (e) {}
+        return event;
+      });
+    })();
+  </script>
   <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

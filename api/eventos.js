@@ -12,7 +12,7 @@ import { getRealDb, getRealIncrement } from './_db.js';
 
 const EVENTS = new Set([
   'search', 'favorite_add', 'favorite_remove', 'trip_start', 'trip_cancel', 'tab_view',
-  'theme_toggle', 'share', 'alert_create', 'suggestion_click', 'lotacao_report',
+  'theme_toggle', 'share', 'alert_create', 'suggestion_click', 'lotacao_report', 'first_open',
 ]);
 const LINE_STOP_EVENTS = new Set(['search', 'favorite_add', 'trip_start', 'share', 'lotacao_report']);
 const SOURCES = new Set(['manual', 'history', 'nearby', 'suggestion', 'map', 'link']);

@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
+import { applyOptOutFromUrl, isOptedOut, markFirstOpen } from './utils/analytics';
+
+// Antes de montar o app: liga/desliga "não contar minhas visitas" e conta aparelho novo
+applyOptOutFromUrl();
+markFirstOpen();
 
 const mountApp = () => {
   const rootElement = document.getElementById('root');
@@ -15,7 +20,7 @@ const mountApp = () => {
         <ErrorBoundary>
           <App />
         </ErrorBoundary>
-        <Analytics />
+        <Analytics beforeSend={(event) => (isOptedOut() ? null : event)} />
       </React.StrictMode>
     );
   } catch (error) {
