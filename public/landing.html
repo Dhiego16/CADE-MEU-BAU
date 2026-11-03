@@ -323,6 +323,10 @@
     }
     @media (max-width: 380px) { .phone.p2 { display: none; } .phone.p1 { transform: translateX(-50%) rotate(0); } }
 
+    @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+      .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: #17171b; border-color: rgba(255,255,255,0.45); }
+      .glass::before { display: none; }
+    }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
       .reveal { opacity: 1; transform: none; transition: none; }

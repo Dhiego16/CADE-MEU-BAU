@@ -3,6 +3,7 @@ import { ThemeTokens } from '../types';
 import { TripTarget, UserLocation, RouteInfo } from '../hooks/useTripMode';
 import { haptic } from '../utils';
 import { LeafletLib, LeafletMap, LeafletMarker } from '../types';
+import { loadLeaflet } from '../utils/leaflet';
 
 interface TripModeOverlayProps {
   tripTarget: TripTarget;
@@ -271,20 +272,6 @@ const TripModeOverlay: React.FC<TripModeOverlayProps> = ({
     isMountedRef.current = true;
     let onVisible: (() => void) | null = null;
 
-    const loadLeaflet = () => new Promise<void>((resolve, reject) => {
-      if ((window as { L?: unknown }).L) { resolve(); return; }
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject();
-      document.head.appendChild(script);
-      if (!document.querySelector('link[href*="leaflet"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-      }
-    });
 
     loadLeaflet().then(() => {
       if (!isMountedRef.current || !mapDivRef.current || leafletMapRef.current) return;

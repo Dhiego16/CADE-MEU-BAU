@@ -3,6 +3,7 @@ import { BusLine, ThemeTokens, LeafletLib, LeafletMap, LeafletMarker, PontoDataW
 import { haptic } from '../../utils';
 import MiniMap from '../MiniMap';
 import PONTOS_DATA from '../../pontos.json';
+import { loadLeaflet } from '../../utils/leaflet';
 
 interface MiniMapConfig {
   key: string;
@@ -125,18 +126,6 @@ const MapTab: React.FC<MapTabProps> = ({
     const PONTOS = (PONTOS_DATA as Array<{ id: string; lat: number; lng: number; nome: string }>)
       .filter(p => { if (seenIds.has(p.id)) return false; seenIds.add(p.id); return true; });
 
-    const loadLeaflet = () => new Promise<void>((resolve, reject) => {
-      if ((window as { L?: unknown }).L) { resolve(); return; }
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Falha ao carregar Leaflet'));
-      document.head.appendChild(script);
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    });
 
     let moveEndHandler: (() => void) | null = null;
 

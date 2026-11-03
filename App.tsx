@@ -542,6 +542,19 @@ const App: React.FC = () => {
       .lg-light { background: rgba(255,255,255,0.95); }
     }
     @media (prefers-reduced-motion: reduce) { .lg-lens { transition: none !important; } }
+    /* Quem pede menos transparência / mais contraste recebe vidro opaco e bordas firmes */
+    @media (prefers-reduced-transparency: reduce) {
+      .lg-glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
+      .lg-glass::before { display: none; }
+      .lg-dark { background: #1e2330; }
+      .lg-light { background: #ffffff; }
+      .lg-lens-dark { background: rgba(251,191,36,0.28); }
+      .lg-lens-light { background: #fde68a; }
+    }
+    @media (prefers-contrast: more) {
+      .lg-dark { border-color: rgba(255,255,255,0.65); background: #1e2330; }
+      .lg-light { border-color: rgba(0,0,0,0.5); background: #ffffff; }
+    }
   `;
 
   return (

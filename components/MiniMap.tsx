@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ThemeTokens, LeafletLib, LeafletMap, LeafletMarker } from '../types';
+import { loadLeaflet } from '../utils/leaflet';
 
 const normDestino = (s: string): string =>
   s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '').trim();
@@ -135,20 +136,6 @@ const MiniMap: React.FC<MiniMapProps> = ({
   useEffect(() => {
     isMountedRef.current = true;
 
-    const loadLeaflet = () => new Promise<void>((resolve, reject) => {
-      if ((window as { L?: unknown }).L) { resolve(); return; }
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Leaflet load error'));
-      document.head.appendChild(script);
-      if (!document.querySelector('link[href*="leaflet"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-      }
-    });
 
     loadLeaflet().then(() => {
       if (!isMountedRef.current || !mapDivRef.current || leafletMapRef.current) return;

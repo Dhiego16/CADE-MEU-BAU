@@ -110,3 +110,9 @@ O deploy é automático via **Vercel** a cada push na branch `main`.
 ## 📜 Licença
 
 Projeto pessoal, não afiliado à RMTC, EIXO Goiânia ou SitPass.
+
+## Estilos e mapas
+
+- **Tailwind** é compilado no build (`tailwind.config.js`). Ele lê as classes direto do código, então use sempre a **classe inteira** (`x ? 'bg-red-500' : 'bg-green-500'`), nunca montada por pedaços (`bg-${cor}-500`).
+- **Leaflet** vem do npm e só é baixado quando um mapa é aberto (`utils/leaflet.ts`).
+- `npm test` roda os testes; o GitHub Actions roda `tsc`, testes e build a cada push.
