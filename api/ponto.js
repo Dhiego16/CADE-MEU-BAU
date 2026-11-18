@@ -1,4 +1,4 @@
-import * as cheerio from 'cheerio';
+import { parseHorarios, layoutReconhecido } from './_parseHorarios.js';
 
 // Cache simples
 const cache = new Map();
@@ -36,13 +36,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const horarios = await buscarHorarios(ponto, linhaDesejada);
+    const { horarios, layoutOk } = await buscarHorarios(ponto, linhaDesejada);
     const resultado = {
       ponto,
       linha: linhaDesejada || 'todas',
       timestamp: new Date().toISOString(),
       horarios,
     };
+    // Sem a tabela conhecida e sem nenhuma linha: pode ser ponto sem previsão agora OU a RMTC mudou o HTML.
+    // Não muda o comportamento do app; só deixa rastro nos logs da Vercel e um campo pra diagnóstico.
+    if (!layoutOk && horarios.length === 0) {
+      resultado.aviso = 'layout_desconhecido';
+      console.error(`[ponto] HTML da RMTC sem a tabela esperada (ponto ${ponto}) — layout pode ter mudado.`);
+    }
     if (cache.size >= CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value);
     cache.set(cacheKey, { timestamp: Date.now(), data: resultado });
     res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
@@ -70,31 +76,9 @@ async function buscarHorarios(ponto, linhaDesejada) {
     clearTimeout(timeout);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     const html = await res.text();
-    return parseHorarios(html, linhaDesejada);
+    return { horarios: parseHorarios(html, linhaDesejada), layoutOk: layoutReconhecido(html) };
   } catch (err) {
     clearTimeout(timeout);
     throw err;
   }
-}
-
-function parseHorarios(html, linhaDesejada) {
-  const $ = cheerio.load(html);
-  const horarios = [];
-
-  $('table.horariosRmtc tr.linha').each((i, el) => {
-    const tds = $(el).find('td');
-    if (tds.length < 4) return;
-
-    const linha   = $(tds[0]).text().replace(/\D/g, '');
-    const destino = $(tds[1]).text().trim();
-    const proximo = $(tds[2]).text().replace(/\s+/g, ' ').trim();
-    const seguinte = $(tds[3]).text().trim();
-
-    if (!linha) return;
-    if (linhaDesejada && linha !== linhaDesejada) return;
-
-    horarios.push({ linha, destino, proximo, seguinte });
-  });
-
-  return horarios;
 }

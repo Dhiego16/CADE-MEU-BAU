@@ -94,6 +94,8 @@ export type SearchError = 'offline' | 'not_found' | 'no_lines' | 'invalid_stop' 
 export interface SearchResult {
   lines: BusLine[];
   error?: SearchError;
+  /** Quando as linhas vieram do cache do aparelho (sem rede): momento (ms) da leitura original. */
+  cachedAt?: number;
 }
 
 export type ActiveTab = 'search' | 'favs' | 'sitpass' | 'map';

@@ -4,6 +4,7 @@ import { normalizeTime, REFRESH_INTERVAL, MAX_HISTORY, BASE_URL } from '../utils
 import { recordStopObservations, refreshGlobalInsights } from '../utils/predictionHistory';
 import { recordUsage, normalizeLine, normalizeStop } from '../utils/usage';
 import { trackEvent, consumeSearchSource } from '../utils/analytics';
+import { saveLastResult, loadLastResult } from '../utils/lastResult';
 
 export function useBusSearch() {
   const [busLines, setBusLines] = useState<BusLine[]>([]);
@@ -27,6 +28,9 @@ export function useBusSearch() {
   const isSearchingRef = useRef(false);
   const isFavSearchingRef = useRef(false);
   const lastQueryRef = useRef('');
+  // Quantos favoritos estão na tela agora (decide se vale usar o cache do aparelho na abertura sem rede)
+  const favLinesCountRef = useRef(0);
+  favLinesCountRef.current = favoriteBusLines.length;
 
   // ─── AbortController para cancelar fetches de realtime stale ─────────────
   // Mantemos uma ref com o controller da última rodada de buscas de realtime.
@@ -40,8 +44,16 @@ export function useBusSearch() {
   // diferirem, a busca foi substituída e os resultados são descartados.
   const searchGenerationRef = useRef(0);
 
-  const performSearch = useCallback(async (sId: string, lFilter: string): Promise<SearchResult> => {
+  const performSearch = useCallback(async (sId: string, lFilter: string, allowCache = false): Promise<SearchResult> => {
     if (!sId) return { lines: [], error: 'invalid_stop' };
+    // Sem rede/RMTC: se permitido, devolve a última previsão boa (com a idade) em vez de tela vazia
+    const offlineResult = (): SearchResult => {
+      if (allowCache) {
+        const cached = loadLastResult(sId, lFilter);
+        if (cached) return { lines: cached.lines, error: 'offline', cachedAt: cached.t };
+      }
+      return { lines: [], error: 'offline' };
+    };
     try {
       let url = `${BASE_URL}?ponto=${sId.trim()}`;
       if (lFilter.trim()) url += `&linha=${lFilter.trim()}`;
@@ -52,7 +64,7 @@ export function useBusSearch() {
       clearTimeout(timeout);
 
       if (res.status === 404) return { lines: [], error: 'not_found' };
-      if (!res.ok) return { lines: [], error: 'offline' };
+      if (!res.ok) return offlineResult();
 
       const data = await res.json();
 
@@ -80,11 +92,12 @@ export function useBusSearch() {
           recordStopObservations(sId.padStart(5, '0'), parsedLines);
           void refreshGlobalInsights(parsedLines.map(l => `${l.stopSource}::${l.number}`));
         } catch { /* nunca quebra a busca */ }
+        saveLastResult(sId, lFilter, parsedLines);
         return { lines: parsedLines };
       }
       return { lines: [], error: 'not_found' };
     } catch {
-      return { lines: [], error: 'offline' };
+      return offlineResult();
     }
   }, []);
 
@@ -150,7 +163,7 @@ export function useBusSearch() {
     setCountdown(REFRESH_INTERVAL);
 
     try {
-      const { lines, error } = await performSearch(idToSearch, forcedFilter ?? lineFilter);
+      const { lines, error, cachedAt } = await performSearch(idToSearch, forcedFilter ?? lineFilter, !sameQuery);
 
       // Se uma busca mais nova já começou, descarta este resultado
       if (currentGeneration !== searchGenerationRef.current) return;
@@ -162,12 +175,13 @@ export function useBusSearch() {
         setBusLines(prev => prev.length === 0 ? lines : mergeLines(prev, lines));
       }
       if (!error && lines.length > 0) setSearchUpdatedAt(Date.now());
+      else if (error === 'offline' && cachedAt) setSearchUpdatedAt(cachedAt);
       if (error === 'offline') { setStaleData(true); setErrorMsg('offline'); }
       else if (error === 'not_found') setErrorMsg('not_found');
       else if (error === 'no_lines') setErrorMsg('no_lines');
       else if (error === 'invalid_stop') setErrorMsg('invalid_stop');
 
-      if (lines.length > 0) {
+      if (lines.length > 0 && !error) {
         addToHistory(idToSearch);
         // Hábito de uso (sugestão por horário) e contagem de buscas: só quando a consulta muda,
         // pra a atualização automática a cada 30s não contar como busca nova.
@@ -230,7 +244,8 @@ export function useBusSearch() {
     setFavoriteBusLines(prev => { if (prev.length === 0) setIsFavoritesLoading(true); return prev; });
     setStaleData(false);
     try {
-      const results = await Promise.all(favs.map(fav => performSearch(fav.stopId, fav.lineNumber)));
+      const useCache = favLinesCountRef.current === 0; // abertura sem nada na tela: aceita o último resultado salvo
+      const results = await Promise.all(favs.map(fav => performSearch(fav.stopId, fav.lineNumber, useCache)));
       const allLines = results.flatMap(r => r.lines);
       const hasOffline = results.some(r => r.error === 'offline');
       const newInactive = new Set<string>();
@@ -250,8 +265,11 @@ export function useBusSearch() {
         const combined = kept.length > 0 ? [...allLines, ...kept] : allLines;
         return prev.length === 0 ? combined : mergeLines(prev, combined);
       });
-      if (hasOffline) setStaleData(true);
-      else setFavsUpdatedAt(Date.now());
+      if (hasOffline) {
+        setStaleData(true);
+        const cachedTimes = results.map(r => r.cachedAt).filter((t): t is number => typeof t === 'number');
+        if (cachedTimes.length > 0) setFavsUpdatedAt(prev => prev ?? Math.min(...cachedTimes));
+      } else setFavsUpdatedAt(Date.now());
     } catch { setStaleData(true); }
     finally { setIsFavoritesLoading(false); setCountdown(REFRESH_INTERVAL); isFavSearchingRef.current = false; }
   }, [performSearch, mergeLines]);
