@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import PONTOS_DATA from '../pontos.json';
+import { loadExtraStops, mergePontos } from '../utils/pontosExtras';
 
 interface PontoData {
   id: string;
@@ -33,10 +34,8 @@ export function useNearbyStops() {
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'granted' | 'denied' | 'unavailable'>('idle');
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
 
-  const calcularProximos = useCallback((lat: number, lng: number) => {
-    const pontos = deduplicarPontos(
-      PONTOS_DATA as PontoData[]
-    );
+  const rankear = useCallback((lat: number, lng: number, base: PontoData[]) => {
+    const pontos = deduplicarPontos(base);
 
     const comDistancia: NearbyStop[] = pontos
       .map(p => ({
@@ -50,6 +49,18 @@ export function useNearbyStops() {
 
     setNearbyStops(comDistancia);
   }, []);
+
+  const calcularProximos = useCallback((lat: number, lng: number) => {
+    // 1) Resposta imediata só com o pontos.json
+    rankear(lat, lng, PONTOS_DATA as PontoData[]);
+    // 2) Depois, completa com pontos do OpenStreetMap da região (Goiânia, Aparecida…), se houver
+    void loadExtraStops(lat, lng).then(extras => {
+      if (extras.length === 0) return;
+      const atual = userLocationRef.current;
+      if (!atual || atual.lat !== lat || atual.lng !== lng) return; // usuário já se moveu/pediu de novo
+      rankear(lat, lng, mergePontos(PONTOS_DATA as PontoData[], extras));
+    });
+  }, [rankear]);
 
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {

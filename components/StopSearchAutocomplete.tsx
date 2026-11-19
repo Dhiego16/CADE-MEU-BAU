@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ThemeTokens } from '../types';
 import PONTOS_DATA from '../pontos.json';
+import { getExtraStops, mergePontos } from '../utils/pontosExtras';
 
 interface PontoData {
   id: string;
@@ -33,7 +34,7 @@ const searchPontos = (query: string): PontoData[] => {
   const seen = new Set<string>();
   const results: Array<{ ponto: PontoData; score: number }> = [];
 
-  for (const ponto of PONTOS) {
+  for (const ponto of mergePontos(PONTOS, getExtraStops())) {
     if (seen.has(ponto.id)) continue;
     seen.add(ponto.id);
 

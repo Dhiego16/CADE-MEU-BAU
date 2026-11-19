@@ -41,6 +41,7 @@ import { trackEvent, markSearchSource } from './utils/analytics';
 import { Suggestion, suggestNow, recordUsage, normalizeStop } from './utils/usage';
 
 import PONTOS_DATA from './pontos.json';
+import { findExtraStop } from './utils/pontosExtras';
 
 interface MiniMapConfig {
   key: string;
@@ -234,6 +235,8 @@ const App: React.FC = () => {
     const fromJson = (PONTOS_DATA as Array<{ id: string; lat: number; lng: number; nome: string }>)
       .find(p => p.id === normalizedId);
     if (fromJson) return { ...fromJson, marker: null as unknown as LeafletMarker };
+    const fromExtra = findExtraStop(normalizedId);
+    if (fromExtra) return { ...fromExtra, marker: null as unknown as LeafletMarker };
     return { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
   }, []);
 

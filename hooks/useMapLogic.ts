@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import PONTOS_DATA from '../pontos.json';
+import { findExtraStop } from '../utils/pontosExtras';
 import { BusLine, LeafletLib, LeafletMap, LeafletMarker, PontoDataWithMarker } from '../types';
 import { haptic } from '../utils';
 import { loadLeaflet } from '../utils/leaflet';
@@ -70,6 +71,8 @@ export function useMapLogic(): UseMapLogicReturn {
     const fromJson = (PONTOS_DATA as Array<{ id: string; lat: number; lng: number; nome: string }>)
       .find(p => p.id === normalizedId);
     if (fromJson) return { ...fromJson, marker: null as unknown as LeafletMarker };
+    const fromExtra = findExtraStop(normalizedId);
+    if (fromExtra) return { ...fromExtra, marker: null as unknown as LeafletMarker };
     return { lat: -16.7200, lng: -49.0900, nome: `Ponto ${stopSource}`, id: stopSource, marker: null as unknown as LeafletMarker };
   }, []);
 
